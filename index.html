@@ -4662,90 +4662,82 @@ class ContractGenerator {
 }
 
 function openContractModal(clientId) {
-  const client = state.clients.find(c => c.id === clientId);
-  if (!client) return notifCoach("❌ Client non trouvé");
+  try {
+    // Chercher le client dans state
+    const client = state.clients?.find(c => c.id === clientId);
+    if (!client) {
+      alert("❌ Client non trouvé");
+      return;
+    }
 
-  const coachSettings = {
-    name: "Coach Julien Tieufri",
-    email: "julien.coaching@example.fr",
-    tel: "+33 6 XX XX XX XX",
-    siret: "SIRET_À_REMPLIR",
-    certification: "Coach RNCP"
-  };
+    // Créer modal simple
+    const modal = document.createElement("div");
+    modal.id = "contractModal";
+    modal.style.cssText = `
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7); display: flex; align-items: center;
+      justify-content: center; z-index: 9999;
+    `;
 
-  const cadrageData = {
-    duration: client.cadrage?.duration || "3 mois",
-    sessionDuration: client.cadrage?.sessionDuration || 60,
-    frequency: client.cadrage?.frequency || "1x/semaine",
-    format: client.cadrage?.format || "Visioconférence",
-    totalAmount: client.cadrage?.totalAmount || 1200,
-    paymentTerms: client.cadrage?.paymentTerms || "À la signature"
-  };
+    const box = document.createElement("div");
+    box.style.cssText = `
+      background: white; width: 90%; max-width: 900px; 
+      max-height: 85vh; overflow-y: auto; padding: 20px;
+      border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    `;
 
-  const gen = new ContractGenerator(coachSettings, client, cadrageData);
+    // Générer contrat
+    const gen = new ContractGenerator(
+      {
+        name: "Coach Julien Tieufri",
+        email: "julien.coaching@example.fr",
+        tel: "+33 6 XX XX XX XX",
+        siret: "SIRET_À_REMPLIR"
+      },
+      client
+    );
 
-  // Modal HTML
-  const modalBg = document.createElement("div");
-  modalBg.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999";
+    box.innerHTML = `
+      <h2 style="margin-top:0;color:#2c3e50">📋 Contrat de Coaching</h2>
+      ${gen.getHTMLPreview()}
+      <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+        <button onclick="document.getElementById('contractModal').remove()" 
+          style="padding: 10px 20px; background: #ccc; border: none; border-radius: 6px; cursor: pointer;">
+          Fermer
+        </button>
+        <button onclick="downloadContractPDF('${client.name}')" 
+          style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer;">
+          ⬇️ Télécharger PDF
+        </button>
+      </div>
+    `;
 
-  const modal = document.createElement("div");
-  modal.style.cssText = "background:white;border-radius:12px;width:90vw;height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3)";
+    modal.appendChild(box);
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    document.body.appendChild(modal);
 
-  const header = document.createElement("div");
-  header.style.cssText = "padding:20px;border-bottom:1px solid #e0e0e0;display:flex;justify-content:space-between;align-items:center";
-  header.innerHTML = "<h2 style='margin:0;font-size:18px;color:#2c3e50'>📋 Aperçu du Contrat</h2>";
-
-  const closeBtn = document.createElement("button");
-  closeBtn.innerHTML = "✕";
-  closeBtn.style.cssText = "background:none;border:none;font-size:24px;cursor:pointer;color:#999";
-  closeBtn.onclick = () => document.body.removeChild(modalBg);
-  header.appendChild(closeBtn);
-
-  const iframeContainer = document.createElement("div");
-  iframeContainer.style.cssText = "flex:1;overflow:auto;padding:20px";
-  
-  const iframe = document.createElement("iframe");
-  iframe.style.cssText = "width:100%;height:100%;border:1px solid #e0e0e0;border-radius:8px";
-  iframeContainer.appendChild(iframe);
-  iframe.srcDoc = gen.getHTMLPreview();
-
-  const footer = document.createElement("div");
-  footer.style.cssText = "padding:16px;border-top:1px solid #e0e0e0;display:flex;gap:10px;justify-content:flex-end";
-
-  const btnDownload = document.createElement("button");
-  btnDownload.innerHTML = "⬇️ Télécharger PDF";
-  btnDownload.className = "btn";
-  btnDownload.onclick = () => gen.generatePDF();
-  
-  const btnArchive = document.createElement("button");
-  btnArchive.innerHTML = "💾 Archiver";
-  btnArchive.className = "btn";
-  btnArchive.onclick = () => {
-    const db = firebase.firestore();
-    db.collection("clients").doc(clientId).collection("contracts").doc(Date.now() + "").set({
-      type: "coaching_contract",
-      createdAt: new Date(),
-      status: "draft",
-      htmlContent: gen.generateHTML(),
-      clientName: client.name,
-      coachName: coachSettings.name
-    }).then(() => {
-      notifCoach("✅ Contrat archivé !");
-    }).catch(e => {
-      console.error("Erreur archivage:", e);
-      notifCoach("❌ Erreur lors de l'archivage");
-    });
-  };
-
-  footer.appendChild(btnDownload);
-  footer.appendChild(btnArchive);
-
-  modal.appendChild(header);
-  modal.appendChild(iframeContainer);
-  modal.appendChild(footer);
-  modalBg.appendChild(modal);
-  document.body.appendChild(modalBg);
+  } catch (err) {
+    console.error("Erreur contrat:", err);
+    alert("Erreur: " + err.message);
+  }
 }
+
+function downloadContractPDF(clientName) {
+  try {
+    const htmlContent = document.getElementById("contractModal").innerHTML;
+    const opt = {
+      margin: 10,
+      filename: "Contrat_" + clientName + "_" + new Date().getTime() + ".pdf",
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { orientation: "portrait", unit: "mm", format: "a4" }
+    };
+    html2pdf().set(opt).from(htmlContent).save();
+  } catch (err) {
+    alert("Erreur PDF: " + err.message);
+  }
+}
+
 
 </script>
 </body>
