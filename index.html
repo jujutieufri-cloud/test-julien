@@ -4598,7 +4598,7 @@ const CONTRACT_TEMPLATE_SIMPLE = `<!DOCTYPE html>
         </div>
     </div>
 </body>
-</html>\`;
+</html>`;
 
 class ContractGenerator {
   constructor(coachSettings, clientData, cadrageData) {
@@ -4652,7 +4652,7 @@ class ContractGenerator {
     const html = this.generateHTML();
     const opt = {
       margin: 5,
-      filename: \`Contrat_\${this.client.name || "Client"}_\${Date.now()}.pdf\`,
+      filename: `Contrat_${this.client.name || "Client"}_${Date.now()}.pdf`,
       image: { type: "jpeg", quality: 0.98 },
       html2canvas: { scale: 2 },
       jsPDF: { orientation: "portrait", unit: "mm", format: "a4" }
@@ -4709,6 +4709,10 @@ function openContractModal(clientId) {
           style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer;">
           ⬇️ Télécharger PDF
         </button>
+        <button onclick="archiveContract('${client.id}', '${client.name}')" 
+          style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer;">
+          💾 Archiver
+        </button>
       </div>
     `;
 
@@ -4735,6 +4739,26 @@ function downloadContractPDF(clientName) {
     html2pdf().set(opt).from(htmlContent).save();
   } catch (err) {
     alert("Erreur PDF: " + err.message);
+  }
+}
+
+function archiveContract(clientId, clientName) {
+  try {
+    const modal = document.getElementById("contractModal");
+    const htmlContent = modal.innerHTML;
+    firebase.firestore().collection("clients").doc(clientId).collection("contracts").doc(Date.now() + "").set({
+      type: "coaching_contract",
+      status: "draft",
+      createdAt: new Date(),
+      htmlContent: htmlContent,
+      clientName: clientName
+    }).then(() => {
+      alert("✅ Contrat archivé !");
+    }).catch(err => {
+      alert("❌ Erreur archivage: " + err.message);
+    });
+  } catch (err) {
+    alert("Erreur: " + err.message);
   }
 }
 
