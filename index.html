@@ -4587,18 +4587,21 @@ const CONTRACT_TEMPLATE_SIMPLE = `<!DOCTYPE html>
             <div class="sig-box">
                 <div>Fait à _____________</div>
                 <div>Le {{contractDate}}</div>
-                <div class="sig-line"></div>
+                <canvas class="sig-pad" id="sigCoachCanvas" width="260" height="90" style="border:1px solid #ccc;border-radius:6px;background:#fff;display:block;margin:8px auto;touch-action:none;max-width:100%;"></canvas>
+                <div><a href="#" onclick="clearSignature('sigCoachCanvas');return false;" style="font-size:11px;color:#9C7A2E;text-decoration:none;">✕ Effacer</a></div>
                 <div>Signature du Coach</div>
-                <div style="margin-top: 20px;">{{coachName}}</div>
+                <div style="margin-top: 8px;">{{coachName}}</div>
             </div>
             <div class="sig-box">
                 <div>Fait à _____________</div>
                 <div>Le {{contractDate}}</div>
-                <div class="sig-line"></div>
+                <canvas class="sig-pad" id="sigClientCanvas" width="260" height="90" style="border:1px solid #ccc;border-radius:6px;background:#fff;display:block;margin:8px auto;touch-action:none;max-width:100%;"></canvas>
+                <div><a href="#" onclick="clearSignature('sigClientCanvas');return false;" style="font-size:11px;color:#9C7A2E;text-decoration:none;">✕ Effacer</a></div>
                 <div>Signature du Client</div>
-                <div style="margin-top: 20px;">{{coacheeName}}</div>
+                <div style="margin-top: 8px;">{{coacheeName}}</div>
             </div>
         </div>
+        <p style="text-align:center;font-size:11px;color:#999;margin-top:8px;">✍️ Signez directement du doigt ou du stylet sur cet écran</p>
     </div>
 </body>
 </html>`;
@@ -4801,6 +4804,7 @@ function generateContractPreview() {
         <button onclick="archiveContract('${client.id}', '${client.name}')" style="padding:10px 20px;background:#28a745;color:white;border:none;border-radius:6px;cursor:pointer">💾 Archiver</button>
       </div>
     `;
+    initSignaturePads();
   } catch (err) {
     console.error("Erreur génération:", err);
     alert("Erreur: " + err.message);
@@ -4809,7 +4813,8 @@ function generateContractPreview() {
 
 function downloadContractPDF(clientName) {
   try {
-    const htmlContent = document.getElementById("contractModal").innerHTML;
+    const box = document.getElementById("contractBox");
+    const flat = flattenSignatures(box);
     const opt = {
       margin: 10,
       filename: "Contrat_" + clientName + "_" + new Date().getTime() + ".pdf",
@@ -4817,7 +4822,7 @@ function downloadContractPDF(clientName) {
       html2canvas: { scale: 2 },
       jsPDF: { orientation: "portrait", unit: "mm", format: "a4" }
     };
-    html2pdf().set(opt).from(htmlContent).save();
+    html2pdf().set(opt).from(flat).save();
   } catch (err) {
     alert("Erreur PDF: " + err.message);
   }
@@ -4825,22 +4830,88 @@ function downloadContractPDF(clientName) {
 
 function archiveContract(clientId, clientName) {
   try {
-    const modal = document.getElementById("contractModal");
-    const htmlContent = modal.innerHTML;
+    const box = document.getElementById("contractBox");
+    const flat = flattenSignatures(box);
+    const htmlContent = flat.innerHTML;
+    const bothSigned = (window.__sigState && window.__sigState.sigCoachCanvas && window.__sigState.sigClientCanvas);
     firebase.firestore().collection("clients").doc(clientId).collection("contracts").doc(Date.now() + "").set({
       type: "coaching_contract",
-      status: "draft",
+      status: bothSigned ? "signed" : "draft",
       createdAt: new Date(),
       htmlContent: htmlContent,
       clientName: clientName
     }).then(() => {
-      alert("✅ Contrat archivé !");
+      alert(bothSigned ? "✅ Contrat signé et archivé !" : "✅ Contrat archivé (non signé)");
     }).catch(err => {
       alert("❌ Erreur archivage: " + err.message);
     });
   } catch (err) {
     alert("Erreur: " + err.message);
   }
+}
+
+function initSignaturePads() {
+  ["sigCoachCanvas", "sigClientCanvas"].forEach(function(id) {
+    const canvas = document.getElementById(id);
+    if (!canvas || canvas.__wired) return;
+    canvas.__wired = true;
+    const ctx = canvas.getContext("2d");
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#1a1a1a";
+    let drawing = false;
+    let last = null;
+
+    function pos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+    }
+
+    canvas.addEventListener("pointerdown", function(e) {
+      drawing = true;
+      try { canvas.setPointerCapture(e.pointerId); } catch(_) {}
+      last = pos(e);
+      window.__sigState = window.__sigState || {};
+      window.__sigState[id] = true;
+    });
+    canvas.addEventListener("pointermove", function(e) {
+      if (!drawing) return;
+      const p = pos(e);
+      ctx.beginPath();
+      ctx.moveTo(last.x, last.y);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      last = p;
+    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach(function(evt) {
+      canvas.addEventListener(evt, function() { drawing = false; });
+    });
+  });
+}
+
+function clearSignature(id) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (window.__sigState) window.__sigState[id] = false;
+}
+
+function flattenSignatures(sourceElement) {
+  const clone = sourceElement.cloneNode(true);
+  const originals = sourceElement.querySelectorAll("canvas.sig-pad");
+  const clones = clone.querySelectorAll("canvas.sig-pad");
+  originals.forEach(function(cv, i) {
+    const img = document.createElement("img");
+    img.src = cv.toDataURL("image/png");
+    img.style.cssText = cv.style.cssText;
+    img.width = cv.width;
+    img.height = cv.height;
+    if (clones[i]) clones[i].replaceWith(img);
+  });
+  return clone;
 }
 
 
