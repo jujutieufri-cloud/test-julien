@@ -272,6 +272,27 @@ nav{flex:1}
   }
 }
 </style>
+/* ═══ OUTILS TAB ═══ */
+.outils-container { padding: 20px; }
+.session-selector { margin-bottom: 20px; display: flex; gap: 10px; align-items: center; }
+.session-selector select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+.outils-tabs { display: flex; gap: 10px; margin: 20px 0; border-bottom: 1px solid #E4DAC0; }
+.tab-btn { padding: 10px 20px; border: none; background: #f3f4f6; cursor: pointer; border-radius: 6px; font-weight: 500; transition: all 0.2s; font-size: 14px; }
+.tab-btn.active { background: #4f46e5; color: white; }
+.tab-btn:hover { background: #e5e7eb; }
+.tab-btn.active:hover { background: #4f46e5; }
+.outil-panel { display: block; }
+.outil-panel.hidden { display: none; }
+.outil-desc { color: #666; font-size: 14px; margin-bottom: 20px; font-style: italic; }
+.ikigai-form, .arbre-form { display: flex; flex-direction: column; gap: 20px; }
+.ikigai-input-group, .arbre-section { background: #f9fafb; padding: 15px; border-radius: 8px; border-left: 4px solid #4f46e5; }
+.ikigai-input-group label, .arbre-section h4 { display: block; font-weight: bold; margin-bottom: 8px; color: #1f2937; font-size: 14px; }
+.ikigai-input-group textarea, .arbre-section textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-family: inherit; min-height: 80px; font-size: 14px; }
+.ikigai-visual, .arbre-visual { margin-top: 30px; padding: 20px; background: #f9fafb; border-radius: 8px; }
+.outils-export { margin-top: 30px; text-align: center; }
+.btn-save { padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; transition: background 0.2s; }
+.btn-save:hover { background: #059669; }
+.empty-state { padding: 40px; text-align: center; color: #999; font-size: 14px; }
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
@@ -2787,6 +2808,7 @@ const TABS = [
 
 function renderNav() {
   const nav = document.getElementById("nav");
+  {id:"outils",       icon:"🛠️", label:"Outils Coaching",        pole:"Gestion", cat:"Coaching"},
   nav.innerHTML = "";
   const upcoming = state.clients.filter(c => c.nextSession && c.status==="actif").length;
   let dernierPole = undefined;
@@ -3910,6 +3932,375 @@ function renderNotes() {
 
 // ══════════════════════════════════════════
 //  RENDER PRINCIPAL
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ONGLET OUTILS — Ikigaï + Arbre de Vie + Export PDF
+   À intégrer dans index.html CoachingStudio (après renderIntakeTab/renderLiveTab)
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+function renderOutilsTab() {
+  const clientId = state.selClientId;
+  if (!clientId) {
+    return `<div class="empty-state">Sélectionnez un client</div>`;
+  }
+
+  const client = state.clients.find(c => c.id === clientId);
+  if (!client) return `<div class="empty-state">Client introuvable</div>`;
+
+  const sessions = state.sessions.filter(s => s.clientId === clientId);
+  const lastSession = sessions.length > 0 ? sessions[sessions.length - 1] : null;
+  const sessionId = lastSession?.id || `session_${Date.now()}`;
+
+  const outil = state.outils?.[sessionId] || { ikigai: {}, arbre: {} };
+
+  return `
+    <div class="outils-container">
+      <h2>🛠️ Outils Coaching — ${client.name}</h2>
+      
+      <!-- Sélecteur de session -->
+      <div class="session-selector">
+        <label>Session:</label>
+        <select id="sessionSelector" onchange="switchOutilSession(this.value)">
+          <option value="new">📝 Nouvelle session</option>
+          ${sessions.map(s => `
+            <option value="${s.id}" ${s.id === sessionId ? 'selected' : ''}>
+              ${new Date(s.timestamp).toLocaleDateString('fr-FR')} — ${s.type || 'Session'}
+            </option>
+          `).join('')}
+        </select>
+      </div>
+
+      <!-- Onglets Ikigaï / Arbre -->
+      <div class="outils-tabs">
+        <button class="tab-btn active" onclick="switchOutilTab('ikigai')">
+          🎯 Ikigaï
+        </button>
+        <button class="tab-btn" onclick="switchOutilTab('arbre')">
+          🌳 Arbre de Vie
+        </button>
+      </div>
+
+      <!-- Contenu Ikigaï -->
+      <div id="ikigai-tab" class="outil-panel active">
+        ${renderIkigai(clientId, sessionId, outil.ikigai)}
+      </div>
+
+      <!-- Contenu Arbre -->
+      <div id="arbre-tab" class="outil-panel hidden">
+        ${renderArbreDeVie(clientId, sessionId, outil.arbre)}
+      </div>
+
+      <!-- Export -->
+      <div class="outils-export">
+        <button class="btn-primary" onclick="exportOutilsPDF('${clientId}', '${sessionId}', '${client.name}')">
+          📥 Exporter en PDF
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function renderIkigai(clientId, sessionId, data) {
+  const { passion, talent, besoin, remuneration } = data;
+
+  return `
+    <div class="ikigai-wrapper">
+      <p class="outil-desc">Trouvez l'intersection de ce que vous aimez, savez faire, le monde a besoin, et qui rémunère.</p>
+
+      <form class="ikigai-form" onsubmit="saveIkigai(event, '${clientId}', '${sessionId}')">
+        <div class="ikigai-input-group">
+          <label>❤️ Passion — Qu'est-ce que vous aimez faire?</label>
+          <textarea name="passion" placeholder="Ce qui vous fait vibrer...">${passion || ''}</textarea>
+        </div>
+
+        <div class="ikigai-input-group">
+          <label>💪 Talent — Qu'est-ce que vous savez faire?</label>
+          <textarea name="talent" placeholder="Vos compétences...">${talent || ''}</textarea>
+        </div>
+
+        <div class="ikigai-input-group">
+          <label>🌍 Besoin — De quoi le monde a-t-il besoin?</label>
+          <textarea name="besoin" placeholder="La demande du marché...">${besoin || ''}</textarea>
+        </div>
+
+        <div class="ikigai-input-group">
+          <label>💰 Rémunération — Ce qui peut vous rémunérer?</label>
+          <textarea name="remuneration" placeholder="Les modèles économiques viables...">${remuneration || ''}</textarea>
+        </div>
+
+        <button type="submit" class="btn-save">💾 Sauvegarder Ikigaï</button>
+      </form>
+
+      <!-- Visualisation Ikigaï -->
+      <div class="ikigai-visual">
+        <svg viewBox="0 0 400 400" width="100%" height="300">
+          <!-- Cercles -->
+          <circle cx="150" cy="150" r="130" fill="rgba(255, 107, 107, 0.1)" stroke="rgb(255, 107, 107)" stroke-width="2"/>
+          <circle cx="250" cy="150" r="130" fill="rgba(52, 211, 153, 0.1)" stroke="rgb(52, 211, 153)" stroke-width="2"/>
+          <circle cx="150" cy="250" r="130" fill="rgba(96, 165, 250, 0.1)" stroke="rgb(96, 165, 250)" stroke-width="2"/>
+          <circle cx="250" cy="250" r="130" fill="rgba(251, 191, 36, 0.1)" stroke="rgb(251, 191, 36)" stroke-width="2"/>
+
+          <!-- Labels -->
+          <text x="100" y="100" text-anchor="middle" font-size="12" font-weight="bold">Passion</text>
+          <text x="300" y="100" text-anchor="middle" font-size="12" font-weight="bold">Talent</text>
+          <text x="100" y="350" text-anchor="middle" font-size="12" font-weight="bold">Besoin</text>
+          <text x="300" y="350" text-anchor="middle" font-size="12" font-weight="bold">Rémunération</text>
+
+          <!-- Centre -->
+          <text x="200" y="205" text-anchor="middle" font-size="14" font-weight="bold" fill="rgb(99, 102, 241)">IKIGAÏ</text>
+        </svg>
+      </div>
+    </div>
+  `;
+}
+
+function renderArbreDeVie(clientId, sessionId, data) {
+  const racines = data.racines || '';
+  const tronc = data.tronc || '';
+  const branches = data.branches || '';
+  const feuilles = data.feuilles || '';
+  const fruits = data.fruits || '';
+  const fleurs = data.fleurs || '';
+
+  return `
+    <div class="arbre-wrapper">
+      <p class="outil-desc">L'Arbre de Vie représente vos forces (racines), vos valeurs (tronc), vos capacités (branches), et vos réalisations (fruits).</p>
+
+      <form class="arbre-form" onsubmit="saveArbreDeVie(event, '${clientId}', '${sessionId}')">
+        <div class="arbre-section">
+          <h4>🌱 Racines — Fondations, origines, ressources familiales</h4>
+          <textarea name="racines" placeholder="D'où venez-vous? Quelles sont vos racines?">${racines}</textarea>
+        </div>
+
+        <div class="arbre-section">
+          <h4>🌳 Tronc — Valeurs, principes, identité</h4>
+          <textarea name="tronc" placeholder="Qui êtes-vous? Quelles sont vos valeurs?">${tronc}</textarea>
+        </div>
+
+        <div class="arbre-section">
+          <h4>🌿 Branches — Capacités, compétences, domaines de vie</h4>
+          <textarea name="branches" placeholder="Que savez-vous faire? Vos compétences?">${branches}</textarea>
+        </div>
+
+        <div class="arbre-section">
+          <h4>🍃 Feuilles — Respiration, projets en cours, apprentissages</h4>
+          <textarea name="feuilles" placeholder="Sur quoi travaillez-vous maintenant?">${feuilles}</textarea>
+        </div>
+
+        <div class="arbre-section">
+          <h4>🌸 Fleurs — Beauté, expression créative, moments de joie</h4>
+          <textarea name="fleurs" placeholder="Où trouvez-vous la beauté et la joie?">${fleurs}</textarea>
+        </div>
+
+        <div class="arbre-section">
+          <h4>🍎 Fruits — Réalisations, héritages, ce que vous offrez au monde</h4>
+          <textarea name="fruits" placeholder="Vos réalisations et contributions?">${fruits}</textarea>
+        </div>
+
+        <button type="submit" class="btn-save">💾 Sauvegarder Arbre de Vie</button>
+      </form>
+
+      <!-- Visualisation Arbre -->
+      <div class="arbre-visual">
+        <svg viewBox="0 0 400 500" width="100%" height="350">
+          <!-- Racines -->
+          <line x1="200" y1="350" x2="150" y2="450" stroke="rgb(139, 92, 46)" stroke-width="3"/>
+          <line x1="200" y1="350" x2="200" y2="470" stroke="rgb(139, 92, 46)" stroke-width="3"/>
+          <line x1="200" y1="350" x2="250" y2="450" stroke="rgb(139, 92, 46)" stroke-width="3"/>
+          <text x="200" y="480" text-anchor="middle" font-size="11">🌱 Racines</text>
+
+          <!-- Tronc -->
+          <rect x="185" y="250" width="30" height="100" fill="rgb(139, 92, 46)" opacity="0.7"/>
+          <text x="200" y="305" text-anchor="middle" font-size="10" fill="white" font-weight="bold">Tronc</text>
+
+          <!-- Branches principales -->
+          <line x1="200" y1="250" x2="100" y2="150" stroke="rgb(34, 197, 94)" stroke-width="3"/>
+          <line x1="200" y1="250" x2="300" y2="150" stroke="rgb(34, 197, 94)" stroke-width="3"/>
+          <line x1="200" y1="280" x2="80" y2="200" stroke="rgb(34, 197, 94)" stroke-width="2"/>
+          <line x1="200" y1="280" x2="320" y2="200" stroke="rgb(34, 197, 94)" stroke-width="2"/>
+
+          <!-- Feuilles/Fleurs -->
+          <circle cx="100" cy="120" r="8" fill="rgb(34, 197, 94)"/>
+          <circle cx="300" cy="120" r="8" fill="rgb(34, 197, 94)"/>
+          <circle cx="60" cy="180" r="6" fill="rgb(251, 146, 60)"/>
+          <circle cx="340" cy="180" r="6" fill="rgb(251, 146, 60)"/>
+
+          <!-- Fruits -->
+          <circle cx="100" cy="100" r="5" fill="rgb(239, 68, 68)"/>
+          <circle cx="300" cy="100" r="5" fill="rgb(239, 68, 68)"/>
+
+          <text x="200" y="50" text-anchor="middle" font-size="24">🌳</text>
+        </svg>
+      </div>
+    </div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Sauvegarde Firestore + localStorage
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+function saveIkigai(event, clientId, sessionId) {
+  event.preventDefault();
+  const form = event.target;
+  const ikigai = {
+    passion: form.passion.value.trim(),
+    talent: form.talent.value.trim(),
+    besoin: form.besoin.value.trim(),
+    remuneration: form.remuneration.value.trim(),
+    timestamp: new Date().toISOString()
+  };
+
+  saveOutilData(clientId, sessionId, 'ikigai', ikigai);
+  alert('✅ Ikigaï sauvegardé');
+}
+
+function saveArbreDeVie(event, clientId, sessionId) {
+  event.preventDefault();
+  const form = event.target;
+  const arbre = {
+    racines: form.racines.value.trim(),
+    tronc: form.tronc.value.trim(),
+    branches: form.branches.value.trim(),
+    feuilles: form.feuilles.value.trim(),
+    fleurs: form.fleurs.value.trim(),
+    fruits: form.fruits.value.trim(),
+    timestamp: new Date().toISOString()
+  };
+
+  saveOutilData(clientId, sessionId, 'arbre', arbre);
+  alert('✅ Arbre de Vie sauvegardé');
+}
+
+function saveOutilData(clientId, sessionId, type, data) {
+  if (!state.outils) state.outils = {};
+  if (!state.outils[sessionId]) state.outils[sessionId] = {};
+  
+  state.outils[sessionId][type] = data;
+  setState();
+
+  // Sauvegarde Firestore
+  const db = firebase.firestore();
+  db.collection('outils').doc(sessionId).set({
+    clientId,
+    coachUid: state.coachUid,
+    [type]: data,
+    updatedAt: new Date()
+  }, { merge: true }).catch(err => console.error('Erreur sauvegarde Firestore:', err));
+}
+
+function switchOutilTab(tab) {
+  document.querySelectorAll('.outil-panel').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  
+  document.getElementById(`${tab}-tab`).classList.remove('hidden');
+  event.target.classList.add('active');
+}
+
+function switchOutilSession(sessionId) {
+  if (sessionId === 'new') {
+    state.outils[`session_${Date.now()}`] = { ikigai: {}, arbre: {} };
+  }
+  setState();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Export PDF
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+function exportOutilsPDF(clientId, sessionId, clientName) {
+  const outil = state.outils?.[sessionId] || { ikigai: {}, arbre: {} };
+  const client = state.clients.find(c => c.id === clientId);
+  
+  // Création du contenu HTML pour PDF
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        body { font-family: Arial, sans-serif; margin: 40px; color: #333; }
+        h1 { color: #4f46e5; border-bottom: 3px solid #4f46e5; padding-bottom: 10px; }
+        h2 { color: #6366f1; margin-top: 30px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .section { margin-bottom: 40px; }
+        .field { margin-bottom: 20px; padding: 15px; background: #f9fafb; border-left: 4px solid #4f46e5; }
+        .field-label { font-weight: bold; color: #4f46e5; margin-bottom: 5px; }
+        .field-value { white-space: pre-wrap; line-height: 1.6; }
+        .empty { font-style: italic; color: #999; }
+        .footer { margin-top: 50px; border-top: 1px solid #ddd; padding-top: 20px; font-size: 12px; color: #666; }
+        .timestamp { font-size: 12px; color: #999; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div>
+          <h1>📋 Outils Coaching</h1>
+          <p><strong>${clientName}</strong></p>
+        </div>
+        <div class="timestamp">${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}</div>
+      </div>
+
+      <div class="section">
+        <h2>🎯 Ikigaï</h2>
+        <div class="field">
+          <div class="field-label">❤️ Passion</div>
+          <div class="field-value">${outil.ikigai?.passion ? outil.ikigai.passion : '<span class="empty">Non renseigné</span>'}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">💪 Talent</div>
+          <div class="field-value">${outil.ikigai?.talent ? outil.ikigai.talent : '<span class="empty">Non renseigné</span>'}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">🌍 Besoin</div>
+          <div class="field-value">${outil.ikigai?.besoin ? outil.ikigai.besoin : '<span class="empty">Non renseigné</span>'}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">💰 Rémunération</div>
+          <div class="field-value">${outil.ikigai?.remuneration ? outil.ikigai.remuneration : '<span class="empty">Non renseigné</span>'}</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>🌳 Arbre de Vie</h2>
+        <div class="field">
+          <div class="field-label">🌱 Racines</div>
+          <div class="field-value">${outil.arbre?.racines ? outil.arbre.racines : '<span class="empty">Non renseigné</span>'}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">🌳 Tronc</div>
+          <div class="field-value">${outil.arbre?.tronc ? outil.arbre.tronc : '<span class="empty">Non renseigné</span>'}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">🌿 Branches</div>
+          <div class="field-value">${outil.arbre?.branches ? outil.arbre.branches : '<span class="empty">Non renseigné</span>'}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">🍃 Feuilles</div>
+          <div class="field-value">${outil.arbre?.feuilles ? outil.arbre.feuilles : '<span class="empty">Non renseigné</span>'}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">🌸 Fleurs</div>
+          <div class="field-value">${outil.arbre?.fleurs ? outil.arbre.fleurs : '<span class="empty">Non renseigné</span>'}</div>
+        </div>
+        <div class="field">
+          <div class="field-label">🍎 Fruits</div>
+          <div class="field-value">${outil.arbre?.fruits ? outil.arbre.fruits : '<span class="empty">Non renseigné</span>'}</div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <p>Généré par CoachingStudio — Coach Julien</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  // Ouverture impression
+  const printWindow = window.open('', '', 'height=600,width=800');
+  printWindow.document.write(html);
+  printWindow.document.close();
+  setTimeout(() => printWindow.print(), 250);
+}
 // ══════════════════════════════════════════
 let _renderScheduled = false;
 function render() {
@@ -3938,6 +4329,7 @@ function renderNow() {
   else if (state.tab==="deroules") content = renderDeroulesTab();
   else if (state.tab==="rdv") content = renderRdvTab();
   else if (state.tab==="reglages") content = renderReglagesTab();
+  else if (state.tab==="outils") content = renderOutilsTab();
   else if (state.tab==="bibliotheque") content = renderBibliotheque();
   else if (state.tab==="ressources")   content = renderRessources();
   else if (state.tab==="notes")        content = renderNotes();
