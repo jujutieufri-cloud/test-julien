@@ -271,7 +271,6 @@ nav{flex:1}
     padding: 16px !important;
   }
 }
-</style>
 /* ═══ OUTILS TAB ═══ */
 .outils-container { padding: 20px; }
 .session-selector { margin-bottom: 20px; display: flex; gap: 10px; align-items: center; }
@@ -293,6 +292,7 @@ nav{flex:1}
 .btn-save { padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; transition: background 0.2s; }
 .btn-save:hover { background: #059669; }
 .empty-state { padding: 40px; text-align: center; color: #999; font-size: 14px; }
+</style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
@@ -2804,11 +2804,11 @@ const TABS = [
   {id:"finances",     icon:"💰", label:"Finances",                 pole:"Gestion", cat:"Finances"},
   {id:"reglages",     icon:"⚙️", label:"Site internet & réglages", pole:"Gestion", cat:"Site internet"},
   {id:"notes",        icon:"◻", label:"Journal de bord",           pole:"Gestion", cat:"Administratif"},
+  {id:"outils",       icon:"🛠️", label:"Outils Coaching",        pole:"Gestion", cat:"Coaching"},
 ];
 
 function renderNav() {
   const nav = document.getElementById("nav");
-  {id:"outils",       icon:"🛠️", label:"Outils Coaching",        pole:"Gestion", cat:"Coaching"},
   nav.innerHTML = "";
   const upcoming = state.clients.filter(c => c.nextSession && c.status==="actif").length;
   let dernierPole = undefined;
@@ -3931,7 +3931,6 @@ function renderNotes() {
 }
 
 // ══════════════════════════════════════════
-//  RENDER PRINCIPAL
 /* ═══════════════════════════════════════════════════════════════════════════════
    ONGLET OUTILS — Ikigaï + Arbre de Vie + Export PDF
    À intégrer dans index.html CoachingStudio (après renderIntakeTab/renderLiveTab)
@@ -4301,6 +4300,7 @@ function exportOutilsPDF(clientId, sessionId, clientName) {
   printWindow.document.close();
   setTimeout(() => printWindow.print(), 250);
 }
+//  RENDER PRINCIPAL
 // ══════════════════════════════════════════
 let _renderScheduled = false;
 function render() {
@@ -4329,10 +4329,10 @@ function renderNow() {
   else if (state.tab==="deroules") content = renderDeroulesTab();
   else if (state.tab==="rdv") content = renderRdvTab();
   else if (state.tab==="reglages") content = renderReglagesTab();
-  else if (state.tab==="outils") content = renderOutilsTab();
   else if (state.tab==="bibliotheque") content = renderBibliotheque();
   else if (state.tab==="ressources")   content = renderRessources();
   else if (state.tab==="notes")        content = renderNotes();
+  else if (state.tab==="outils") content = renderOutilsTab();
   else content = renderDashboard();
 
   main.appendChild(content);
