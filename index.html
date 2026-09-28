@@ -292,6 +292,21 @@ nav{flex:1}
 .btn-save { padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; transition: background 0.2s; }
 .btn-save:hover { background: #059669; }
 .empty-state { padding: 40px; text-align: center; color: #999; font-size: 14px; }
+/* ═══ OUTILS V2 — radar + cartes ═══ */
+.rv-wrap{max-width:720px;margin:0 auto}
+.rv-radar{margin:10px 0 6px}
+.rv-summary{background:#FFFDF7;border:1px solid #E4DAC0;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.6;color:#4A4030;margin-bottom:18px}
+.rv-dom{margin:18px 0 26px}
+.rv-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.rv-title{font-weight:600;font-size:15px;color:#3A3226;line-height:1.35}
+.rv-score{font-size:22px;font-weight:700;color:#9C7A2E;min-width:28px;text-align:right}
+.rv-link{background:none;border:none;color:#6B6355;text-decoration:underline;font-size:13px;padding:10px 0;cursor:pointer}
+.rv-card{display:block;width:100%;text-align:left;padding:14px 16px;margin:8px 0;border:1px solid #D8CBA8;border-radius:14px;background:#FFFFFF;font-size:15px;color:#3A3226;cursor:pointer;min-height:48px;font-family:inherit}
+.rv-card.sel{border:2px solid #9C7A2E;background:#FBF5E4;font-weight:600}
+.rv-slider{width:100%;margin:14px 0 4px;accent-color:#9C7A2E}
+.rv-scale{display:flex;justify-content:space-between;font-size:12px;color:#8A806E}
+.rv-note{width:100%;box-sizing:border-box;margin-top:8px;padding:10px 12px;border:1px solid #E4DAC0;border-radius:10px;font:inherit;font-size:14px;background:#FFFDF7}
+.rv-saved{font-size:12px;color:#4a9e6a;text-align:right;min-height:16px}
 </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
@@ -3932,10 +3947,267 @@ function renderNotes() {
 }
 
 // ══════════════════════════════════════════
-/* ═══════════════════════════════════════════════════════════════════════════════
-   ONGLET OUTILS — Ikigaï + Arbre de Vie + Export PDF
-   À intégrer dans index.html CoachingStudio (après renderIntakeTab/renderLiveTab)
-   ═══════════════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════════
+   OUTILS COACHING — Ikigaï + Arbre de vie
+   Même mécanique que la Roue de la vie : radar en direct, une question par
+   domaine (4 réponses à toucher), curseur manuel en option, enregistrement auto.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const OUTILS_DEF = {
+  ikigai: {
+    titre: "Ikigaï",
+    intro: "4 dimensions, notées de 0 à 10 avec le client — un bon point de départ pour repérer où porter l'attention en premier.",
+    domaines: [
+      { id:"passion", icone:"❤️", court:"Passion", titre:"Passion — Ce que j'aime", question:"Je fais des choses qui me font vibrer ?",
+        reponses:[
+          { t:"Je ne sais plus ce qui me fait vibrer", s:2 },
+          { t:"Ça arrive rarement, par petits moments", s:4 },
+          { t:"Je m'y consacre régulièrement", s:7 },
+          { t:"C'est au cœur de mon quotidien", s:9 } ] },
+      { id:"talent", icone:"💪", court:"Talent", titre:"Talent — Ce en quoi je suis doué(e)", question:"J'utilise mes talents ?",
+        reponses:[
+          { t:"J'ai du mal à voir ce que je sais bien faire", s:2 },
+          { t:"Je les connais, mais je les utilise peu", s:4 },
+          { t:"Je les utilise souvent", s:7 },
+          { t:"Ils sont reconnus et mobilisés chaque jour", s:9 } ] },
+      { id:"mission", icone:"🌍", court:"Mission", titre:"Mission — Ce dont le monde a besoin", question:"Ce que je fais est utile aux autres ?",
+        reponses:[
+          { t:"Je ne vois pas à quoi ce que je fais sert", s:2 },
+          { t:"Parfois, de façon diffuse", s:4 },
+          { t:"Je vois l'effet sur des personnes précises", s:7 },
+          { t:"Ma contribution est claire et je la ressens", s:9 } ] },
+      { id:"profession", icone:"💰", court:"Profession", titre:"Profession — Ce pour quoi on peut me payer", question:"Je peux en vivre ?",
+        reponses:[
+          { t:"Aucun revenu en lien avec ça", s:2 },
+          { t:"Quelques revenus, loin de suffire", s:4 },
+          { t:"Une partie de mes revenus", s:7 },
+          { t:"J'en vis confortablement", s:9 } ] }
+    ]
+  },
+  arbre: {
+    titre: "Arbre de vie",
+    intro: "6 parties de l'arbre, notées de 0 à 10 avec le client — pour repérer ce qui nourrit et ce qui demande de l'attention.",
+    domaines: [
+      { id:"racines", icone:"🌱", court:"Racines", titre:"Racines — D'où je viens, ce qui me porte", question:"Je m'appuie sur mes origines et mes ressources ?",
+        reponses:[
+          { t:"Je me sens coupé(e) de mes origines et de mes appuis", s:2 },
+          { t:"J'ai quelques appuis, mais fragiles", s:4 },
+          { t:"J'ai des appuis solides que je mobilise", s:7 },
+          { t:"Mes racines me nourrissent au quotidien", s:9 } ] },
+      { id:"tronc", icone:"🌳", court:"Tronc", titre:"Tronc — Mes valeurs, mon identité", question:"Je vis en accord avec mes valeurs ?",
+        reponses:[
+          { t:"Je ne sais plus ce qui compte pour moi", s:2 },
+          { t:"Je les connais, mais je m'en éloigne", s:4 },
+          { t:"Je les respecte la plupart du temps", s:7 },
+          { t:"Mes choix reflètent mes valeurs", s:9 } ] },
+      { id:"branches", icone:"🌿", court:"Branches", titre:"Branches — Mes compétences, mes domaines de vie", question:"Je développe mes capacités ?",
+        reponses:[
+          { t:"Je me sens sans ressources en ce moment", s:2 },
+          { t:"Je doute de mes capacités", s:4 },
+          { t:"Je m'appuie sur plusieurs compétences", s:7 },
+          { t:"Je cultive mes capacités et j'en explore de nouvelles", s:9 } ] },
+      { id:"feuilles", icone:"🍃", court:"Feuilles", titre:"Feuilles — Ce qui me fait grandir en ce moment", question:"J'avance dans mes projets et mes apprentissages ?",
+        reponses:[
+          { t:"Rien ne bouge en ce moment", s:2 },
+          { t:"J'ai des envies, peu de passage à l'action", s:4 },
+          { t:"Des projets avancent", s:7 },
+          { t:"J'apprends et je grandis chaque semaine", s:9 } ] },
+      { id:"fleurs", icone:"🌸", court:"Fleurs", titre:"Fleurs — La joie, la beauté, la créativité", question:"Je m'offre des moments de joie ?",
+        reponses:[
+          { t:"La joie est absente en ce moment", s:2 },
+          { t:"Quelques éclats, rares", s:4 },
+          { t:"Régulièrement", s:7 },
+          { t:"Mon quotidien est coloré de plaisirs", s:9 } ] },
+      { id:"fruits", icone:"🍎", court:"Fruits", titre:"Fruits — Ce que je réalise et transmets", question:"Je vois les fruits de mes efforts ?",
+        reponses:[
+          { t:"Je ne vois pas ce que j'ai accompli", s:2 },
+          { t:"Je minimise mes réalisations", s:4 },
+          { t:"Je reconnais mes réalisations", s:7 },
+          { t:"Je suis fier(e) de ce que j'apporte", s:9 } ] }
+    ]
+  }
+};
+
+function outilEsc(s) {
+  return String(s === undefined || s === null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function outilQ(s) {
+  return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, "&quot;");
+}
+
+function outilData(sid, tool) {
+  if (!state.outils) state.outils = {};
+  if (!state.outils[sid]) state.outils[sid] = {};
+  const cur = state.outils[sid][tool];
+  const d = (cur && typeof cur === "object") ? cur : {};
+  if (!d.scores || typeof d.scores !== "object") d.scores = {};
+  if (!d.mode || typeof d.mode !== "object") d.mode = {};
+  if (!d.note || typeof d.note !== "object") d.note = {};
+  state.outils[sid][tool] = d;
+  return d;
+}
+
+function outilRadarSvg(def, scores) {
+  const n = def.domaines.length, cx = 230, cy = 215, R = 120;
+  const ang = i => -Math.PI / 2 + i * 2 * Math.PI / n;
+  const pt = (i, v) => [cx + Math.cos(ang(i)) * R * v / 10, cy + Math.sin(ang(i)) * R * v / 10];
+  const fmt = p => p[0].toFixed(1) + "," + p[1].toFixed(1);
+
+  let rings = "";
+  [2, 4, 6, 8, 10].forEach(k => {
+    rings += `<polygon points="${def.domaines.map((_, i) => fmt(pt(i, k))).join(" ")}" fill="none" stroke="#D8CBA8" stroke-width="1"/>`;
+  });
+  let axes = "", labels = "", dots = "";
+  def.domaines.forEach((dom, i) => {
+    const e = pt(i, 10);
+    axes += `<line x1="${cx}" y1="${cy}" x2="${e[0].toFixed(1)}" y2="${e[1].toFixed(1)}" stroke="#D8CBA8" stroke-width="1"/>`;
+    const lx = cx + Math.cos(ang(i)) * (R + 26), ly = cy + Math.sin(ang(i)) * (R + 26);
+    labels += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="22">${dom.icone}</text>`;
+    labels += `<text x="${lx.toFixed(1)}" y="${(ly + 20).toFixed(1)}" text-anchor="middle" font-size="11" fill="#6B6355">${outilEsc(dom.court)}</text>`;
+    const s = scores[dom.id];
+    if (s !== undefined) {
+      const p = pt(i, s);
+      dots += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="5" fill="#8B6B4A"/>`;
+    }
+  });
+  const poly = def.domaines.map((dom, i) => fmt(pt(i, scores[dom.id] === undefined ? 0 : scores[dom.id]))).join(" ");
+  return `<svg viewBox="0 0 460 430" width="100%" style="max-width:420px;display:block;margin:0 auto" role="img" aria-label="Radar ${outilEsc(def.titre)}">
+    ${rings}${axes}
+    <polygon points="${poly}" fill="rgba(156,122,46,0.18)" stroke="#8B6B4A" stroke-width="2.5" stroke-linejoin="round"/>
+    ${dots}${labels}
+  </svg>`;
+}
+
+function outilSummaryHtml(def, scores) {
+  const rated = def.domaines.filter(x => scores[x.id] !== undefined);
+  if (!rated.length) return `<span>Aucun domaine noté pour l'instant.</span>`;
+  const avg = rated.reduce((a, x) => a + scores[x.id], 0) / rated.length;
+  let html = `<div><b>Moyenne :</b> ${avg.toFixed(1).replace(".", ",")}/10 · ${rated.length}/${def.domaines.length} domaines notés</div>`;
+  if (rated.length > 1) {
+    const low = rated.reduce((m, x) => scores[x.id] < scores[m.id] ? x : m, rated[0]);
+    html += `<div><b>Où porter l'attention en premier :</b> ${low.icone} ${outilEsc(low.court)} (${scores[low.id]}/10)</div>`;
+  }
+  return html;
+}
+
+function outilDomainHtml(tool, sid, dom, d) {
+  const score = d.scores[dom.id];
+  const mode = d.mode[dom.id] === "curseur" ? "curseur" : "cartes";
+  const note = d.note[dom.id] || "";
+  const S = outilQ(sid);
+  let body;
+  if (mode === "cartes") {
+    body = dom.reponses.map((r, i) =>
+      `<button type="button" class="rv-card${score === r.s ? " sel" : ""}" onclick="outilPick('${tool}','${S}','${dom.id}',${i})">${outilEsc(r.t)}</button>`
+    ).join("");
+  } else {
+    body = `<input type="range" class="rv-slider" min="0" max="10" step="1" value="${score === undefined ? 5 : score}" aria-label="${outilEsc(dom.court)}" oninput="outilSlide('${tool}','${S}','${dom.id}',this.value)">
+      <div class="rv-scale"><span>0</span><span>10</span></div>`;
+  }
+  return `<div class="rv-head">
+      <div class="rv-title">${dom.icone} ${outilEsc(dom.titre)} — ${outilEsc(dom.question)}</div>
+      <div class="rv-score" id="rv-score-${tool}-${dom.id}">${score === undefined ? "—" : score}</div>
+    </div>
+    <button type="button" class="rv-link" onclick="outilToggleMode('${tool}','${S}','${dom.id}')">↔ ${mode === "cartes" ? "Passer en curseur manuel" : "Revenir aux propositions"}</button>
+    ${body}
+    <input type="text" class="rv-note" placeholder="Mes mots (facultatif)" value="${outilEsc(note)}" oninput="outilNote('${tool}','${S}','${dom.id}',this.value)">`;
+}
+
+function outilPanelHtml(tool, sid) {
+  const def = OUTILS_DEF[tool], d = outilData(sid, tool);
+  return `<div class="rv-wrap">
+    <p class="outil-desc">${outilEsc(def.intro)}</p>
+    <div class="rv-radar" id="rv-radar-${tool}">${outilRadarSvg(def, d.scores)}</div>
+    <div class="rv-summary" id="rv-sum-${tool}">${outilSummaryHtml(def, d.scores)}</div>
+    ${def.domaines.map(dom => `<div class="rv-dom" id="rv-dom-${tool}-${dom.id}">${outilDomainHtml(tool, sid, dom, d)}</div>`).join("")}
+    <div class="rv-saved" id="rv-saved-${tool}"></div>
+  </div>`;
+}
+
+function outilRefresh(tool, sid) {
+  const def = OUTILS_DEF[tool], d = outilData(sid, tool);
+  const r = document.getElementById("rv-radar-" + tool);
+  if (r) r.innerHTML = outilRadarSvg(def, d.scores);
+  const s = document.getElementById("rv-sum-" + tool);
+  if (s) s.innerHTML = outilSummaryHtml(def, d.scores);
+}
+
+function outilRerenderDomain(tool, sid, dom) {
+  const box = document.getElementById(`rv-dom-${tool}-${dom.id}`);
+  if (box) box.innerHTML = outilDomainHtml(tool, sid, dom, outilData(sid, tool));
+}
+
+const _outilsFsTimers = {};
+function outilPersist(sid, tool) {
+  const d = outilData(sid, tool);
+  d.timestamp = new Date().toISOString();
+  try {
+    localStorage.setItem("cs4-outils", JSON.stringify(state.outils));
+  } catch (err) {
+    console.error("Outils : sauvegarde locale impossible", err);
+  }
+  const key = sid + "|" + tool;
+  clearTimeout(_outilsFsTimers[key]);
+  _outilsFsTimers[key] = setTimeout(() => {
+    try {
+      if (typeof firebase !== "undefined" && firebase.firestore) {
+        firebase.firestore().collection("outils").doc(sid).set({
+          clientId: state.selClientId || null,
+          coachUid: state.coachUid || null,
+          [tool]: d,
+          updatedAt: new Date().toISOString()
+        }, { merge: true }).catch(err => console.error("Outils : Firestore refusé", err));
+      }
+    } catch (err) {
+      console.error("Outils : Firestore indisponible", err);
+    }
+  }, 800);
+  const el = document.getElementById("rv-saved-" + tool);
+  if (el) el.textContent = "✓ Enregistré";
+}
+
+function outilPick(tool, sid, domId, idx) {
+  const dom = OUTILS_DEF[tool].domaines.find(x => x.id === domId);
+  if (!dom || !dom.reponses[idx]) return;
+  const d = outilData(sid, tool);
+  d.scores[domId] = dom.reponses[idx].s;
+  d.mode[domId] = "cartes";
+  outilRerenderDomain(tool, sid, dom);
+  outilRefresh(tool, sid);
+  outilPersist(sid, tool);
+}
+
+function outilSlide(tool, sid, domId, val) {
+  const d = outilData(sid, tool);
+  d.scores[domId] = Number(val);
+  d.mode[domId] = "curseur";
+  const el = document.getElementById(`rv-score-${tool}-${domId}`);
+  if (el) el.textContent = String(Number(val));
+  outilRefresh(tool, sid);
+  outilPersist(sid, tool);
+}
+
+function outilToggleMode(tool, sid, domId) {
+  const dom = OUTILS_DEF[tool].domaines.find(x => x.id === domId);
+  if (!dom) return;
+  const d = outilData(sid, tool);
+  if (d.mode[domId] === "curseur") {
+    d.mode[domId] = "cartes";
+  } else {
+    d.mode[domId] = "curseur";
+    if (d.scores[domId] === undefined) d.scores[domId] = 5;
+  }
+  outilRerenderDomain(tool, sid, dom);
+  outilRefresh(tool, sid);
+  outilPersist(sid, tool);
+}
+
+function outilNote(tool, sid, domId, val) {
+  outilData(sid, tool).note[domId] = val;
+  outilPersist(sid, tool);
+}
 
 function getOutilsClientSessions(clientId) {
   const all = state.sessions || {};
@@ -3953,7 +4225,7 @@ function renderOutilsTab() {
   const clientId = state.selClientId;
 
   if (!clientId) {
-    const options = state.clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    const options = state.clients.map(c => `<option value="${outilEsc(c.id)}">${outilEsc(c.name)}</option>`).join('');
     wrap.innerHTML = `<div class="outils-container">
       <h2>🛠️ Outils Coaching</h2>
       <p class="outil-desc">Choisir un client :</p>
@@ -3972,16 +4244,13 @@ function renderOutilsTab() {
 
   const clientSessions = getOutilsClientSessions(clientId);
   const currentIndex = (state.selOutilSessionIndex !== undefined && state.selOutilSessionIndex !== null)
-    ? state.selOutilSessionIndex
-    : "current";
+    ? state.selOutilSessionIndex : "current";
   const sessionId = currentIndex === "current" ? `${clientId}_current` : `${clientId}_s${currentIndex}`;
-
-  const outil = (state.outils && state.outils[sessionId]) || { ikigai: {}, arbre: {} };
-  const activeSubTab = state.selOutilSubTab || "ikigai";
+  const activeSubTab = state.selOutilSubTab === "arbre" ? "arbre" : "ikigai";
 
   wrap.innerHTML = `
     <div class="outils-container">
-      <h2>🛠️ Outils Coaching — ${client.name}</h2>
+      <h2>🛠️ Outils Coaching — ${outilEsc(client.name)}</h2>
       <button class="tab-btn" onclick="setState({selClientId:null, selOutilSessionIndex:null})">← Changer de client</button>
 
       <div class="session-selector">
@@ -3990,9 +4259,8 @@ function renderOutilsTab() {
           <option value="current" ${currentIndex === "current" ? "selected" : ""}>📝 Session actuelle</option>
           ${clientSessions.map((s, idx) => `
             <option value="${idx}" ${idx === currentIndex ? "selected" : ""}>
-              ${s.date ? new Date(s.date).toLocaleDateString('fr-FR') : 'Séance ' + (idx + 1)} — ${s.branchLabel || s.optionName || 'Séance'}
-            </option>
-          `).join('')}
+              ${s.date ? new Date(s.date).toLocaleDateString('fr-FR') : 'Séance ' + (idx + 1)} — ${outilEsc(s.branchLabel || s.optionName || 'Séance')}
+            </option>`).join('')}
         </select>
       </div>
 
@@ -4001,183 +4269,14 @@ function renderOutilsTab() {
         <button class="tab-btn ${activeSubTab === 'arbre' ? 'active' : ''}" onclick="switchOutilTab('arbre')">🌳 Arbre de Vie</button>
       </div>
 
-      <div id="ikigai-tab" class="outil-panel ${activeSubTab === 'ikigai' ? '' : 'hidden'}">
-        ${renderIkigai(clientId, sessionId, outil.ikigai)}
-      </div>
-
-      <div id="arbre-tab" class="outil-panel ${activeSubTab === 'arbre' ? '' : 'hidden'}">
-        ${renderArbreDeVie(clientId, sessionId, outil.arbre)}
-      </div>
+      <div id="ikigai-tab" class="outil-panel ${activeSubTab === 'ikigai' ? '' : 'hidden'}">${outilPanelHtml('ikigai', sessionId)}</div>
+      <div id="arbre-tab" class="outil-panel ${activeSubTab === 'arbre' ? '' : 'hidden'}">${outilPanelHtml('arbre', sessionId)}</div>
 
       <div class="outils-export">
-        <button class="btn-primary" onclick="exportOutilsPDF('${sessionId}', '${client.name.replace(/'/g, "\\'")}')">📥 Exporter en PDF</button>
+        <button class="btn-save" onclick="exportOutilsPDF('${outilQ(sessionId)}', '${outilQ(client.name)}')">📥 Exporter en PDF</button>
       </div>
-    </div>
-  `;
-
+    </div>`;
   return wrap;
-}
-
-function renderIkigai(clientId, sessionId, data) {
-  const { passion, talent, besoin, remuneration } = data || {};
-
-  return `
-    <div class="ikigai-wrapper">
-      <p class="outil-desc">Trouvez l'intersection de ce que vous aimez, savez faire, le monde a besoin, et qui rémunère.</p>
-
-      <form class="ikigai-form" onsubmit="saveIkigai(event, '${sessionId}')">
-        <div class="ikigai-input-group">
-          <label>❤️ Passion — Qu'est-ce que vous aimez faire?</label>
-          <textarea name="passion" placeholder="Ce qui vous fait vibrer...">${passion || ''}</textarea>
-        </div>
-        <div class="ikigai-input-group">
-          <label>💪 Talent — Qu'est-ce que vous savez faire?</label>
-          <textarea name="talent" placeholder="Vos compétences...">${talent || ''}</textarea>
-        </div>
-        <div class="ikigai-input-group">
-          <label>🌍 Besoin — De quoi le monde a-t-il besoin?</label>
-          <textarea name="besoin" placeholder="La demande du marché...">${besoin || ''}</textarea>
-        </div>
-        <div class="ikigai-input-group">
-          <label>💰 Rémunération — Ce qui peut vous rémunérer?</label>
-          <textarea name="remuneration" placeholder="Les modèles économiques viables...">${remuneration || ''}</textarea>
-        </div>
-        <button type="submit" class="btn-save">💾 Sauvegarder Ikigaï</button>
-      </form>
-
-      <div class="ikigai-visual">
-        <svg viewBox="0 0 400 400" width="100%" height="300">
-          <circle cx="150" cy="150" r="130" fill="rgba(255, 107, 107, 0.1)" stroke="rgb(255, 107, 107)" stroke-width="2"/>
-          <circle cx="250" cy="150" r="130" fill="rgba(52, 211, 153, 0.1)" stroke="rgb(52, 211, 153)" stroke-width="2"/>
-          <circle cx="150" cy="250" r="130" fill="rgba(96, 165, 250, 0.1)" stroke="rgb(96, 165, 250)" stroke-width="2"/>
-          <circle cx="250" cy="250" r="130" fill="rgba(251, 191, 36, 0.1)" stroke="rgb(251, 191, 36)" stroke-width="2"/>
-          <text x="100" y="100" text-anchor="middle" font-size="12" font-weight="bold">Passion</text>
-          <text x="300" y="100" text-anchor="middle" font-size="12" font-weight="bold">Talent</text>
-          <text x="100" y="350" text-anchor="middle" font-size="12" font-weight="bold">Besoin</text>
-          <text x="300" y="350" text-anchor="middle" font-size="12" font-weight="bold">Rémunération</text>
-          <text x="200" y="205" text-anchor="middle" font-size="14" font-weight="bold" fill="rgb(99, 102, 241)">IKIGAÏ</text>
-        </svg>
-      </div>
-    </div>
-  `;
-}
-
-function renderArbreDeVie(clientId, sessionId, data) {
-  const d = data || {};
-  const racines = d.racines || '';
-  const tronc = d.tronc || '';
-  const branches = d.branches || '';
-  const feuilles = d.feuilles || '';
-  const fruits = d.fruits || '';
-  const fleurs = d.fleurs || '';
-
-  return `
-    <div class="arbre-wrapper">
-      <p class="outil-desc">L'Arbre de Vie représente vos forces (racines), vos valeurs (tronc), vos capacités (branches), et vos réalisations (fruits).</p>
-
-      <form class="arbre-form" onsubmit="saveArbreDeVie(event, '${sessionId}')">
-        <div class="arbre-section">
-          <h4>🌱 Racines — Fondations, origines, ressources familiales</h4>
-          <textarea name="racines" placeholder="D'où venez-vous? Quelles sont vos racines?">${racines}</textarea>
-        </div>
-        <div class="arbre-section">
-          <h4>🌳 Tronc — Valeurs, principes, identité</h4>
-          <textarea name="tronc" placeholder="Qui êtes-vous? Quelles sont vos valeurs?">${tronc}</textarea>
-        </div>
-        <div class="arbre-section">
-          <h4>🌿 Branches — Capacités, compétences, domaines de vie</h4>
-          <textarea name="branches" placeholder="Que savez-vous faire? Vos compétences?">${branches}</textarea>
-        </div>
-        <div class="arbre-section">
-          <h4>🍃 Feuilles — Respiration, projets en cours, apprentissages</h4>
-          <textarea name="feuilles" placeholder="Sur quoi travaillez-vous maintenant?">${feuilles}</textarea>
-        </div>
-        <div class="arbre-section">
-          <h4>🌸 Fleurs — Beauté, expression créative, moments de joie</h4>
-          <textarea name="fleurs" placeholder="Où trouvez-vous la beauté et la joie?">${fleurs}</textarea>
-        </div>
-        <div class="arbre-section">
-          <h4>🍎 Fruits — Réalisations, héritages, ce que vous offrez au monde</h4>
-          <textarea name="fruits" placeholder="Vos réalisations et contributions?">${fruits}</textarea>
-        </div>
-        <button type="submit" class="btn-save">💾 Sauvegarder Arbre de Vie</button>
-      </form>
-
-      <div class="arbre-visual">
-        <svg viewBox="0 0 400 500" width="100%" height="350">
-          <line x1="200" y1="350" x2="150" y2="450" stroke="rgb(139, 92, 46)" stroke-width="3"/>
-          <line x1="200" y1="350" x2="200" y2="470" stroke="rgb(139, 92, 46)" stroke-width="3"/>
-          <line x1="200" y1="350" x2="250" y2="450" stroke="rgb(139, 92, 46)" stroke-width="3"/>
-          <text x="200" y="480" text-anchor="middle" font-size="11">🌱 Racines</text>
-          <rect x="185" y="250" width="30" height="100" fill="rgb(139, 92, 46)" opacity="0.7"/>
-          <text x="200" y="305" text-anchor="middle" font-size="10" fill="white" font-weight="bold">Tronc</text>
-          <line x1="200" y1="250" x2="100" y2="150" stroke="rgb(34, 197, 94)" stroke-width="3"/>
-          <line x1="200" y1="250" x2="300" y2="150" stroke="rgb(34, 197, 94)" stroke-width="3"/>
-          <line x1="200" y1="280" x2="80" y2="200" stroke="rgb(34, 197, 94)" stroke-width="2"/>
-          <line x1="200" y1="280" x2="320" y2="200" stroke="rgb(34, 197, 94)" stroke-width="2"/>
-          <circle cx="100" cy="120" r="8" fill="rgb(34, 197, 94)"/>
-          <circle cx="300" cy="120" r="8" fill="rgb(34, 197, 94)"/>
-          <circle cx="60" cy="180" r="6" fill="rgb(251, 146, 60)"/>
-          <circle cx="340" cy="180" r="6" fill="rgb(251, 146, 60)"/>
-          <circle cx="100" cy="100" r="5" fill="rgb(239, 68, 68)"/>
-          <circle cx="300" cy="100" r="5" fill="rgb(239, 68, 68)"/>
-          <text x="200" y="50" text-anchor="middle" font-size="24">🌳</text>
-        </svg>
-      </div>
-    </div>
-  `;
-}
-
-function saveIkigai(event, sessionId) {
-  event.preventDefault();
-  const form = event.target;
-  const ikigai = {
-    passion: form.passion.value.trim(),
-    talent: form.talent.value.trim(),
-    besoin: form.besoin.value.trim(),
-    remuneration: form.remuneration.value.trim(),
-    timestamp: new Date().toISOString()
-  };
-  saveOutilData(sessionId, 'ikigai', ikigai);
-  render();
-}
-
-function saveArbreDeVie(event, sessionId) {
-  event.preventDefault();
-  const form = event.target;
-  const arbre = {
-    racines: form.racines.value.trim(),
-    tronc: form.tronc.value.trim(),
-    branches: form.branches.value.trim(),
-    feuilles: form.feuilles.value.trim(),
-    fleurs: form.fleurs.value.trim(),
-    fruits: form.fruits.value.trim(),
-    timestamp: new Date().toISOString()
-  };
-  saveOutilData(sessionId, 'arbre', arbre);
-  render();
-}
-
-function saveOutilData(sessionId, type, data) {
-  if (!state.outils) state.outils = {};
-  if (!state.outils[sessionId]) state.outils[sessionId] = {};
-  state.outils[sessionId][type] = data;
-
-  localStorage.setItem("cs4-outils", JSON.stringify(state.outils));
-
-  try {
-    if (typeof firebase !== "undefined" && firebase.firestore) {
-      const db = firebase.firestore();
-      db.collection('outils').doc(sessionId).set({
-        clientId: state.selClientId,
-        coachUid: state.coachUid || null,
-        [type]: data,
-        updatedAt: new Date().toISOString()
-      }, { merge: true }).catch(err => console.error('Erreur sauvegarde Firestore:', err));
-    }
-  } catch (err) {
-    console.error('Firestore indisponible:', err);
-  }
 }
 
 function switchOutilTab(tabName) {
@@ -4191,62 +4290,49 @@ function switchOutilSession(value) {
 }
 
 function exportOutilsPDF(sessionId, clientName) {
-  const outil = (state.outils && state.outils[sessionId]) || { ikigai: {}, arbre: {} };
-
-  const champ = (val) => val ? String(val).replace(/</g, "&lt;").replace(/>/g, "&gt;") : '<span class="empty">Non renseigné</span>';
-
-  const html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <style>
-        body { font-family: Arial, sans-serif; margin: 40px; color: #333; }
-        h1 { color: #4f46e5; border-bottom: 3px solid #4f46e5; padding-bottom: 10px; }
-        h2 { color: #6366f1; margin-top: 30px; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-        .field { margin-bottom: 20px; padding: 15px; background: #f9fafb; border-left: 4px solid #4f46e5; }
-        .field-label { font-weight: bold; color: #4f46e5; margin-bottom: 5px; }
-        .field-value { white-space: pre-wrap; line-height: 1.6; }
-        .empty { font-style: italic; color: #999; }
-        .footer { margin-top: 50px; border-top: 1px solid #ddd; padding-top: 20px; font-size: 12px; color: #666; }
-        .timestamp { font-size: 12px; color: #999; }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <div><h1>📋 Outils Coaching</h1><p><strong>${clientName}</strong></p></div>
-        <div class="timestamp">${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}</div>
-      </div>
-
-      <div class="section">
-        <h2>🎯 Ikigaï</h2>
-        <div class="field"><div class="field-label">❤️ Passion</div><div class="field-value">${champ(outil.ikigai?.passion)}</div></div>
-        <div class="field"><div class="field-label">💪 Talent</div><div class="field-value">${champ(outil.ikigai?.talent)}</div></div>
-        <div class="field"><div class="field-label">🌍 Besoin</div><div class="field-value">${champ(outil.ikigai?.besoin)}</div></div>
-        <div class="field"><div class="field-label">💰 Rémunération</div><div class="field-value">${champ(outil.ikigai?.remuneration)}</div></div>
-      </div>
-
-      <div class="section">
-        <h2>🌳 Arbre de Vie</h2>
-        <div class="field"><div class="field-label">🌱 Racines</div><div class="field-value">${champ(outil.arbre?.racines)}</div></div>
-        <div class="field"><div class="field-label">🌳 Tronc</div><div class="field-value">${champ(outil.arbre?.tronc)}</div></div>
-        <div class="field"><div class="field-label">🌿 Branches</div><div class="field-value">${champ(outil.arbre?.branches)}</div></div>
-        <div class="field"><div class="field-label">🍃 Feuilles</div><div class="field-value">${champ(outil.arbre?.feuilles)}</div></div>
-        <div class="field"><div class="field-label">🌸 Fleurs</div><div class="field-value">${champ(outil.arbre?.fleurs)}</div></div>
-        <div class="field"><div class="field-label">🍎 Fruits</div><div class="field-value">${champ(outil.arbre?.fruits)}</div></div>
-      </div>
-
-      <div class="footer"><p>Généré par CoachingStudio — Coach Julien</p></div>
-    </body>
-    </html>
-  `;
-
-  const printWindow = window.open('', '', 'height=600,width=800');
-  printWindow.document.write(html);
-  printWindow.document.close();
-  setTimeout(() => printWindow.print(), 250);
+  const bloc = (tool) => {
+    const def = OUTILS_DEF[tool], d = outilData(sessionId, tool);
+    const lignes = def.domaines.map(dom => {
+      const s = d.scores[dom.id];
+      const rep = dom.reponses.find(r => r.s === s);
+      const detail = s === undefined ? "Non renseigné" : (rep ? rep.t : "Note attribuée au curseur");
+      const note = d.note[dom.id] ? `<div class="note">« ${outilEsc(d.note[dom.id])} »</div>` : "";
+      return `<div class="ligne"><div class="ligne-t">${dom.icone} ${outilEsc(dom.titre)}</div>
+        <div class="ligne-s">${s === undefined ? "—" : s + "/10"}</div>
+        <div class="ligne-d">${outilEsc(detail)}</div>${note}</div>`;
+    }).join("");
+    return `<section><h2>${outilEsc(def.titre)}</h2>${outilRadarSvg(def, d.scores)}
+      <div class="resume">${outilSummaryHtml(def, d.scores)}</div>${lignes}</section>`;
+  };
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Outils Coaching — ${outilEsc(clientName)}</title>
+    <style>
+      body{font-family:Arial,sans-serif;margin:32px;color:#3A3226}
+      h1{color:#9C7A2E;border-bottom:3px solid #9C7A2E;padding-bottom:8px;margin-bottom:4px}
+      h2{color:#8B6B4A;margin-top:0}
+      .sous{color:#8A806E;font-size:13px;margin-bottom:24px}
+      section{page-break-after:always;margin-bottom:30px}
+      section:last-of-type{page-break-after:auto}
+      .resume{background:#FBF5E4;border:1px solid #E4DAC0;border-radius:8px;padding:10px 14px;font-size:14px;margin:8px 0 16px}
+      .ligne{border-left:4px solid #9C7A2E;background:#FFFDF7;padding:10px 14px;margin-bottom:10px;position:relative}
+      .ligne-t{font-weight:bold}
+      .ligne-s{position:absolute;right:14px;top:10px;font-weight:bold;color:#9C7A2E;font-size:18px}
+      .ligne-d{font-size:14px;margin-top:4px;padding-right:50px}
+      .note{font-style:italic;color:#6B6355;font-size:13px;margin-top:6px}
+      .pied{margin-top:24px;border-top:1px solid #ddd;padding-top:10px;font-size:12px;color:#8A806E}
+    </style></head><body>
+    <h1>Outils Coaching</h1>
+    <div class="sous">${outilEsc(clientName)} · ${new Date().toLocaleDateString('fr-FR')}</div>
+    ${bloc('ikigai')}${bloc('arbre')}
+    <div class="pied">Généré par CoachingStudio — Coach Julien</div>
+    </body></html>`;
+  const w = window.open('', '', 'height=700,width=850');
+  if (!w) { alert("Le navigateur a bloqué la fenêtre d'export. Autorise les pop-ups pour ce site, puis réessaie."); return; }
+  w.document.write(html);
+  w.document.close();
+  setTimeout(() => w.print(), 300);
 }
+
+// ══════════════════════════════════════════
 //  RENDER PRINCIPAL
 // ══════════════════════════════════════════
 let _renderScheduled = false;
