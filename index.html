@@ -292,20 +292,31 @@ nav{flex:1}
 .btn-save { padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; transition: background 0.2s; }
 .btn-save:hover { background: #059669; }
 .empty-state { padding: 40px; text-align: center; color: #999; font-size: 14px; }
-/* ═══ OUTILS V2 — radar + cartes ═══ */
+/* ═══ OUTILS V3 — radar + questions à curseur ═══ */
 .rv-wrap{max-width:720px;margin:0 auto}
 .rv-radar{margin:10px 0 6px}
-.rv-summary{background:#FFFDF7;border:1px solid #E4DAC0;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.6;color:#4A4030;margin-bottom:18px}
-.rv-dom{margin:18px 0 26px}
-.rv-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
-.rv-title{font-weight:600;font-size:15px;color:#3A3226;line-height:1.35}
-.rv-score{font-size:22px;font-weight:700;color:#9C7A2E;min-width:28px;text-align:right}
-.rv-link{background:none;border:none;color:#6B6355;text-decoration:underline;font-size:13px;padding:10px 0;cursor:pointer}
-.rv-card{display:block;width:100%;text-align:left;padding:14px 16px;margin:8px 0;border:1px solid #D8CBA8;border-radius:14px;background:#FFFFFF;font-size:15px;color:#3A3226;cursor:pointer;min-height:48px;font-family:inherit}
-.rv-card.sel{border:2px solid #9C7A2E;background:#FBF5E4;font-weight:600}
-.rv-slider{width:100%;margin:14px 0 4px;accent-color:#9C7A2E}
+.rv-summary{background:#FFFDF7;border:1px solid #E4DAC0;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.55;color:#4A4030;margin-bottom:16px}
+.rv-summary div{margin:3px 0}
+.rv-dom{background:#FFFDF7;border:1px solid #E4DAC0;border-radius:14px;margin:12px 0;padding:0 14px}
+.rv-dom[open]{padding-bottom:14px}
+.rv-dhead{list-style:none;display:flex;align-items:center;gap:10px;cursor:pointer;padding:14px 0;min-height:48px}
+.rv-dhead::-webkit-details-marker{display:none}
+.rv-title{flex:1;font-weight:600;font-size:15px;color:#3A3226;line-height:1.35}
+.rv-dscore{display:flex;flex-direction:column;align-items:flex-end;color:#9C7A2E;line-height:1.1}
+.rv-dscore b{font-size:20px}
+.rv-dscore small{font-size:11px;color:#8A806E}
+.rv-chev{font-size:22px;color:#8A806E;transition:transform .2s}
+.rv-dom[open] .rv-chev{transform:rotate(90deg)}
+.rv-q{padding:12px 0 10px;border-top:1px solid #F0E8D2}
+.rv-q-top{display:flex;align-items:flex-start;gap:10px}
+.rv-q-text{flex:1;font-size:15px;color:#3A3226;line-height:1.4}
+.rv-q-score{min-width:26px;text-align:right;font-weight:700;font-size:18px;color:#9C7A2E}
+.rv-clear{background:none;border:none;color:#8A806E;font-size:18px;cursor:pointer;width:32px;height:32px;padding:0;visibility:hidden}
+.rv-q.has .rv-clear{visibility:visible}
+.rv-slider{width:100%;margin:12px 0 2px;accent-color:#9C7A2E;height:32px}
+.rv-slider.untouched{opacity:.5}
 .rv-scale{display:flex;justify-content:space-between;font-size:12px;color:#8A806E}
-.rv-note{width:100%;box-sizing:border-box;margin-top:8px;padding:10px 12px;border:1px solid #E4DAC0;border-radius:10px;font:inherit;font-size:14px;background:#FFFDF7}
+.rv-note{width:100%;box-sizing:border-box;margin-top:10px;padding:10px 12px;border:1px solid #E4DAC0;border-radius:10px;font:inherit;font-size:14px;background:#FFFFFF}
 .rv-saved{font-size:12px;color:#4a9e6a;text-align:right;min-height:16px}
 </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -3949,81 +3960,91 @@ function renderNotes() {
 // ══════════════════════════════════════════
 /* ═══════════════════════════════════════════════════════════════════════════
    OUTILS COACHING — Ikigaï + Arbre de vie
-   Même mécanique que la Roue de la vie : radar en direct, une question par
-   domaine (4 réponses à toucher), curseur manuel en option, enregistrement auto.
+   Chaque thème = 5 questions, chacune notée au curseur de 1 à 10.
+   La moyenne des questions notées dessine le radar en direct.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const OUTILS_DEF = {
   ikigai: {
     titre: "Ikigaï",
-    intro: "4 dimensions, notées de 0 à 10 avec le client — un bon point de départ pour repérer où porter l'attention en premier.",
+    intro: "4 thèmes, chacun exploré par 5 questions notées de 1 à 10 avec le client. La moyenne de chaque thème dessine le radar.",
     domaines: [
-      { id:"passion", icone:"❤️", court:"Passion", titre:"Passion — Ce que j'aime", question:"Je fais des choses qui me font vibrer ?",
-        reponses:[
-          { t:"Je ne sais plus ce qui me fait vibrer", s:2 },
-          { t:"Ça arrive rarement, par petits moments", s:4 },
-          { t:"Je m'y consacre régulièrement", s:7 },
-          { t:"C'est au cœur de mon quotidien", s:9 } ] },
-      { id:"talent", icone:"💪", court:"Talent", titre:"Talent — Ce en quoi je suis doué(e)", question:"J'utilise mes talents ?",
-        reponses:[
-          { t:"J'ai du mal à voir ce que je sais bien faire", s:2 },
-          { t:"Je les connais, mais je les utilise peu", s:4 },
-          { t:"Je les utilise souvent", s:7 },
-          { t:"Ils sont reconnus et mobilisés chaque jour", s:9 } ] },
-      { id:"mission", icone:"🌍", court:"Mission", titre:"Mission — Ce dont le monde a besoin", question:"Ce que je fais est utile aux autres ?",
-        reponses:[
-          { t:"Je ne vois pas à quoi ce que je fais sert", s:2 },
-          { t:"Parfois, de façon diffuse", s:4 },
-          { t:"Je vois l'effet sur des personnes précises", s:7 },
-          { t:"Ma contribution est claire et je la ressens", s:9 } ] },
-      { id:"profession", icone:"💰", court:"Profession", titre:"Profession — Ce pour quoi on peut me payer", question:"Je peux en vivre ?",
-        reponses:[
-          { t:"Aucun revenu en lien avec ça", s:2 },
-          { t:"Quelques revenus, loin de suffire", s:4 },
-          { t:"Une partie de mes revenus", s:7 },
-          { t:"J'en vis confortablement", s:9 } ] }
+      { id:"passion", icone:"❤️", court:"Passion", titre:"Passion — Ce que j'aime",
+        questions:[
+          "Je sais nommer ce qui me passionne vraiment.",
+          "Je m'offre régulièrement du temps pour ces activités.",
+          "Quand je m'y consacre, j'oublie le temps qui passe.",
+          "Ces activités me donnent de l'énergie plutôt que d'en prendre.",
+          "J'ose défendre ce que j'aime, même si les autres ne comprennent pas." ] },
+      { id:"talent", icone:"💪", court:"Talent", titre:"Talent — Ce en quoi je suis doué(e)",
+        questions:[
+          "Je sais nommer mes points forts sans hésiter.",
+          "Les autres reconnaissent mes qualités et me sollicitent pour elles.",
+          "J'utilise mes talents dans mon quotidien.",
+          "J'ai confiance dans mes compétences.",
+          "Je continue d'apprendre et de progresser dans ce que je fais bien." ] },
+      { id:"mission", icone:"🌍", court:"Mission", titre:"Mission — Ce dont le monde a besoin",
+        questions:[
+          "Je vois à qui ce que je sais faire peut être utile.",
+          "Je sais quel problème j'ai envie d'aider à résoudre.",
+          "Je ressens que mon action a un effet concret sur les autres.",
+          "Mes valeurs guident ce que je propose autour de moi.",
+          "Je me sens utile là où je suis aujourd'hui." ] },
+      { id:"profession", icone:"💰", court:"Profession", titre:"Profession — Ce pour quoi on peut me payer",
+        questions:[
+          "Je vois des moyens concrets de transformer mes talents en revenus.",
+          "Je connais des personnes prêtes à payer pour ce que je propose.",
+          "Mes revenus actuels couvrent mes besoins essentiels.",
+          "Je sais présenter et valoriser ce que je propose.",
+          "Je me sens légitime de demander une juste rémunération." ] }
     ]
   },
   arbre: {
     titre: "Arbre de vie",
-    intro: "6 parties de l'arbre, notées de 0 à 10 avec le client — pour repérer ce qui nourrit et ce qui demande de l'attention.",
+    intro: "6 thèmes, chacun exploré par 5 questions notées de 1 à 10 avec le client. La moyenne de chaque thème dessine le radar.",
     domaines: [
-      { id:"racines", icone:"🌱", court:"Racines", titre:"Racines — D'où je viens, ce qui me porte", question:"Je m'appuie sur mes origines et mes ressources ?",
-        reponses:[
-          { t:"Je me sens coupé(e) de mes origines et de mes appuis", s:2 },
-          { t:"J'ai quelques appuis, mais fragiles", s:4 },
-          { t:"J'ai des appuis solides que je mobilise", s:7 },
-          { t:"Mes racines me nourrissent au quotidien", s:9 } ] },
-      { id:"tronc", icone:"🌳", court:"Tronc", titre:"Tronc — Mes valeurs, mon identité", question:"Je vis en accord avec mes valeurs ?",
-        reponses:[
-          { t:"Je ne sais plus ce qui compte pour moi", s:2 },
-          { t:"Je les connais, mais je m'en éloigne", s:4 },
-          { t:"Je les respecte la plupart du temps", s:7 },
-          { t:"Mes choix reflètent mes valeurs", s:9 } ] },
-      { id:"branches", icone:"🌿", court:"Branches", titre:"Branches — Mes compétences, mes domaines de vie", question:"Je développe mes capacités ?",
-        reponses:[
-          { t:"Je me sens sans ressources en ce moment", s:2 },
-          { t:"Je doute de mes capacités", s:4 },
-          { t:"Je m'appuie sur plusieurs compétences", s:7 },
-          { t:"Je cultive mes capacités et j'en explore de nouvelles", s:9 } ] },
-      { id:"feuilles", icone:"🍃", court:"Feuilles", titre:"Feuilles — Ce qui me fait grandir en ce moment", question:"J'avance dans mes projets et mes apprentissages ?",
-        reponses:[
-          { t:"Rien ne bouge en ce moment", s:2 },
-          { t:"J'ai des envies, peu de passage à l'action", s:4 },
-          { t:"Des projets avancent", s:7 },
-          { t:"J'apprends et je grandis chaque semaine", s:9 } ] },
-      { id:"fleurs", icone:"🌸", court:"Fleurs", titre:"Fleurs — La joie, la beauté, la créativité", question:"Je m'offre des moments de joie ?",
-        reponses:[
-          { t:"La joie est absente en ce moment", s:2 },
-          { t:"Quelques éclats, rares", s:4 },
-          { t:"Régulièrement", s:7 },
-          { t:"Mon quotidien est coloré de plaisirs", s:9 } ] },
-      { id:"fruits", icone:"🍎", court:"Fruits", titre:"Fruits — Ce que je réalise et transmets", question:"Je vois les fruits de mes efforts ?",
-        reponses:[
-          { t:"Je ne vois pas ce que j'ai accompli", s:2 },
-          { t:"Je minimise mes réalisations", s:4 },
-          { t:"Je reconnais mes réalisations", s:7 },
-          { t:"Je suis fier(e) de ce que j'apporte", s:9 } ] }
+      { id:"racines", icone:"🌱", court:"Racines", titre:"Racines — D'où je viens, ce qui me porte",
+        questions:[
+          "Je connais mon histoire et d'où je viens.",
+          "Je m'appuie sur des personnes qui comptent pour moi (famille, amis, mentors).",
+          "Je me sens soutenu(e) quand j'en ai besoin.",
+          "Je reconnais ce que mes origines m'ont transmis de précieux.",
+          "Je me sens ancré(e) et stable dans ma vie actuelle." ] },
+      { id:"tronc", icone:"🌳", court:"Tronc", titre:"Tronc — Mes valeurs, mon identité",
+        questions:[
+          "Je sais nommer mes valeurs essentielles.",
+          "Mes choix de vie sont en accord avec mes valeurs.",
+          "Je me sens fidèle à moi-même.",
+          "Je sais dire non à ce qui va contre mes valeurs.",
+          "Je me sens en sécurité dans qui je suis." ] },
+      { id:"branches", icone:"🌿", court:"Branches", titre:"Branches — Mes compétences, mes domaines de vie",
+        questions:[
+          "Je sais nommer mes compétences et mes ressources.",
+          "Je me sens capable de faire face aux imprévus.",
+          "Je m'appuie sur plusieurs domaines de vie qui m'équilibrent (travail, famille, loisirs...).",
+          "Je fais confiance à ma capacité d'apprendre de nouvelles choses.",
+          "Je sais demander de l'aide quand j'en ai besoin." ] },
+      { id:"feuilles", icone:"🍃", court:"Feuilles", titre:"Feuilles — Ce qui me fait grandir en ce moment",
+        questions:[
+          "J'ai un projet ou un objectif qui me motive en ce moment.",
+          "Je passe à l'action, même à tout petits pas.",
+          "J'apprends régulièrement quelque chose de nouveau.",
+          "Je prends le temps de me reposer et de respirer.",
+          "Je me sens en mouvement dans ma vie." ] },
+      { id:"fleurs", icone:"🌸", court:"Fleurs", titre:"Fleurs — La joie, la beauté, la créativité",
+        questions:[
+          "Je vis des moments de joie dans ma semaine.",
+          "Je m'accorde du temps pour des activités créatives ou qui me font plaisir.",
+          "Je remarque la beauté autour de moi.",
+          "Je sais rire et jouer, sans culpabiliser.",
+          "Je m'exprime de façon authentique (paroles, gestes, création)." ] },
+      { id:"fruits", icone:"🍎", court:"Fruits", titre:"Fruits — Ce que je réalise et transmets",
+        questions:[
+          "Je reconnais ce que j'ai accompli dans ma vie.",
+          "Je suis fier(e) de certaines de mes réalisations.",
+          "Je transmets ou partage ce que je sais.",
+          "Je vois l'effet positif de ce que j'apporte aux autres.",
+          "Je me laisse recevoir la reconnaissance des autres." ] }
     ]
   }
 };
@@ -4037,16 +4058,49 @@ function outilQ(s) {
   return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, "&quot;");
 }
 
+function outilFmt(v) {
+  return (Math.round(v * 10) / 10).toString().replace(".", ",");
+}
+
+function outilRecalc(def, d) {
+  d.scores = {};
+  def.domaines.forEach(dom => {
+    const q = d.q[dom.id] || {};
+    const vals = Object.keys(q).map(k => q[k]).filter(v => typeof v === "number");
+    if (vals.length) d.scores[dom.id] = vals.reduce((a, b) => a + b, 0) / vals.length;
+  });
+}
+
 function outilData(sid, tool) {
   if (!state.outils) state.outils = {};
   if (!state.outils[sid]) state.outils[sid] = {};
   const cur = state.outils[sid][tool];
   const d = (cur && typeof cur === "object") ? cur : {};
-  if (!d.scores || typeof d.scores !== "object") d.scores = {};
-  if (!d.mode || typeof d.mode !== "object") d.mode = {};
+  if (!d.q || typeof d.q !== "object") d.q = {};
   if (!d.note || typeof d.note !== "object") d.note = {};
+  delete d.mode;
   state.outils[sid][tool] = d;
+  outilRecalc(OUTILS_DEF[tool], d);
   return d;
+}
+
+function outilStats(def, d) {
+  let answered = 0, total = 0, lowQ = null, highQ = null;
+  def.domaines.forEach(dom => {
+    total += dom.questions.length;
+    const q = d.q[dom.id] || {};
+    dom.questions.forEach((txt, i) => {
+      const v = q[i];
+      if (typeof v !== "number") return;
+      answered++;
+      if (!lowQ || v < lowQ.v) lowQ = { v, txt };
+      if (!highQ || v > highQ.v) highQ = { v, txt };
+    });
+  });
+  const rated = def.domaines.filter(x => d.scores[x.id] !== undefined);
+  const avg = rated.length ? rated.reduce((a, x) => a + d.scores[x.id], 0) / rated.length : null;
+  const lowDom = rated.length > 1 ? rated.reduce((m, x) => d.scores[x.id] < d.scores[m.id] ? x : m, rated[0]) : null;
+  return { answered, total, avg, lowDom, lowQ, highQ };
 }
 
 function outilRadarSvg(def, scores) {
@@ -4080,39 +4134,54 @@ function outilRadarSvg(def, scores) {
   </svg>`;
 }
 
-function outilSummaryHtml(def, scores) {
-  const rated = def.domaines.filter(x => scores[x.id] !== undefined);
-  if (!rated.length) return `<span>Aucun domaine noté pour l'instant.</span>`;
-  const avg = rated.reduce((a, x) => a + scores[x.id], 0) / rated.length;
-  let html = `<div><b>Moyenne :</b> ${avg.toFixed(1).replace(".", ",")}/10 · ${rated.length}/${def.domaines.length} domaines notés</div>`;
-  if (rated.length > 1) {
-    const low = rated.reduce((m, x) => scores[x.id] < scores[m.id] ? x : m, rated[0]);
-    html += `<div><b>Où porter l'attention en premier :</b> ${low.icone} ${outilEsc(low.court)} (${scores[low.id]}/10)</div>`;
+function outilSummaryHtml(def, d) {
+  const st = outilStats(def, d);
+  if (!st.answered) return `<span>Aucune question notée pour l'instant.</span>`;
+  let h = `<div><b>Moyenne :</b> ${outilFmt(st.avg)}/10 · ${st.answered}/${st.total} questions notées</div>`;
+  if (st.lowDom) h += `<div><b>À regarder en premier :</b> ${st.lowDom.icone} ${outilEsc(st.lowDom.court)} (${outilFmt(d.scores[st.lowDom.id])}/10)</div>`;
+  if (st.answered > 1 && st.lowQ.v < st.highQ.v) {
+    h += `<div><b>Point le plus bas :</b> « ${outilEsc(st.lowQ.txt)} » (${st.lowQ.v}/10)</div>`;
+    h += `<div><b>Ressource la plus forte :</b> « ${outilEsc(st.highQ.txt)} » (${st.highQ.v}/10)</div>`;
   }
-  return html;
+  return h;
 }
 
-function outilDomainHtml(tool, sid, dom, d) {
-  const score = d.scores[dom.id];
-  const mode = d.mode[dom.id] === "curseur" ? "curseur" : "cartes";
-  const note = d.note[dom.id] || "";
+function outilHeadScoreHtml(dom, d) {
+  const q = d.q[dom.id] || {};
+  const n = Object.keys(q).filter(k => typeof q[k] === "number").length;
+  const s = d.scores[dom.id];
+  return `<b>${s === undefined ? "—" : outilFmt(s)}</b><small>${n}/${dom.questions.length}</small>`;
+}
+
+function outilQuestionHtml(tool, sid, dom, i, d) {
+  const v = (d.q[dom.id] || {})[i];
+  const has = typeof v === "number";
   const S = outilQ(sid);
-  let body;
-  if (mode === "cartes") {
-    body = dom.reponses.map((r, i) =>
-      `<button type="button" class="rv-card${score === r.s ? " sel" : ""}" onclick="outilPick('${tool}','${S}','${dom.id}',${i})">${outilEsc(r.t)}</button>`
-    ).join("");
-  } else {
-    body = `<input type="range" class="rv-slider" min="0" max="10" step="1" value="${score === undefined ? 5 : score}" aria-label="${outilEsc(dom.court)}" oninput="outilSlide('${tool}','${S}','${dom.id}',this.value)">
-      <div class="rv-scale"><span>0</span><span>10</span></div>`;
-  }
-  return `<div class="rv-head">
-      <div class="rv-title">${dom.icone} ${outilEsc(dom.titre)} — ${outilEsc(dom.question)}</div>
-      <div class="rv-score" id="rv-score-${tool}-${dom.id}">${score === undefined ? "—" : score}</div>
+  return `<div class="rv-q-top">
+      <div class="rv-q-text">${outilEsc(dom.questions[i])}</div>
+      <div class="rv-q-score" id="rv-qs-${tool}-${dom.id}-${i}">${has ? v : "—"}</div>
+      <button type="button" class="rv-clear" title="Effacer cette réponse" aria-label="Effacer cette réponse" onclick="outilClear('${tool}','${S}','${dom.id}',${i})">↺</button>
     </div>
-    <button type="button" class="rv-link" onclick="outilToggleMode('${tool}','${S}','${dom.id}')">↔ ${mode === "cartes" ? "Passer en curseur manuel" : "Revenir aux propositions"}</button>
-    ${body}
-    <input type="text" class="rv-note" placeholder="Mes mots (facultatif)" value="${outilEsc(note)}" oninput="outilNote('${tool}','${S}','${dom.id}',this.value)">`;
+    <input type="range" class="rv-slider${has ? "" : " untouched"}" min="1" max="10" step="1" value="${has ? v : 5}" aria-label="${outilEsc(dom.questions[i])}"
+      oninput="outilSlide('${tool}','${S}','${dom.id}',${i},this)" onpointerup="outilSlideCommit('${tool}','${S}','${dom.id}',${i},this)">
+    <div class="rv-scale"><span>1 · pas du tout</span><span>10 · tout à fait</span></div>`;
+}
+
+function outilDomainHtml(tool, sid, dom, d, open) {
+  const S = outilQ(sid);
+  const qs = dom.questions.map((_, i) => {
+    const has = typeof (d.q[dom.id] || {})[i] === "number";
+    return `<div class="rv-q${has ? " has" : ""}" id="rv-q-${tool}-${dom.id}-${i}">${outilQuestionHtml(tool, sid, dom, i, d)}</div>`;
+  }).join("");
+  return `<details class="rv-dom" id="rv-dom-${tool}-${dom.id}"${open ? " open" : ""}>
+    <summary class="rv-dhead">
+      <span class="rv-title">${dom.icone} ${outilEsc(dom.titre)}</span>
+      <span class="rv-dscore" id="rv-ds-${tool}-${dom.id}">${outilHeadScoreHtml(dom, d)}</span>
+      <span class="rv-chev">›</span>
+    </summary>
+    ${qs}
+    <input type="text" class="rv-note" placeholder="Mes mots sur ce thème (facultatif)" value="${outilEsc(d.note[dom.id] || "")}" oninput="outilNote('${tool}','${S}','${dom.id}',this.value)">
+  </details>`;
 }
 
 function outilPanelHtml(tool, sid) {
@@ -4120,8 +4189,8 @@ function outilPanelHtml(tool, sid) {
   return `<div class="rv-wrap">
     <p class="outil-desc">${outilEsc(def.intro)}</p>
     <div class="rv-radar" id="rv-radar-${tool}">${outilRadarSvg(def, d.scores)}</div>
-    <div class="rv-summary" id="rv-sum-${tool}">${outilSummaryHtml(def, d.scores)}</div>
-    ${def.domaines.map(dom => `<div class="rv-dom" id="rv-dom-${tool}-${dom.id}">${outilDomainHtml(tool, sid, dom, d)}</div>`).join("")}
+    <div class="rv-summary" id="rv-sum-${tool}">${outilSummaryHtml(def, d)}</div>
+    ${def.domaines.map((dom, k) => outilDomainHtml(tool, sid, dom, d, k === 0)).join("")}
     <div class="rv-saved" id="rv-saved-${tool}"></div>
   </div>`;
 }
@@ -4131,12 +4200,11 @@ function outilRefresh(tool, sid) {
   const r = document.getElementById("rv-radar-" + tool);
   if (r) r.innerHTML = outilRadarSvg(def, d.scores);
   const s = document.getElementById("rv-sum-" + tool);
-  if (s) s.innerHTML = outilSummaryHtml(def, d.scores);
-}
-
-function outilRerenderDomain(tool, sid, dom) {
-  const box = document.getElementById(`rv-dom-${tool}-${dom.id}`);
-  if (box) box.innerHTML = outilDomainHtml(tool, sid, dom, outilData(sid, tool));
+  if (s) s.innerHTML = outilSummaryHtml(def, d);
+  def.domaines.forEach(dom => {
+    const h = document.getElementById(`rv-ds-${tool}-${dom.id}`);
+    if (h) h.innerHTML = outilHeadScoreHtml(dom, d);
+  });
 }
 
 const _outilsFsTimers = {};
@@ -4158,7 +4226,8 @@ function outilPersist(sid, tool) {
           coachUid: state.coachUid || null,
           [tool]: d,
           updatedAt: new Date().toISOString()
-        }, { merge: true }).catch(err => console.error("Outils : Firestore refusé", err));
+        }, { mergeFields: ["clientId", "coachUid", "updatedAt", tool] })
+          .catch(err => console.error("Outils : Firestore refusé", err));
       }
     } catch (err) {
       console.error("Outils : Firestore indisponible", err);
@@ -4168,38 +4237,34 @@ function outilPersist(sid, tool) {
   if (el) el.textContent = "✓ Enregistré";
 }
 
-function outilPick(tool, sid, domId, idx) {
-  const dom = OUTILS_DEF[tool].domaines.find(x => x.id === domId);
-  if (!dom || !dom.reponses[idx]) return;
+function outilSlide(tool, sid, domId, i, el) {
   const d = outilData(sid, tool);
-  d.scores[domId] = dom.reponses[idx].s;
-  d.mode[domId] = "cartes";
-  outilRerenderDomain(tool, sid, dom);
+  if (!d.q[domId]) d.q[domId] = {};
+  const val = Number(el.value);
+  d.q[domId][i] = val;
+  el.classList.remove("untouched");
+  const row = el.closest(".rv-q");
+  if (row) row.classList.add("has");
+  const sc = document.getElementById(`rv-qs-${tool}-${domId}-${i}`);
+  if (sc) sc.textContent = String(val);
   outilRefresh(tool, sid);
   outilPersist(sid, tool);
 }
 
-function outilSlide(tool, sid, domId, val) {
-  const d = outilData(sid, tool);
-  d.scores[domId] = Number(val);
-  d.mode[domId] = "curseur";
-  const el = document.getElementById(`rv-score-${tool}-${domId}`);
-  if (el) el.textContent = String(Number(val));
-  outilRefresh(tool, sid);
-  outilPersist(sid, tool);
+function outilSlideCommit(tool, sid, domId, i, el) {
+  if (el.classList.contains("untouched")) outilSlide(tool, sid, domId, i, el);
 }
 
-function outilToggleMode(tool, sid, domId) {
+function outilClear(tool, sid, domId, i) {
   const dom = OUTILS_DEF[tool].domaines.find(x => x.id === domId);
   if (!dom) return;
   const d = outilData(sid, tool);
-  if (d.mode[domId] === "curseur") {
-    d.mode[domId] = "cartes";
-  } else {
-    d.mode[domId] = "curseur";
-    if (d.scores[domId] === undefined) d.scores[domId] = 5;
+  if (d.q[domId]) delete d.q[domId][i];
+  const row = document.getElementById(`rv-q-${tool}-${domId}-${i}`);
+  if (row) {
+    row.classList.remove("has");
+    row.innerHTML = outilQuestionHtml(tool, sid, dom, i, d);
   }
-  outilRerenderDomain(tool, sid, dom);
   outilRefresh(tool, sid);
   outilPersist(sid, tool);
 }
@@ -4292,17 +4357,18 @@ function switchOutilSession(value) {
 function exportOutilsPDF(sessionId, clientName) {
   const bloc = (tool) => {
     const def = OUTILS_DEF[tool], d = outilData(sessionId, tool);
-    const lignes = def.domaines.map(dom => {
+    const doms = def.domaines.map(dom => {
+      const q = d.q[dom.id] || {};
       const s = d.scores[dom.id];
-      const rep = dom.reponses.find(r => r.s === s);
-      const detail = s === undefined ? "Non renseigné" : (rep ? rep.t : "Note attribuée au curseur");
+      const lignes = dom.questions.map((txt, i) => {
+        const v = q[i];
+        return `<div class="q"><span class="qt">${outilEsc(txt)}</span><span class="qv">${typeof v === "number" ? v + "/10" : "—"}</span></div>`;
+      }).join("");
       const note = d.note[dom.id] ? `<div class="note">« ${outilEsc(d.note[dom.id])} »</div>` : "";
-      return `<div class="ligne"><div class="ligne-t">${dom.icone} ${outilEsc(dom.titre)}</div>
-        <div class="ligne-s">${s === undefined ? "—" : s + "/10"}</div>
-        <div class="ligne-d">${outilEsc(detail)}</div>${note}</div>`;
+      return `<div class="dom"><div class="dom-h"><span>${dom.icone} ${outilEsc(dom.titre)}</span><span class="dom-s">${s === undefined ? "—" : outilFmt(s) + "/10"}</span></div>${lignes}${note}</div>`;
     }).join("");
     return `<section><h2>${outilEsc(def.titre)}</h2>${outilRadarSvg(def, d.scores)}
-      <div class="resume">${outilSummaryHtml(def, d.scores)}</div>${lignes}</section>`;
+      <div class="resume">${outilSummaryHtml(def, d)}</div>${doms}</section>`;
   };
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Outils Coaching — ${outilEsc(clientName)}</title>
     <style>
@@ -4312,11 +4378,12 @@ function exportOutilsPDF(sessionId, clientName) {
       .sous{color:#8A806E;font-size:13px;margin-bottom:24px}
       section{page-break-after:always;margin-bottom:30px}
       section:last-of-type{page-break-after:auto}
-      .resume{background:#FBF5E4;border:1px solid #E4DAC0;border-radius:8px;padding:10px 14px;font-size:14px;margin:8px 0 16px}
-      .ligne{border-left:4px solid #9C7A2E;background:#FFFDF7;padding:10px 14px;margin-bottom:10px;position:relative}
-      .ligne-t{font-weight:bold}
-      .ligne-s{position:absolute;right:14px;top:10px;font-weight:bold;color:#9C7A2E;font-size:18px}
-      .ligne-d{font-size:14px;margin-top:4px;padding-right:50px}
+      .resume{background:#FBF5E4;border:1px solid #E4DAC0;border-radius:8px;padding:10px 14px;font-size:14px;margin:8px 0 16px;line-height:1.6}
+      .dom{border-left:4px solid #9C7A2E;background:#FFFDF7;padding:10px 14px;margin-bottom:12px;page-break-inside:avoid}
+      .dom-h{display:flex;justify-content:space-between;font-weight:bold;margin-bottom:6px}
+      .dom-s{color:#9C7A2E;font-size:17px}
+      .q{display:flex;justify-content:space-between;gap:14px;font-size:13px;padding:3px 0;border-top:1px solid #F0E8D2}
+      .qv{font-weight:bold;white-space:nowrap}
       .note{font-style:italic;color:#6B6355;font-size:13px;margin-top:6px}
       .pied{margin-top:24px;border-top:1px solid #ddd;padding-top:10px;font-size:12px;color:#8A806E}
     </style></head><body>
