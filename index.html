@@ -1122,6 +1122,7 @@ let state = {
   notes: localStorage.getItem("cs4-notes") || "",
   appointments: JSON.parse(localStorage.getItem("cs4-appointments") || "[]"),
   sessions: JSON.parse(localStorage.getItem("cs4-sessions") || "{}"),
+  outils: JSON.parse(localStorage.getItem("cs4-outils") || "{}"),
   agendaView: "liste",
   agendaRef: (() => { const d = new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); })(),
   agendaSelectedDay: null,
@@ -3936,115 +3937,124 @@ function renderNotes() {
    À intégrer dans index.html CoachingStudio (après renderIntakeTab/renderLiveTab)
    ═══════════════════════════════════════════════════════════════════════════════ */
 
+function getOutilsClientSessions(clientId) {
+  const all = state.sessions || {};
+  const out = [];
+  Object.keys(all).forEach(k => {
+    const v = all[k];
+    if (Array.isArray(v)) { if (k === clientId) out.push(...v); }
+    else if (v && v.clientId === clientId) out.push(v);
+  });
+  return out;
+}
+
 function renderOutilsTab() {
+  const wrap = document.createElement("div");
   const clientId = state.selClientId;
+
   if (!clientId) {
-    return `<div class="empty-state">Sélectionnez un client</div>`;
+    const options = state.clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    wrap.innerHTML = `<div class="outils-container">
+      <h2>🛠️ Outils Coaching</h2>
+      <p class="outil-desc">Choisir un client :</p>
+      <select onchange="if(this.value) setState({selClientId:this.value, selOutilSessionIndex:null, selOutilSubTab:'ikigai'})" style="padding:8px;border-radius:6px;border:1px solid #ccc;min-width:220px;">
+        <option value="">— Sélectionner —</option>${options}
+      </select>
+    </div>`;
+    return wrap;
   }
 
   const client = state.clients.find(c => c.id === clientId);
-  if (!client) return `<div class="empty-state">Client introuvable</div>`;
+  if (!client) {
+    wrap.innerHTML = `<div class="empty-state">Client introuvable</div>`;
+    return wrap;
+  }
 
-  const sessions = state.sessions.filter(s => s.clientId === clientId);
-  const lastSession = sessions.length > 0 ? sessions[sessions.length - 1] : null;
-  const sessionId = lastSession?.id || `session_${Date.now()}`;
+  const clientSessions = getOutilsClientSessions(clientId);
+  const currentIndex = (state.selOutilSessionIndex !== undefined && state.selOutilSessionIndex !== null)
+    ? state.selOutilSessionIndex
+    : "current";
+  const sessionId = currentIndex === "current" ? `${clientId}_current` : `${clientId}_s${currentIndex}`;
 
-  const outil = state.outils?.[sessionId] || { ikigai: {}, arbre: {} };
+  const outil = (state.outils && state.outils[sessionId]) || { ikigai: {}, arbre: {} };
+  const activeSubTab = state.selOutilSubTab || "ikigai";
 
-  return `
+  wrap.innerHTML = `
     <div class="outils-container">
       <h2>🛠️ Outils Coaching — ${client.name}</h2>
-      
-      <!-- Sélecteur de session -->
+      <button class="tab-btn" onclick="setState({selClientId:null, selOutilSessionIndex:null})">← Changer de client</button>
+
       <div class="session-selector">
-        <label>Session:</label>
+        <label>Session :</label>
         <select id="sessionSelector" onchange="switchOutilSession(this.value)">
-          <option value="new">📝 Nouvelle session</option>
-          ${sessions.map(s => `
-            <option value="${s.id}" ${s.id === sessionId ? 'selected' : ''}>
-              ${new Date(s.timestamp).toLocaleDateString('fr-FR')} — ${s.type || 'Session'}
+          <option value="current" ${currentIndex === "current" ? "selected" : ""}>📝 Session actuelle</option>
+          ${clientSessions.map((s, idx) => `
+            <option value="${idx}" ${idx === currentIndex ? "selected" : ""}>
+              ${s.date ? new Date(s.date).toLocaleDateString('fr-FR') : 'Séance ' + (idx + 1)} — ${s.branchLabel || s.optionName || 'Séance'}
             </option>
           `).join('')}
         </select>
       </div>
 
-      <!-- Onglets Ikigaï / Arbre -->
       <div class="outils-tabs">
-        <button class="tab-btn active" onclick="switchOutilTab('ikigai')">
-          🎯 Ikigaï
-        </button>
-        <button class="tab-btn" onclick="switchOutilTab('arbre')">
-          🌳 Arbre de Vie
-        </button>
+        <button class="tab-btn ${activeSubTab === 'ikigai' ? 'active' : ''}" onclick="switchOutilTab('ikigai')">🎯 Ikigaï</button>
+        <button class="tab-btn ${activeSubTab === 'arbre' ? 'active' : ''}" onclick="switchOutilTab('arbre')">🌳 Arbre de Vie</button>
       </div>
 
-      <!-- Contenu Ikigaï -->
-      <div id="ikigai-tab" class="outil-panel active">
+      <div id="ikigai-tab" class="outil-panel ${activeSubTab === 'ikigai' ? '' : 'hidden'}">
         ${renderIkigai(clientId, sessionId, outil.ikigai)}
       </div>
 
-      <!-- Contenu Arbre -->
-      <div id="arbre-tab" class="outil-panel hidden">
+      <div id="arbre-tab" class="outil-panel ${activeSubTab === 'arbre' ? '' : 'hidden'}">
         ${renderArbreDeVie(clientId, sessionId, outil.arbre)}
       </div>
 
-      <!-- Export -->
       <div class="outils-export">
-        <button class="btn-primary" onclick="exportOutilsPDF('${clientId}', '${sessionId}', '${client.name}')">
-          📥 Exporter en PDF
-        </button>
+        <button class="btn-primary" onclick="exportOutilsPDF('${sessionId}', '${client.name.replace(/'/g, "\\'")}')">📥 Exporter en PDF</button>
       </div>
     </div>
   `;
+
+  return wrap;
 }
 
 function renderIkigai(clientId, sessionId, data) {
-  const { passion, talent, besoin, remuneration } = data;
+  const { passion, talent, besoin, remuneration } = data || {};
 
   return `
     <div class="ikigai-wrapper">
       <p class="outil-desc">Trouvez l'intersection de ce que vous aimez, savez faire, le monde a besoin, et qui rémunère.</p>
 
-      <form class="ikigai-form" onsubmit="saveIkigai(event, '${clientId}', '${sessionId}')">
+      <form class="ikigai-form" onsubmit="saveIkigai(event, '${sessionId}')">
         <div class="ikigai-input-group">
           <label>❤️ Passion — Qu'est-ce que vous aimez faire?</label>
           <textarea name="passion" placeholder="Ce qui vous fait vibrer...">${passion || ''}</textarea>
         </div>
-
         <div class="ikigai-input-group">
           <label>💪 Talent — Qu'est-ce que vous savez faire?</label>
           <textarea name="talent" placeholder="Vos compétences...">${talent || ''}</textarea>
         </div>
-
         <div class="ikigai-input-group">
           <label>🌍 Besoin — De quoi le monde a-t-il besoin?</label>
           <textarea name="besoin" placeholder="La demande du marché...">${besoin || ''}</textarea>
         </div>
-
         <div class="ikigai-input-group">
           <label>💰 Rémunération — Ce qui peut vous rémunérer?</label>
           <textarea name="remuneration" placeholder="Les modèles économiques viables...">${remuneration || ''}</textarea>
         </div>
-
         <button type="submit" class="btn-save">💾 Sauvegarder Ikigaï</button>
       </form>
 
-      <!-- Visualisation Ikigaï -->
       <div class="ikigai-visual">
         <svg viewBox="0 0 400 400" width="100%" height="300">
-          <!-- Cercles -->
           <circle cx="150" cy="150" r="130" fill="rgba(255, 107, 107, 0.1)" stroke="rgb(255, 107, 107)" stroke-width="2"/>
           <circle cx="250" cy="150" r="130" fill="rgba(52, 211, 153, 0.1)" stroke="rgb(52, 211, 153)" stroke-width="2"/>
           <circle cx="150" cy="250" r="130" fill="rgba(96, 165, 250, 0.1)" stroke="rgb(96, 165, 250)" stroke-width="2"/>
           <circle cx="250" cy="250" r="130" fill="rgba(251, 191, 36, 0.1)" stroke="rgb(251, 191, 36)" stroke-width="2"/>
-
-          <!-- Labels -->
           <text x="100" y="100" text-anchor="middle" font-size="12" font-weight="bold">Passion</text>
           <text x="300" y="100" text-anchor="middle" font-size="12" font-weight="bold">Talent</text>
           <text x="100" y="350" text-anchor="middle" font-size="12" font-weight="bold">Besoin</text>
           <text x="300" y="350" text-anchor="middle" font-size="12" font-weight="bold">Rémunération</text>
-
-          <!-- Centre -->
           <text x="200" y="205" text-anchor="middle" font-size="14" font-weight="bold" fill="rgb(99, 102, 241)">IKIGAÏ</text>
         </svg>
       </div>
@@ -4053,80 +4063,64 @@ function renderIkigai(clientId, sessionId, data) {
 }
 
 function renderArbreDeVie(clientId, sessionId, data) {
-  const racines = data.racines || '';
-  const tronc = data.tronc || '';
-  const branches = data.branches || '';
-  const feuilles = data.feuilles || '';
-  const fruits = data.fruits || '';
-  const fleurs = data.fleurs || '';
+  const d = data || {};
+  const racines = d.racines || '';
+  const tronc = d.tronc || '';
+  const branches = d.branches || '';
+  const feuilles = d.feuilles || '';
+  const fruits = d.fruits || '';
+  const fleurs = d.fleurs || '';
 
   return `
     <div class="arbre-wrapper">
       <p class="outil-desc">L'Arbre de Vie représente vos forces (racines), vos valeurs (tronc), vos capacités (branches), et vos réalisations (fruits).</p>
 
-      <form class="arbre-form" onsubmit="saveArbreDeVie(event, '${clientId}', '${sessionId}')">
+      <form class="arbre-form" onsubmit="saveArbreDeVie(event, '${sessionId}')">
         <div class="arbre-section">
           <h4>🌱 Racines — Fondations, origines, ressources familiales</h4>
           <textarea name="racines" placeholder="D'où venez-vous? Quelles sont vos racines?">${racines}</textarea>
         </div>
-
         <div class="arbre-section">
           <h4>🌳 Tronc — Valeurs, principes, identité</h4>
           <textarea name="tronc" placeholder="Qui êtes-vous? Quelles sont vos valeurs?">${tronc}</textarea>
         </div>
-
         <div class="arbre-section">
           <h4>🌿 Branches — Capacités, compétences, domaines de vie</h4>
           <textarea name="branches" placeholder="Que savez-vous faire? Vos compétences?">${branches}</textarea>
         </div>
-
         <div class="arbre-section">
           <h4>🍃 Feuilles — Respiration, projets en cours, apprentissages</h4>
           <textarea name="feuilles" placeholder="Sur quoi travaillez-vous maintenant?">${feuilles}</textarea>
         </div>
-
         <div class="arbre-section">
           <h4>🌸 Fleurs — Beauté, expression créative, moments de joie</h4>
           <textarea name="fleurs" placeholder="Où trouvez-vous la beauté et la joie?">${fleurs}</textarea>
         </div>
-
         <div class="arbre-section">
           <h4>🍎 Fruits — Réalisations, héritages, ce que vous offrez au monde</h4>
           <textarea name="fruits" placeholder="Vos réalisations et contributions?">${fruits}</textarea>
         </div>
-
         <button type="submit" class="btn-save">💾 Sauvegarder Arbre de Vie</button>
       </form>
 
-      <!-- Visualisation Arbre -->
       <div class="arbre-visual">
         <svg viewBox="0 0 400 500" width="100%" height="350">
-          <!-- Racines -->
           <line x1="200" y1="350" x2="150" y2="450" stroke="rgb(139, 92, 46)" stroke-width="3"/>
           <line x1="200" y1="350" x2="200" y2="470" stroke="rgb(139, 92, 46)" stroke-width="3"/>
           <line x1="200" y1="350" x2="250" y2="450" stroke="rgb(139, 92, 46)" stroke-width="3"/>
           <text x="200" y="480" text-anchor="middle" font-size="11">🌱 Racines</text>
-
-          <!-- Tronc -->
           <rect x="185" y="250" width="30" height="100" fill="rgb(139, 92, 46)" opacity="0.7"/>
           <text x="200" y="305" text-anchor="middle" font-size="10" fill="white" font-weight="bold">Tronc</text>
-
-          <!-- Branches principales -->
           <line x1="200" y1="250" x2="100" y2="150" stroke="rgb(34, 197, 94)" stroke-width="3"/>
           <line x1="200" y1="250" x2="300" y2="150" stroke="rgb(34, 197, 94)" stroke-width="3"/>
           <line x1="200" y1="280" x2="80" y2="200" stroke="rgb(34, 197, 94)" stroke-width="2"/>
           <line x1="200" y1="280" x2="320" y2="200" stroke="rgb(34, 197, 94)" stroke-width="2"/>
-
-          <!-- Feuilles/Fleurs -->
           <circle cx="100" cy="120" r="8" fill="rgb(34, 197, 94)"/>
           <circle cx="300" cy="120" r="8" fill="rgb(34, 197, 94)"/>
           <circle cx="60" cy="180" r="6" fill="rgb(251, 146, 60)"/>
           <circle cx="340" cy="180" r="6" fill="rgb(251, 146, 60)"/>
-
-          <!-- Fruits -->
           <circle cx="100" cy="100" r="5" fill="rgb(239, 68, 68)"/>
           <circle cx="300" cy="100" r="5" fill="rgb(239, 68, 68)"/>
-
           <text x="200" y="50" text-anchor="middle" font-size="24">🌳</text>
         </svg>
       </div>
@@ -4134,11 +4128,7 @@ function renderArbreDeVie(clientId, sessionId, data) {
   `;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════════
-   Sauvegarde Firestore + localStorage
-   ═══════════════════════════════════════════════════════════════════════════════ */
-
-function saveIkigai(event, clientId, sessionId) {
+function saveIkigai(event, sessionId) {
   event.preventDefault();
   const form = event.target;
   const ikigai = {
@@ -4148,12 +4138,11 @@ function saveIkigai(event, clientId, sessionId) {
     remuneration: form.remuneration.value.trim(),
     timestamp: new Date().toISOString()
   };
-
-  saveOutilData(clientId, sessionId, 'ikigai', ikigai);
-  alert('✅ Ikigaï sauvegardé');
+  saveOutilData(sessionId, 'ikigai', ikigai);
+  render();
 }
 
-function saveArbreDeVie(event, clientId, sessionId) {
+function saveArbreDeVie(event, sessionId) {
   event.preventDefault();
   const form = event.target;
   const arbre = {
@@ -4165,52 +4154,47 @@ function saveArbreDeVie(event, clientId, sessionId) {
     fruits: form.fruits.value.trim(),
     timestamp: new Date().toISOString()
   };
-
-  saveOutilData(clientId, sessionId, 'arbre', arbre);
-  alert('✅ Arbre de Vie sauvegardé');
+  saveOutilData(sessionId, 'arbre', arbre);
+  render();
 }
 
-function saveOutilData(clientId, sessionId, type, data) {
+function saveOutilData(sessionId, type, data) {
   if (!state.outils) state.outils = {};
   if (!state.outils[sessionId]) state.outils[sessionId] = {};
-  
   state.outils[sessionId][type] = data;
-  setState();
 
-  // Sauvegarde Firestore
-  const db = firebase.firestore();
-  db.collection('outils').doc(sessionId).set({
-    clientId,
-    coachUid: state.coachUid,
-    [type]: data,
-    updatedAt: new Date()
-  }, { merge: true }).catch(err => console.error('Erreur sauvegarde Firestore:', err));
-}
+  localStorage.setItem("cs4-outils", JSON.stringify(state.outils));
 
-function switchOutilTab(tab) {
-  document.querySelectorAll('.outil-panel').forEach(el => el.classList.add('hidden'));
-  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-  
-  document.getElementById(`${tab}-tab`).classList.remove('hidden');
-  event.target.classList.add('active');
-}
-
-function switchOutilSession(sessionId) {
-  if (sessionId === 'new') {
-    state.outils[`session_${Date.now()}`] = { ikigai: {}, arbre: {} };
+  try {
+    if (typeof firebase !== "undefined" && firebase.firestore) {
+      const db = firebase.firestore();
+      db.collection('outils').doc(sessionId).set({
+        clientId: state.selClientId,
+        coachUid: state.coachUid || null,
+        [type]: data,
+        updatedAt: new Date().toISOString()
+      }, { merge: true }).catch(err => console.error('Erreur sauvegarde Firestore:', err));
+    }
+  } catch (err) {
+    console.error('Firestore indisponible:', err);
   }
-  setState();
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════════
-   Export PDF
-   ═══════════════════════════════════════════════════════════════════════════════ */
+function switchOutilTab(tabName) {
+  state.selOutilSubTab = tabName;
+  render();
+}
 
-function exportOutilsPDF(clientId, sessionId, clientName) {
-  const outil = state.outils?.[sessionId] || { ikigai: {}, arbre: {} };
-  const client = state.clients.find(c => c.id === clientId);
-  
-  // Création du contenu HTML pour PDF
+function switchOutilSession(value) {
+  state.selOutilSessionIndex = (value === "current") ? "current" : Number(value);
+  render();
+}
+
+function exportOutilsPDF(sessionId, clientName) {
+  const outil = (state.outils && state.outils[sessionId]) || { ikigai: {}, arbre: {} };
+
+  const champ = (val) => val ? String(val).replace(/</g, "&lt;").replace(/>/g, "&gt;") : '<span class="empty">Non renseigné</span>';
+
   const html = `
     <!DOCTYPE html>
     <html>
@@ -4221,7 +4205,6 @@ function exportOutilsPDF(clientId, sessionId, clientName) {
         h1 { color: #4f46e5; border-bottom: 3px solid #4f46e5; padding-bottom: 10px; }
         h2 { color: #6366f1; margin-top: 30px; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-        .section { margin-bottom: 40px; }
         .field { margin-bottom: 20px; padding: 15px; background: #f9fafb; border-left: 4px solid #4f46e5; }
         .field-label { font-weight: bold; color: #4f46e5; margin-bottom: 5px; }
         .field-value { white-space: pre-wrap; line-height: 1.6; }
@@ -4232,69 +4215,33 @@ function exportOutilsPDF(clientId, sessionId, clientName) {
     </head>
     <body>
       <div class="header">
-        <div>
-          <h1>📋 Outils Coaching</h1>
-          <p><strong>${clientName}</strong></p>
-        </div>
+        <div><h1>📋 Outils Coaching</h1><p><strong>${clientName}</strong></p></div>
         <div class="timestamp">${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}</div>
       </div>
 
       <div class="section">
         <h2>🎯 Ikigaï</h2>
-        <div class="field">
-          <div class="field-label">❤️ Passion</div>
-          <div class="field-value">${outil.ikigai?.passion ? outil.ikigai.passion : '<span class="empty">Non renseigné</span>'}</div>
-        </div>
-        <div class="field">
-          <div class="field-label">💪 Talent</div>
-          <div class="field-value">${outil.ikigai?.talent ? outil.ikigai.talent : '<span class="empty">Non renseigné</span>'}</div>
-        </div>
-        <div class="field">
-          <div class="field-label">🌍 Besoin</div>
-          <div class="field-value">${outil.ikigai?.besoin ? outil.ikigai.besoin : '<span class="empty">Non renseigné</span>'}</div>
-        </div>
-        <div class="field">
-          <div class="field-label">💰 Rémunération</div>
-          <div class="field-value">${outil.ikigai?.remuneration ? outil.ikigai.remuneration : '<span class="empty">Non renseigné</span>'}</div>
-        </div>
+        <div class="field"><div class="field-label">❤️ Passion</div><div class="field-value">${champ(outil.ikigai?.passion)}</div></div>
+        <div class="field"><div class="field-label">💪 Talent</div><div class="field-value">${champ(outil.ikigai?.talent)}</div></div>
+        <div class="field"><div class="field-label">🌍 Besoin</div><div class="field-value">${champ(outil.ikigai?.besoin)}</div></div>
+        <div class="field"><div class="field-label">💰 Rémunération</div><div class="field-value">${champ(outil.ikigai?.remuneration)}</div></div>
       </div>
 
       <div class="section">
         <h2>🌳 Arbre de Vie</h2>
-        <div class="field">
-          <div class="field-label">🌱 Racines</div>
-          <div class="field-value">${outil.arbre?.racines ? outil.arbre.racines : '<span class="empty">Non renseigné</span>'}</div>
-        </div>
-        <div class="field">
-          <div class="field-label">🌳 Tronc</div>
-          <div class="field-value">${outil.arbre?.tronc ? outil.arbre.tronc : '<span class="empty">Non renseigné</span>'}</div>
-        </div>
-        <div class="field">
-          <div class="field-label">🌿 Branches</div>
-          <div class="field-value">${outil.arbre?.branches ? outil.arbre.branches : '<span class="empty">Non renseigné</span>'}</div>
-        </div>
-        <div class="field">
-          <div class="field-label">🍃 Feuilles</div>
-          <div class="field-value">${outil.arbre?.feuilles ? outil.arbre.feuilles : '<span class="empty">Non renseigné</span>'}</div>
-        </div>
-        <div class="field">
-          <div class="field-label">🌸 Fleurs</div>
-          <div class="field-value">${outil.arbre?.fleurs ? outil.arbre.fleurs : '<span class="empty">Non renseigné</span>'}</div>
-        </div>
-        <div class="field">
-          <div class="field-label">🍎 Fruits</div>
-          <div class="field-value">${outil.arbre?.fruits ? outil.arbre.fruits : '<span class="empty">Non renseigné</span>'}</div>
-        </div>
+        <div class="field"><div class="field-label">🌱 Racines</div><div class="field-value">${champ(outil.arbre?.racines)}</div></div>
+        <div class="field"><div class="field-label">🌳 Tronc</div><div class="field-value">${champ(outil.arbre?.tronc)}</div></div>
+        <div class="field"><div class="field-label">🌿 Branches</div><div class="field-value">${champ(outil.arbre?.branches)}</div></div>
+        <div class="field"><div class="field-label">🍃 Feuilles</div><div class="field-value">${champ(outil.arbre?.feuilles)}</div></div>
+        <div class="field"><div class="field-label">🌸 Fleurs</div><div class="field-value">${champ(outil.arbre?.fleurs)}</div></div>
+        <div class="field"><div class="field-label">🍎 Fruits</div><div class="field-value">${champ(outil.arbre?.fruits)}</div></div>
       </div>
 
-      <div class="footer">
-        <p>Généré par CoachingStudio — Coach Julien</p>
-      </div>
+      <div class="footer"><p>Généré par CoachingStudio — Coach Julien</p></div>
     </body>
     </html>
   `;
 
-  // Ouverture impression
   const printWindow = window.open('', '', 'height=600,width=800');
   printWindow.document.write(html);
   printWindow.document.close();
