@@ -3189,12 +3189,44 @@ const ENTRETIEN_TYPES = {
     icon: "🏗️",
     intro: "Analyse de la demande : établir le fondement de l'accompagnement.",
     sections: [
-      { titre: "Réunion de cadrage — Objectifs", questions: [
-        "Cadrer la relation.",
-        "Poser des limites claires.",
-        "Rassurer le client.",
-        "Vérifier la motivation."
-      ]},
+      { titre: "Réunion de cadrage — Objectifs",
+        archive: ["Cadrer la relation.", "Poser des limites claires.", "Rassurer le client.", "Vérifier la motivation."],
+        questions: [],
+        aide: {
+          intro: "Cette réunion pose le terrain : à la fin, le client sait avec qui il travaille, à quelles conditions et pourquoi il est là. Ces 4 intentions guident les parties qui suivent (cadre de travail, organisation, relation, émotion).",
+          blocs: [
+            { titre: "1. Cadrer la relation",
+              paragraphes: [
+                "Clarifier qui fait quoi. Le client reste maître de ses choix et de son rythme ; je tiens le processus et j'ose poser des questions qui bousculent.",
+                "Nous sommes deux adultes qui coopèrent : ni toi ni moi ne jouons un rôle."
+              ],
+              dire: "« Ici, je serai franc et direct, avec bienveillance. J'attends la même vérité de ta part. »",
+              repere: "Le client redit, avec ses mots, son rôle et le mien." },
+            { titre: "2. Poser des limites claires",
+              paragraphes: [
+                "Dire ce que je fais et ce que je ne fais pas, avant d'en avoir besoin. Le coaching n'est pas un soin : si la situation relève d'un suivi médical ou psychologique, j'oriente vers un professionnel.",
+                "Poser aussi les limites pratiques : durée et fréquence des séances, ponctualité, annulations, paiement, confidentialité (voir l'engagement déontologique du contrat)."
+              ],
+              dire: "« Voilà ce que tu peux attendre de moi, et voilà ce que je te demande en retour. »",
+              repere: "Les règles sont dites à voix haute et le client les a acceptées." },
+            { titre: "3. Rassurer le client",
+              paragraphes: [
+                "Beaucoup de clients arrivent avec de l'appréhension : peur d'être jugé, de ne pas être à la hauteur, de devoir tout raconter. Rassurer, c'est rendre le cadre prévisible.",
+                "Expliquer le déroulé d'une séance, rappeler la confidentialité, dire qu'il n'a rien à prouver et qu'il peut répondre « je ne sais pas » ou dire « stop ». Avec un profil HPI, HSP ou TDAH, un cadre explicite (durée, déroulé, suite) apaise souvent l'incertitude."
+              ],
+              dire: "« Tu avances à ton rythme. Si quelque chose te met mal à l'aise, dis-le-moi : on s'arrête et on ajuste. »",
+              repere: "Le client se sent libre de dire ce qui le dérange (voir la partie Émotion)." },
+            { titre: "4. Vérifier la motivation",
+              paragraphes: [
+                "Comprendre ce qui l'amène maintenant, et si l'envie de changer vient de lui plutôt que de son entourage. Écouter les mots d'envie (« je veux », « j'ai besoin ») et les mots de contrainte (« il faut », « on m'a dit de »).",
+                "Repères : ce qu'il a déjà essayé, ce qui changerait pour lui si la situation évoluait, sa disponibilité en temps et en énergie entre les séances. Si la motivation semble fragile, je le dis avec douceur et je laisse le client décider, sans pousser."
+              ],
+              dire: "« Ce qui compte pour moi, c'est que ce travail te serve à toi. Dis-moi ce que tu en attends. »",
+              repere: "Je sais ce que le client attend, pourquoi maintenant, et ce qu'il est prêt à engager." }
+          ],
+          fin: "En fin de réunion, le client sait ce que nous faisons ensemble, les règles du jeu, ce qu'il peut attendre de moi et ce qui le motive. S'il hésite, on prend le temps avant de démarrer."
+        }
+      },
       { titre: "Réunion de cadrage — Cadre de travail", questions: [
         "Motivation pour mettre en place un coaching : que sais-tu du coaching et qu'est-ce que tu as fait ?",
         "Qu'est-ce qui te fait croire qu'un coach est plus approprié dans ce domaine ?",
@@ -3362,6 +3394,19 @@ const ENTRETIEN_TYPES = {
   }
 };
 
+function buildAideSection(aide) {
+  const box = h("div",{style:"background:#FBF5E4;border:1px solid #E4DAC0;border-radius:12px;padding:14px 16px;margin-bottom:10px;line-height:1.55"});
+  if (aide.intro) box.appendChild(h("div",{style:"font-size:13px;color:#2E2A20;margin-bottom:6px"}, aide.intro));
+  (aide.blocs || []).forEach(b => {
+    box.appendChild(h("div",{style:"font-weight:700;font-size:13.5px;color:#2E2A20;margin:14px 0 4px"}, b.titre));
+    (b.paragraphes || []).forEach(t => box.appendChild(h("div",{style:"font-size:13px;color:#2E2A20;margin-bottom:6px"}, t)));
+    if (b.dire) box.appendChild(h("div",{style:"font-size:13px;color:#7A5F1E;font-style:italic;margin-bottom:6px"}, "À dire : " + b.dire));
+    if (b.repere) box.appendChild(h("div",{style:"font-size:12.5px;color:#5A5648;margin-bottom:2px"}, "✔ Acquis quand : " + b.repere));
+  });
+  if (aide.fin) box.appendChild(h("div",{style:"font-size:13px;color:#2E2A20;margin-top:14px;padding-top:10px;border-top:1px solid #E4DAC0"}, aide.fin));
+  return box;
+}
+
 function buildProtocole(c) {
   c.entretiens = c.entretiens || [];
   const wrap = h("div",{});
@@ -3374,7 +3419,8 @@ function buildProtocole(c) {
 
     def.sections.forEach((sec, sIdx) => {
       wrap.appendChild(h("div",{style:"font-weight:700;font-size:12.5px;color:#9C7A2E;margin:16px 0 8px;text-transform:uppercase;letter-spacing:.03em"}, sec.titre));
-      sec.questions.forEach((q, qIdx) => {
+      if (sec.aide) wrap.appendChild(buildAideSection(sec.aide));
+      (sec.questions || []).forEach((q, qIdx) => {
         const key = "s"+sIdx+"q"+qIdx;
         const row = h("div",{style:"margin-bottom:10px"});
         row.appendChild(h("div",{style:"font-size:13px;color:#2E2A20;margin-bottom:4px"}, q));
@@ -3432,7 +3478,7 @@ function buildProtocole(c) {
       card.appendChild(hdr);
       if (def) {
         def.sections.forEach((sec, sIdx) => {
-          sec.questions.forEach((q, qIdx) => {
+          ((sec.questions && sec.questions.length) ? sec.questions : (sec.archive || [])).forEach((q, qIdx) => {
             const val = (en.reponses||{})["s"+sIdx+"q"+qIdx];
             if (val) card.appendChild(h("div",{style:"font-size:12px;color:#5A5648;margin-top:4px"}, h("span",{style:"color:#9C7A2E;font-weight:600"}, sec.titre+" : "), val));
           });
