@@ -366,310 +366,6 @@ const SAMPLE = [
 ];
 
 const BIBLIO = [
-  {id:"q1",cat:"Questions puissantes",phase:"evaluation",profil:"Tous",titre:"Ouverture & exploration",source:"Meta-Coaching — Hall & Duval",
-   contenu:`1. Qu'est-ce qui est le plus important pour toi là, maintenant ?
-2. Si tu n'avais aucune limite, que ferais-tu ?
-3. Qu'est-ce que cette situation te coûte de ne pas changer ?
-4. De quoi as-tu besoin pour avancer ?
-5. Qu'est-ce qui serait différent si ce problème était résolu ?
-6. Qu'est-ce que tu sais déjà, au fond de toi ?
-7. Quel serait le premier petit pas possible aujourd'hui ?`},
-  {id:"q2",cat:"Questions puissantes",phase:"entrainement",profil:"HPI",titre:"Décélération & ancrage (HPI)",source:"Assenheim — Mon Cerveau est Hyper",
-   contenu:`1. Parmi toutes ces idées, laquelle résonne le plus avec qui tu es vraiment ?
-2. Si tu devais choisir UNE seule priorité cette semaine, laquelle ?
-3. Qu'est-ce que tu ressens dans ton corps quand tu penses à ça ?
-4. Tu analyses beaucoup — qu'est-ce que TOI tu veux vraiment ?
-5. À quel moment tu t'es senti pleinement toi-même récemment ?`},
-  {id:"q3",cat:"Questions puissantes",phase:"entrainement",profil:"HSP",titre:"Validation & besoins (HSP)",source:"Coaching HSP — approche somatique",
-   contenu:`1. Qu'est-ce que tu as absorbé des autres aujourd'hui qui n'est pas le tien ?
-2. Où dans ton corps ressens-tu ça ?
-3. Qu'est-ce dont tu as besoin pour te sentir en sécurité ici ?
-4. Si ta sensibilité était un superpouvoir, comment tu l'utiliserais là ?
-5. Quelle est la frontière que tu as du mal à maintenir en ce moment ?`},
-  {id:"q4",cat:"Questions puissantes",phase:"entrainement",profil:"TDAH",titre:"Focus & momentum (TDAH)",source:"Coaching TDAH — approche forces",
-   contenu:`1. Quelle est la SEULE chose que tu ferais si tu ne pouvais en faire qu'une ?
-2. Qu'est-ce qui te donne de l'énergie vs ce qui t'en prend ?
-3. À quel moment de la journée tu es le plus efficace ?
-4. C'est quoi le vrai obstacle : la tâche ou ce qu'elle représente ?
-5. Comment rendre ça plus fun, plus rapide, plus stimulant ?`},
-  {id:"n1",cat:"NLP",phase:"entrainement",profil:"Tous",titre:"Recadrage de contenu",source:"NLP — Bandler & Grinder",
-   contenu:`OBJECTIF : Changer la signification attribuée à un événement.
-
-1. Identifier la croyance limitante : « Qu'est-ce que tu dis sur toi dans cette situation ? »
-2. Questionner : « Est-ce TOUJOURS vrai ? Dans 100% des cas ? »
-3. Proposer une autre perspective : « Et si ça signifiait autre chose ? »
-4. Ancrer la nouvelle signification : « Si c'était une preuve de ta force ? »
-5. Test : « Sur 1 à 10, comment tu te sens avec cette nouvelle façon de voir ? »
-
-EXEMPLE : "Je suis trop sensible" → "Je perçois ce que les autres ne voient pas encore"`},
-  {id:"n2",cat:"NLP",phase:"entrainement",profil:"HPI",titre:"Ligne du temps — décision (HPI)",source:"NLP — Ligne du temps",
-   contenu:`OBJECTIF : Débloquer une décision via la sagesse temporelle.
-
-1. Imaginer une ligne du temps devant soi.
-2. Avancer vers le FUTUR : « Imagine que tu as fait ce choix. Comment tu te sens ? »
-3. Explorer les conséquences à 1 an, 5 ans, 10 ans.
-4. Revenir au présent : « Depuis ce futur, quel conseil tu te donnes ? »
-5. Ancrer la ressource : geste ou mot-clé associé à la clarté ressentie.
-
-ADAPTÉ HPI : Le HPI visualise plusieurs futurs simultanément — choisir le plus ALIGNÉ, pas le plus optimal.`},
-  {id:"n3",cat:"NLP",phase:"entrainement",profil:"HSP",titre:"Ancrage ressource (HSP)",source:"NLP — Ancrage",
-   contenu:`OBJECTIF : Créer une ancre corporelle de sécurité rapidement accessible.
-
-1. Identifier un souvenir de sécurité absolue.
-2. Immersion sensorielle : voir, entendre, ressentir dans le corps.
-3. Au pic de l'état ressource : poser l'ancre (pression sur le poignet).
-4. Répéter 3 fois pour renforcer.
-5. Tester : activer l'ancre et vérifier le retour de l'état ressource.
-
-ADAPTÉ HSP : Ancres discrètes (poignet, lobe de l'oreille) utilisables en public.`},
-  {id:"n4",cat:"NLP",phase:"entrainement",profil:"TDAH",titre:"Modélisation état de flow (TDAH)",source:"NLP + Csikszentmihalyi — Flow",
-   contenu:`OBJECTIF : Reproduire volontairement un état de concentration intense.
-
-1. « Rappelle-toi d'un moment où tu étais totalement absorbé. »
-2. Mapping sensoriel : environnement, sensations, énergie.
-3. Identifier les déclencheurs : heure, type de tâche, niveau de défi.
-4. Créer un rituel d'entrée : musique, posture, durée (pomodoro 25 min).
-5. Ancrer et tester.
-
-ADAPTÉ TDAH : Le flow arrive quand la tâche est juste assez difficile — calibrer le défi.`},
-  {id:"s1b",cat:"Sophrologie & somatique",phase:"entrainement",profil:"Tous",titre:"Cohérence cardiaque 3-6-5",source:"Dr David O'Hare",
-   contenu:`OBJECTIF : Réguler le système nerveux en 5 minutes.
-→ 3 fois par jour / 6 respirations par minute / 5 minutes
-
-1. S'installer, colonne droite.
-2. Inspiration nasale : 5 secondes.
-3. Expiration buccale : 5 secondes.
-4. Maintenir 5 minutes.
-5. Observer sans juger.
-
-EFFETS : Réduction cortisol, clarté mentale, retour au calme.
-CONSEIL : Matin + avant séance + avant de dormir.
-ADAPTÉ TDAH : Utiliser une app de guidage visuel (RespiRelax).`},
-  {id:"s2b",cat:"Sophrologie & somatique",phase:"entrainement",profil:"HSP",titre:"Protocole de décharge sensorielle",source:"Peter Levine — Somatic Experiencing",
-   contenu:`OBJECTIF : Libérer les tensions d'hyperstimulation.
-DURÉE : 15-20 minutes
-
-1. SCAN CORPOREL (3 min) : Balayer le corps de la tête aux pieds. Nommer les tensions sans les changer.
-
-2. SECOUSSE CONSCIENTE (5 min) : Pieds écartés, laisser les genoux fléchir et vibrer doucement. Laisser monter progressivement.
-
-3. EXPIRATION SONORE (3 min) : Inspirer profond, expirer avec un son (soupir, "aaah"). Répéter jusqu'au relâchement.
-
-4. ANCRAGE (5 min) : S'allonger. Sentir le poids du corps. Nommer 5 choses vues, 4 entendues, 3 touchées.
-
-SIGNAL : Bâillement spontané, chaleur dans les mains.`},
-  {id:"s3b",cat:"Sophrologie & somatique",phase:"entrainement",profil:"HPI",titre:"Scan de désaccélération mentale",source:"Jon Kabat-Zinn — MBSR",
-   contenu:`OBJECTIF : Passer de la pensée arborescente à la présence.
-DURÉE : 10 minutes
-
-1. OBSERVATION (2 min) : Les pensées comme des nuages. Ne pas les suivre ni les repousser.
-
-2. DESCENTE (3 min) : Attention sur les pieds → chevilles → mollets → bassin → ventre → poitrine → épaules → visage.
-
-3. POINT DE GRAVITÉ (3 min) : Centre dans le bas-ventre. Respirer depuis ce centre.
-
-4. QUESTION D'ANCRAGE (2 min) : « Qu'est-ce qui est vrai, là, maintenant ? » Laisser la réponse venir du corps.
-
-ADAPTÉ HPI : Si les pensées s'emballent, les noter avant de commencer.`},
-  {id:"s4b",cat:"Sophrologie & somatique",phase:"entrainement",profil:"TDAH",titre:"Activation physique pré-séance",source:"Dr John Ratey — Spark",
-   contenu:`OBJECTIF : Stimuler dopamine et noradrénaline avant un travail cognitif.
-DURÉE : 5-10 minutes
-
-1. ACTIVATION (2 min) : Tête de gauche à droite, cercles épaules, marche genoux levés.
-
-2. CROISEMENTS (2 min) : Genou gauche + main droite, alternance rapide. Active les deux hémisphères.
-
-3. RESPIRATION ACTIVANTE (2 min) : Inspiration 3 sec / rétention 1 sec / expiration forte. × 10.
-
-4. INTENTION (1 min) : « Aujourd'hui je vais travailler sur… et je m'autorise à… »
-
-POURQUOI : L'exercice augmente BDNF et dopamine, essentiels pour l'attention TDAH.`},
-  {id:"b1b",cat:"Protocole burnout",phase:"evaluation",profil:"Tous",titre:"Évaluation initiale burnout (5 axes)",source:"Christina Maslach + modèle CARE",
-   contenu:`5 AXES À ÉVALUER (de 0 à 10) :
-
-① ÉPUISEMENT PHYSIQUE
-→ Signes : sommeil non récupérateur, douleurs, infections.
-
-② ÉPUISEMENT ÉMOTIONNEL
-→ Signes : émoussement, cynisme, irritabilité.
-
-③ ÉPUISEMENT COGNITIF
-→ Signes : brouillard mental, oublis, indécision.
-
-④ PERTE DE SENS
-→ Signes : détachement, sentiment d'inutilité.
-
-⑤ ISOLEMENT
-→ Signes : repli, évitement social, honte.
-
-INTERPRÉTATION :
-≤ 25 = vigilance
-25-40 = burnout modéré
-> 40 = arrêt recommandé`},
-  {id:"b2b",cat:"Protocole burnout",phase:"entrainement",profil:"HPI",titre:"Reconnecter au sens — post-burnout (HPI)",source:"Cathy Assenheim",
-   contenu:`PHASE 1 — PERMISSION DE SE REPOSER (séances 1-2)
-→ Déconstruire : "je dois produire pour avoir de la valeur"
-→ Exercice : liste de 10 choses que tu ES, sans verbe d'action.
-
-PHASE 2 — RÉINVENTAIRE DES FORCES (séances 3-4)
-→ Roue de l'énergie : ce qui recharge vs ce qui vide.
-→ Question : "Qu'est-ce que tu ferais si tu ne pouvais pas échouer ?"
-
-PHASE 3 — RECONSTRUCTION DU SENS (séances 5-6)
-→ Valeurs non négociables.
-→ Contrat avec soi-même : 3 engagements.
-→ Rituels de ressourcement quotidien.
-
-VIGILANCE : Le HPI peut intellectualiser le burnout sans en vivre la guérison. Ancrer dans le corps.`},
-  {id:"b3b",cat:"Protocole burnout",phase:"entrainement",profil:"HSP",titre:"Récupération sensorielle (HSP)",source:"Elaine Aron + Somatic Experiencing",
-   contenu:`SEMAINE 1-2 : DÉCONNEXION
-→ Réduire stimuli, rituels de silence (10 min entre activités)
-→ Journal des "voleurs d'énergie"
-
-SEMAINE 3-4 : RESTAURATION
-→ Nature, créativité, beauté
-→ Cohérence cardiaque + marche 20 min/jour
-→ Budget d'énergie : 10 jetons/jour
-
-SEMAINE 5-6 : RECALIBRATION
-→ Besoins fondamentaux non satisfaits
-→ Zones tampon entre stimulations
-→ Script de communication des besoins
-
-QUESTION CLÉ : "Qu'est-ce que tu n'as pas le droit de ressentir selon toi ?"`},
-  {id:"b4b",cat:"Protocole burnout",phase:"entrainement",profil:"TDAH",titre:"Reconstruire un système soutenable post-burnout (TDAH)",source:"Parcours Reconversion après burn-out",
-   contenu:`SEMAINE 1-2 : OBSERVER SANS CORRIGER
-→ Cartographier une journée type sans jugement, repérer les voleurs de temps réels (oublis, recommencements).
-→ Le pic d'énergie du jour : identifier le moment où la concentration est naturellement disponible.
-
-SEMAINE 3-4 : UN SYSTÈME EXTERNE SIMPLE
-→ Un seul support visible (pas de dispersion), échéances affichées physiquement.
-→ Time-boxing en blocs courts (15-25 min) + un blanc protégé par jour, non négociable.
-
-SEMAINE 5 : TENIR LA CHARGE SANS S'EFFONDRER
-→ 3 catégories de priorité maximum (urgent / important / reportable).
-→ Une phrase de refus prête à l'avance, réutilisable telle quelle.
-→ Version « minimum » du planning prévue pour les jours sans énergie.
-
-REPÈRE COACH : un système qui ne prévoit pas les jours sans énergie n'est pas un vrai système — la flexibilité planifiée fait partie de la structure.`},
-  {id:"pr1",cat:"Parcours 5 semaines (reconversion)",phase:"entrainement",profil:"Tous",titre:"Organisation / gestion du temps",source:"Parcours Reconversion après burn-out",
-   contenu:`S1 — Observer avant de changer : cartographier une journée type, repérer les voleurs de temps, sans encore rien corriger.
-S2 — Construire un système externe : un support unique, simple, testé 2 semaines avant tout ajout.
-S3 — Découper et cadencer : time-boxing, règle des 2 minutes, un blanc protégé chaque jour.
-S4 — Tenir la charge dans la durée : prioriser en 3 catégories, anticiper l'imprévu, savoir dire non.
-S5 — Ancrer et transmettre : formaliser le système sur une seule page, le partager, prévoir la version « semaine chargée ».
-
-REPÈRE COACH : chaque semaine se termine par un bilan factuel, jamais un jugement de discipline.`},
-  {id:"pr2",cat:"Parcours 5 semaines (reconversion)",phase:"entrainement",profil:"HSP",titre:"Régulation émotionnelle",source:"Parcours Reconversion après burn-out",
-   contenu:`S1 — Observer les vagues : journal d'intensité émotionnelle (1-10), 3 fois/jour, sans intervenir.
-S2 — Nommer et ralentir : verbaliser l'émotion à voix haute, pause de 90 secondes avant de réagir.
-S3 — Repérer les signaux : signal corporel annonciateur (mâchoire, respiration), seuil de bascule.
-S4 — Construire des espaces de régulation : lieu de retrait, personne ressource, objet apaisant — testés à l'avance.
-S5 — Consolider un rythme stable : une semaine sans journal pour vérifier que les réflexes tiennent seuls.
-
-EXERCICE COACH (S1) : relecture commentée du journal des vagues en séance (20 min) — questions ouvertes uniquement, sans interpréter à la place du client.`},
-  {id:"pr3",cat:"Parcours 5 semaines (reconversion)",phase:"entrainement",profil:"Tous",titre:"Relations sociales / professionnelles",source:"Parcours Reconversion après burn-out",
-   contenu:`S1 — Cartographier les interactions : lesquelles coûtent, lesquelles ressourcent, sans jugement.
-S2 — Clarifier plutôt que deviner : poser la question directe au lieu de supposer une attente implicite.
-S3 — Préparer les échanges à enjeu : 3 points clés écrits à l'avance, scénario de réaction difficile anticipé.
-S4 — Poser des limites : décliner sans justification excessive, limiter la durée d'une interaction.
-S5 — Construire un réseau soutenant durable : identifier le noyau de 3-5 personnes vraiment soutenantes.
-
-REPÈRE COACH : la culpabilité après un refus posé est normale et attendue — ne signifie pas que la limite était injustifiée.`},
-  {id:"pr4",cat:"Parcours 5 semaines (reconversion)",phase:"entrainement",profil:"HPI",titre:"Confiance en soi / estime de soi",source:"Parcours Reconversion après burn-out",
-   contenu:`S1 — Collecter les faits : 3 réussites notées chaque soir, réussites passées oubliées, retours de tiers.
-S2 — Distinguer fait et jugement : reformuler un échec en fait neutre, repérer les mots absolus (toujours/jamais).
-S3 — Solliciter et intégrer les retours : demander un avis ciblé, accueillir un compliment sans le minimiser.
-S4 — Retravailler le discours intérieur : identifier la voix critique d'origine, préparer une réponse ferme et bienveillante.
-S5 — Ancrer une image de soi stable : une semaine sans relevé pour vérifier la stabilité acquise.
-
-REPÈRE COACH : le but n'est pas la pensée positive mais une base factuelle solide face à une mémoire biaisée vers l'échec.`},
-  {id:"o1b",cat:"Outils pratiques",phase:"evaluation",profil:"Tous",titre:"Roue de vie — version atypiques",source:"Adapté Wheel of Life",
-   contenu:`8 DOMAINES (de 0 à 10) :
-
-① ÉNERGIE & CORPS — Je prends soin de mon corps ?
-② MENTAL & CLARTÉ — Mon esprit est clair et apaisé ?
-③ ÉMOTIONS — Je reconnais et exprime mes émotions ?
-④ RELATIONS — Mes relations me nourrissent ?
-⑤ TRAVAIL & SENS — Mon travail a du sens ?
-⑥ CRÉATIVITÉ — J'explore, je crée, j'apprends ?
-⑦ LIMITES — Je sais dire non ?
-⑧ PLAISIR — Je ris, je joue, je savoure ?
-
-UTILISATION :
-1. Client note chaque domaine (5 min)
-2. Domaine le plus bas : "Que se passerait-il si ça montait de 1 ?"
-3. Domaine le plus haut : "Comment cette force peut-elle aider les autres ?"
-4. 1 action concrète pour la semaine.`},
-  {id:"o2b",cat:"Outils pratiques",phase:"entrainement",profil:"HPI",titre:"Journal de décélération (HPI)",source:"Journaling adapté HPI",
-   contenu:`FORMAT QUOTIDIEN — 10 minutes le soir
-
-① CE QUI S'EST PASSÉ (2 min) — Faits bruts, sans analyse.
-
-② CE QUE J'AI RESSENTI (3 min) — Émotions, sensations corporelles.
-
-③ CE QUE J'AI APPRIS (2 min) — 1 seule chose. Pas une liste.
-
-④ BESOIN DE DEMAIN (1 min) — 1 besoin, 1 action.
-
-⑤ GRATITUDE (2 min) — 1 chose concrète, ressentie dans le corps.
-
-RÈGLE DU JEU : Interdiction d'analyser. Juste décrire et ressentir.`},
-  {id:"o3b",cat:"Outils pratiques",phase:"entrainement",profil:"TDAH",titre:"Système des 3 blocs (TDAH)",source:"Dr Ned Hallowell + Russell Barkley",
-   contenu:`MATIN — BLOC COGNITIF (pic dopamine)
-→ Tâches de concentration max
-→ 90 min max, pauses de 10 min
-→ UNE tâche à la fois, téléphone en mode avion
-
-APRÈS-MIDI — BLOC CRÉATIF & RELATIONNEL
-→ Réunions, appels, créativité
-→ Blocs de 45 min
-
-FIN DE JOURNÉE — BLOC ADMINISTRATIF
-→ Emails, rangement, planification du lendemain
-→ 30-45 min max
-
-RITUELS DE TRANSITION :
-→ 10 min de marche entre chaque bloc
-→ Début : "Mon intention pour ce bloc est…"
-→ Fin : noter ce qui reste (vider la RAM)`},
-  {id:"o4b",cat:"Outils pratiques",phase:"evaluation",profil:"HSP",titre:"Carte des déclencheurs sensoriels",source:"Elaine Aron — The Highly Sensitive Person",
-   contenu:`À REMPLIR AVEC LE CLIENT :
-
-DÉCLENCHEURS SONORES
-→ Ce qui épuise : _____ Ce qui ressource : _____
-
-DÉCLENCHEURS VISUELS
-→ Ce qui épuise : _____ Ce qui ressource : _____
-
-DÉCLENCHEURS RELATIONNELS
-→ Profils épuisants : _____ Profils ressourçants : _____
-
-ÉMOTIONS ABSORBÉES
-→ Émotions des autres que j'absorbe facilement : _____
-→ Ma stratégie de protection : _____
-
-SIGNAUX D'ALERTE
-→ Dans mon corps, surcharge = : _____
-
-PLAN DE DÉCOMPRESSION
-→ En 5 min : _____ En 30 min : _____ En 1 soirée : _____`},
-  {id:"o5b",cat:"Outils pratiques",phase:"maintien",profil:"Tous",titre:"Bilan de séance structuré",source:"Meta-Coaching + supervision",
-   contenu:`À REMPLIR EN FIN DE SÉANCE (10 min)
-
-POUR LE CLIENT :
-① Ce que j'ai exploré : _____
-② La prise de conscience principale : _____
-③ Ce que je ressens dans mon corps : _____
-④ Mon engagement pour la semaine : _____
-⑤ Ce dont j'ai besoin de mon coach : _____
-
-POUR LE COACH :
-① Ce que j'ai observé : _____
-② La dynamique de la séance : _____
-③ Ce qui a bien fonctionné : _____
-④ Ce que j'aurais pu faire différemment : _____
-⑤ Points à suivre : _____`},
   {id:"o6b",cat:"Outils pratiques",phase:"evaluation",profil:"Tous",titre:"Cycle du changement — modèle de Hudson",source:"Frederic Hudson — MHD Formation (CC BY 4.0)",
    contenu:`DÉFINITION
 Le changement va d'une situation problématique vers une situation désirée. Il fait toujours naître une résistance d'égale puissance : c'est un mécanisme normal, pas un échec du client.
@@ -702,261 +398,68 @@ QUESTIONS DE COACH (bilan de cycle)
 – Dans quelle phase es-tu aujourd'hui, et laquelle te plaît le plus ?
 
 LES 6 PÔLES D'ÉNERGIE DE HUDSON (2 à 3 dominants en général, à repérer avec le client)
-Puissance personnelle · Réussite · Intimité · Jeu · Quête de sens · Contribution`},
-  {id:"c1b",cat:"Communication assertive",phase:"entrainement",profil:"Tous",titre:"Script DESC — Poser ses limites",source:"Sharon Bower — DESC + CNV",
-   contenu:`MÉTHODE DESC
+Puissance personnelle · Réussite · Intimité · Jeu · Quête de sens · Contribution
 
-D — DÉCRIRE les faits (sans jugement)
-→ "Quand… [fait précis]"
+LES 4 VIEILLES RÈGLES DE VIE (qui ne fonctionnent plus)
+① La linéarité — la vie comme suite prévisible d'étapes (études, travail, famille, retraite)
+② La constance — travailler dur garantirait sécurité et bonheur pour toute la vie
+③ Dehors/Dedans — la sécurité vient de l'extérieur (entreprise, État, diplômes)
+④ Apprendre une fois pour toutes pendant la scolarité, puis c'est fini
 
-E — EXPRIMER mon ressenti (en "je")
-→ "Je ressens…"
+LES 4 NOUVELLES RÈGLES DE VIE (qui donnent du pouvoir)
+① Le recyclage — la vie se mesure en chapitres/cycles, pas en ligne droite
+② Le changement — devenu la norme, plus l'exception
+③ Dedans/Dehors — la sécurité vient de soi : identité solide, valeurs et objectifs propres
+④ Apprendre est l'activité de toute une vie, à tout âge
 
-S — SPÉCIFIER ma demande (concrète)
-→ "Ce dont j'ai besoin c'est…"
+LES 3 STADES DU DÉVELOPPEMENT PERSONNEL (à traverser sans en sauter aucun)
+① Le ressenti et l'expérimentation — attention sans jugement au corps, aux sensations, aux pensées
+② La compréhension — l'intellect analyse ensuite ce qui a été vécu, sans effacer le ressenti
+③ Le lâcher-prise — l'ego cesse de vouloir tout contrôler ; confiance et sérénité s'installent`},
+  {id:"o7b",cat:"Outils pratiques",phase:"evaluation",profil:"Tous",titre:"Matrice SWOT (forces/faiblesses/opportunités/menaces)",source:"Albert S. Humphrey — MHD Formation (CC BY 4.0)",
+   contenu:`DÉFINITION
+Le SWOT croise 2 axes pour éclairer un projet ou une décision : interne/externe, et positif/négatif.
+Interne + positif = Forces (S) · Interne + négatif = Faiblesses (W)
+Externe + positif = Opportunités (O) · Externe + négatif = Menaces (T)
 
-C — CONSÉQUENCES (positives)
-→ "Ainsi…"
+QUESTIONS PAR CASE
+① FORCES — Quels sont les atouts du projet ? Quelle est sa différence, son avantage ? Sur quelles ressources (matérielles, humaines) le client peut-il s'appuyer ?
+② FAIBLESSES — Que lui manque-t-il pour réaliser le projet ? Que doit-il encore apprendre ?
+③ OPPORTUNITÉS — Quelles opportunités de lieu, de moyens, de contacts, de contexte permettraient de concrétiser ce projet ?
+④ MENACES — Quels blocages prévisibles ? Quelles contraintes incontournables / négociables ? Quelles résistances (humaines, institutionnelles, économiques, environnementales) ? Le projet prend-il en compte ses besoins, ses valeurs, ses atouts et ses faiblesses personnelles ? Quel impact sur son environnement, ses comportements, sa qualité de vie ?
 
-EXEMPLE COMPLET :
-"Quand tu m'envoies des messages après 22h, je me sens envahie. J'ai besoin qu'on évite ça sauf urgence. Ainsi je serai plus disponible le jour."
+2 POSTURES À REPÉRER CHEZ LE CLIENT
+– Focalisé Forces/Faiblesses (« l'input ») : centré sur les moyens à mobiliser (temps, argent, apprentissages). Changer = chercher de nouveaux moyens.
+– Focalisé Opportunités/Menaces (« l'output ») : centré sur l'objectif et le résultat. Toute menace devient une occasion de changer, d'inventer, d'ajuster sa vision.
+→ Utile pour situer où porte l'attention du client, et l'aider à explorer l'axe qu'il néglige.`},
+  {id:"o8b",cat:"Outils pratiques",phase:"entrainement",profil:"Tous",titre:"Écoute active et reformulation",source:"MHD Formation (CC BY 4.0)",
+   contenu:`ÉCOUTE PASSIVE VS ÉCOUTE ACTIVE
+Passive : processus mécanique, peu d'effort, on entend sans absorber.
+Active : demande un effort — absorber ce qui est dit, le relier à sa propre expérience, le rendre réutilisable.
 
-ADAPTÉ HSP : Préparer le script à l'écrit avant de le dire.
-ADAPTÉ HPI : Éviter de sur-justifier. Rester simple et direct.`},
-  {id:"c2b",cat:"Communication assertive",phase:"entrainement",profil:"HSP",titre:"Décentrage émotionnel (HSP)",source:"Judith Orloff — The Empath's Survival Guide",
-   contenu:`OBJECTIF : Ne pas absorber les émotions de l'autre.
+PRATIQUER L'ÉCOUTE ACTIVE
+– Garder le contact visuel, se pencher vers l'avant, écouter avec tout le corps
+– Observer le langage corporel, les expressions, le ton — ils font partie du message
+– Ne pas se laisser distraire ; poser de côté tout objet à manipuler
+– Avancer par étapes : écouter → interpréter → évaluer (ne pas sauter à l'action)
+– Repérer aussi ce qui s'exprime involontairement : lapsus, ordre du discours, mots chargés
 
-AVANT :
-1. Visualiser une bulle protectrice autour de soi.
-2. "Je peux être présent(e) sans porter leur charge."
-3. Ancrage : sentir ses pieds au sol.
+LE SILENCE
+Première technique d'écoute active : se taire pendant que l'autre parle ou cherche ses mots. Il existe des silences de réflexion, de conception, d'accoutumance — les laisser vivre.
 
-PENDANT :
-1. Observer l'émotion de l'autre sans la laisser entrer.
-2. "Je comprends que c'est difficile pour toi."
-3. Rester conscient(e) de son propre état.
+LE QUESTIONNEMENT (en entonnoir : du général au particulier)
+– Questions ouvertes : laisser l'interlocuteur s'exprimer librement
+– Questions fermées / alternatives : préciser un point
+– Questions de relance : approfondir ce qui vient d'être dit (≠ questions d'enchaînement qui font juste poursuivre le récit)
+À éviter : questions négatives involontaires ou inductives, deux questions en une, questionnaire rigide plaqué sur le discours du client.
 
-APRÈS :
-1. Se laver les mains en imaginant lâcher ce qui n'est pas sien.
-2. Scanner le corps : qu'est-ce qui reste ? À qui ça appartient ?
-3. Expiration longue + secouer les mains.`},
-  {id:"e1b",cat:"Régulation émotionnelle",phase:"entrainement",profil:"Tous",titre:"Protocole STOP (urgence émotionnelle)",source:"Jon Kabat-Zinn — MBSR",
-   contenu:`S — STOP
-→ Stopper. Mains à plat sur les cuisses.
+LES 3 REFORMULATIONS
+① Reformulation-écho — reprendre un mot fort de l'interlocuteur (fort pour lui, pas nécessairement pour vous)
+② Reformulation-résumé — renvoyer une image synthétique d'un discours spontané et désordonné
+③ Reformulation-élucidation — renvoyer une vue du problème différente de ce qui a été dit explicitement, mais sentie sous-jacente ; pousse à aller plus loin
 
-T — TAKE A BREATH
-→ Inspiration 5 sec, expiration 7 sec.
-
-O — OBSERVER
-→ "Qu'est-ce qui se passe en moi ?"
-→ Nommer l'émotion. La localiser dans le corps.
-
-P — PROCEED
-→ Choisir consciemment comment répondre.
-→ "Quelle est la réponse la plus utile pour moi ?"
-
-DURÉE : 60-90 secondes.
-EFFET : Activation cortex préfrontal, réduction amygdale.`},
-  {id:"e2b",cat:"Régulation émotionnelle",phase:"entrainement",profil:"HPI+HSP",titre:"Journal des émotions complexes",source:"Susan David — Emotional Agility",
-   contenu:`FORMAT HEBDOMADAIRE
-
-LUNDI — INVENTAIRE
-→ Quelles émotions cette semaine ?
-→ Lesquelles ont été les plus intenses ?
-
-MERCREDI — EXPLORATION
-→ Émotion la plus difficile :
-   • Qu'est-ce qu'elle dit de mes besoins ?
-   • D'où vient-elle ?
-
-VENDREDI — INTÉGRATION
-→ Comment j'ai géré ?
-→ Quelle est la sagesse de cette émotion ?
-→ "Chère [émotion], merci de m'avoir dit que…"
-
-DIMANCHE — RESSOURCE
-→ Quelle émotion positive cette semaine ?
-→ Comment en cultiver plus ?`},
-  {id:"p90-1",cat:"Programme 90 jours",phase:"maintien",profil:"Tous",titre:"S01 — La citadelle intérieure",source:"Masterclass 90 Jours — Stoïcisme (Épictète)",
-   contenu:`« Ce qui trouble les hommes, ce ne sont pas les choses, mais les jugements qu'ils portent sur les choses. » — Épictète
-
-Dichotomie du contrôle : séparer ce qui dépend de soi (actes, pensées) de ce qui n'en dépend pas.
-La citadelle intérieure : créer une bulle mentale pour protéger sa concentration et son calme.
-Amor Fati : transformer chaque imprévu en opportunité d'apprentissage.
-
-Planning quotidien :
-• Lundi — Désencombrement mental : Lister les irritants du jour et barrer ceux qui ne dépendent pas de vous.
-• Mardi — Ancrage visuel : Placer un rappel 'Contrôlable / Incontrôlable' sur votre poste de travail.
-• Mercredi — Focus unique : Traiter 1 seule tâche prioritaire le matin en immersion totale sans distraction.
-• Jeudi — Mode stoïcien : Face à un retard ou couac, respirer 3 fois et appliquer une solution purement logique.
-• Vendredi — Clôture sereine : Traiter et classer vos urgences pour clôturer la semaine sans charge mentale restante.
-• Week-end — Recharge sensorielle : Coupure des notifications et reconnexion au calme en plein air.
-Ancrage quotidien : 5 min de cohérence cardiaque au réveil + question « Est-ce sous mon contrôle direct ? »`},
-  {id:"p90-2",cat:"Programme 90 jours",phase:"maintien",profil:"Tous",titre:"S02 — L'ancrage dans l'ici et maintenant",source:"Masterclass 90 Jours — Pleine conscience (Eckhart Tolle)",
-   contenu:`« Rien ne s'est jamais produit dans le passé, rien ne se produira dans le futur : tout se produit dans le Présent. » — E. Tolle
-
-Rupture de la rumination : empêcher le cerveau de voyager entre regrets et scénarios futurs.
-L'Observateur Silencieux : observer ses pensées sans les juger.
-Extinction du feu mental : revenir répétitivement à l'instant présent.
-
-Planning quotidien :
-• Lundi — Ancrage des 5 sens : Prendre votre premier café/thé du matin en observant 3 détails visuels et 2 odeurs sans écran.
-• Mardi — Repas mono-tâche : Manger votre déjeuner sans téléphone, ni vidéo, ni lecture.
-• Mercredi — Marche consciente : Effectuer 10 minutes de marche en vous concentrant uniquement sur le contact des pieds.
-• Jeudi — Pause d'extinction : Faire 3 micro-pauses de 2 minutes dans la journée pour observer simplement votre respiration.
-• Vendredi — Transition pro/perso : Prendre 5 minutes de silence absolu avant de basculer dans votre soirée.
-• Week-end — Immersion manuelle : Bricolage, jardinage, sport ou activité manuelle avec une présence totale.
-Ancrage quotidien : 10 min de silence au réveil + règle des 3 respirations avant toute nouvelle tâche.`},
-  {id:"p90-3",cat:"Programme 90 jours",phase:"maintien",profil:"Tous",titre:"S03 — Le dépouillement du superflu",source:"Masterclass 90 Jours — Cynisme & minimalisme (Diogène)",
-   contenu:`« Je possède tout car je ne désire rien. » — Diogène de Sinope
-
-Dépouillement stratégique : réduire les choix quotidiens pour préserver l'énergie décisionnelle.
-Indépendance sociale : se détacher du besoin de validation extérieure.
-Sobriété choisie : redécouvrir la clarté de l'essentiel.
-
-Planning quotidien :
-• Lundi — Trieur numérique : Supprimer 5 applications inutiles et désactiver toutes les notifications secondaires.
-• Mardi — Épure du bureau : Ne laisser sur votre plan de travail physique et digital que le dossier en cours.
-• Mercredi — Journée sans dépense/distraction : Limiter la consultation des réseaux à 1 seul créneau de 15 min.
-• Jeudi — To-Do List minimaliste : Réduire la liste de travail de la journée à 3 priorités absolues.
-• Vendredi — Refus constructif : Dire non de façon courtoise mais ferme à une sollicitation non essentielle.
-• Week-end — Tri physique : Épurer, donner ou jeter 5 objets inutiles qui encombrent votre espace de vie.
-Ancrage quotidien : règle de soustraction avant tout nouvel engagement.`},
-  {id:"p90-4",cat:"Programme 90 jours",phase:"maintien",profil:"Tous",titre:"S04 — L'art du lâcher-prise",source:"Masterclass 90 Jours — Stoïcisme moderne",
-   contenu:`« Vous n'avez pas le contrôle sur ce qui vous arrive, mais vous avez le contrôle absolu sur la façon d'y réagir. »
-
-Sélection des combats : économiser son attention pour l'impact réel.
-Équation de la souffrance = Souci × Résistance.
-Tolérance à l'inconfort : accepter le doute sans distraction réflexe.
-
-Planning quotidien :
-• Lundi — Tri des batailles : Lister 3 sujets qui vous préoccupent et décider consciemment d'en lâcher un.
-• Mardi — Règle des 80/20 : Livrer une tâche dès qu'elle est efficace à 80% sans chercher la perfection ultime.
-• Mercredi — Mantra de secours : Répéter 'C'est un détail, pas une urgence' face aux petits imprévus.
-• Jeudi — Délégation / Simplification : Identifier 1 processus répétitif à simplifier ou automatiser.
-• Vendredi — Clôture sereine : Écrire votre liste du lundi soir pour libérer complètement votre cerveau du week-end.
-• Week-end — Déconnexion totale : Une journée 100% libre de tout objectif de performance.
-Ancrage quotidien : technique du « Et alors ? » face au pire scénario réaliste.`},
-  {id:"p90-5",cat:"Programme 90 jours",phase:"maintien",profil:"Tous",titre:"S05 — La conversion des passions en joie",source:"Masterclass 90 Jours — Spinoza",
-   contenu:`« La joie est le passage de l'homme d'une moindre à une plus grande perfection. » — Spinoza
-
-Le Conatus : l'énergie vitale qui pousse à se développer.
-Joie Active vs Passion Subie : comprendre la cause de ses émotions.
-Augmentation de la puissance : privilégier ce qui redonne de l'énergie.
-
-Planning quotidien :
-• Lundi — Analyse d'énergie : Identifier les 2 activités qui vous apportent le plus d'enthousiasme.
-• Mardi — Action motrice : Bloquer un créneau d'hyperfocus sur un projet stimulant au début de journée.
-• Mercredi — Analyse des blocages : Remplacer une frustration par la question : 'Quelle action concrète résout cela ?'
-• Jeudi — Micro-succès : Noter et célébrer 3 petites victoires accomplies aujourd'hui.
-• Vendredi — Partage positif : Exprimer un compliment sincère ou une gratitude à un collaborateur ou proche.
-• Week-end — Projet passion : Consacrer 2h à un projet personnel stimulant sans contrainte de résultat.
-Ancrage quotidien : journal de Spinoza — 3 moments de fierté/élan chaque soir.`},
-  {id:"p90-6",cat:"Programme 90 jours",phase:"maintien",profil:"Tous",titre:"S06 — La sobriété heureuse & les plaisirs simples",source:"Masterclass 90 Jours — Épicurisme",
-   contenu:`« Ne gâte pas ce que tu as par le désir de ce que tu n'as pas. » — Épicure
-
-Tri des désirs : nécessaire vs superflu anxieux.
-Ataraxie : tranquillité par la réduction des besoins artificiels.
-Plaisir d'être : savourer l'existant.
-
-Planning quotidien :
-• Lundi — Audit des impulsions : Vérifier si un nouveau projet/achat répond à un besoin réel ou à une impulsion.
-• Mardi — Pause café/thé sensorielle : Savourer une boisson en observant avec attention sa chaleur et ses arômes.
-• Mercredi — Déjeuner déconnecté : Manger dans le calme et échanger de façon authentique sans écran.
-• Jeudi — Marche de décompression : Faire un tour de 15 minutes en plein air sans téléphone.
-• Vendredi — Valorisation des acquis : Lister 5 outils ou réussites actuelles dont vous êtes pleinement satisfait.
-• Week-end — Cuisine & Convivialité : Préparer un repas simple et savoureux à partager avec vos proches.
-Ancrage quotidien : « un truc à la fois » — interdire le multitâche pendant un plaisir simple.`},
-  {id:"p90-7",cat:"Programme 90 jours",phase:"maintien",profil:"Tous",titre:"S07 — L'élan créateur & le mouvement",source:"Masterclass 90 Jours — Bergson",
-   contenu:`« Exister consiste à changer, changer à se mûrir, se mûrir à se créer soi-même. » — Henri Bergson
-
-L'Élan créateur : la force de vie dans la création et le renouvellement.
-Sortir du temps mécanique : vivre en état de Flow.
-L'intuition agissante : faire confiance aux flashs de compréhension.
-
-Planning quotidien :
-• Lundi — Casser la routine : Changer la disposition de votre bureau ou faire varier votre itinéraire habituel.
-• Mardi — Brainstorming visuel : Poser toutes vos idées sur une carte mentale (MindMap) ou un tableau blanc.
-• Mercredi — Action rapide : Tester une idée créative immédiatement sur un prototype ou un brouillon.
-• Jeudi — Mouvement corporel : Pratiquer une séance de sport ou une marche active pour réactiver le mental.
-• Vendredi — Veille inspirante : Explorer un sujet totalement nouveau hors de votre domaine habituel.
-• Week-end — Création libre : Construire, concevoir, rédiger ou développer quelque chose de personnel.
-Ancrage quotidien : session Flow de 25 min sans interruption ni correction.`},
-  {id:"p90-8",cat:"Programme 90 jours",phase:"maintien",profil:"Tous",titre:"S08 — La révolte solidaire & l'action",source:"Masterclass 90 Jours — Camus",
-   contenu:`« Je me révolte, donc nous sommes. » — Albert Camus
-
-L'Action vs le Cynisme : donner un sens par des actes engagés.
-La Révolte noble : dire non à l'injuste pour proposer une solution.
-La Solidarité : mettre ses compétences au service du collectif.
-
-Planning quotidien :
-• Lundi — Clarification du Sens : Identifier le 'Pourquoi' fondamental de votre projet ou mission.
-• Mardi — Correction d'inefficacité : Résoudre un dysfonctionnement récurrent qui freine l'équipe ou le quotidien.
-• Mercredi — Entraide spontanée : Offrir 15 minutes d'aide ou de conseil avisé à un collègue ou un proche.
-• Jeudi — Prise de position : Exprimer une idée forte avec calme et clarté lors d'un échange.
-• Vendredi — Alignement éthique : Vérifier que vos projets de la semaine respectent vos valeurs profondes.
-• Week-end — Bilan de mi-parcours : Évaluer le chemin parcouru sur ces 8 premières semaines.
-Ancrage quotidien : remplacer chaque critique par « Voici comment on peut l'améliorer ».`},
-  {id:"p90-9",cat:"Programme 90 jours",phase:"maintien",profil:"Tous",titre:"S09 — L'action sans effort (Wu Wei)",source:"Masterclass 90 Jours — Taoïsme (Lao Tseu)",
-   contenu:`« Le sage agit sans rien faire et enseigne sans rien dire. » — Lao Tseu
-
-Wu Wei (Non-Forçage) : suivre le courant plutôt que lutter.
-La souplesse de l'eau : l'adaptabilité l'emporte sur la rigidité.
-Alternance Yin/Yang : équilibrer action intense et repos.
-
-Planning quotidien :
-• Lundi — Lecture du flux : Identifier les tâches où vous avez du vent dans les voiles et pousser celles-ci.
-• Mardi — Économie de gestes : Découvrir la méthode la plus directe et simple pour accomplir votre objectif.
-• Mercredi — Écoute non-réactive : Laisser parler vos interlocuteurs sans anticiper mentalement vos réponses.
-• Jeudi — Lâcher la rigidité : Si un obstacle bloque un projet, pivoter temporairement vers une autre tâche.
-• Vendredi — Ralentissement mesuré : Effectuer vos tâches avec calme, régularité et précision sans courir.
-• Week-end — Reconnexion nature : Passer du temps au bord de l'eau ou en forêt sans montre ni timing.
-Ancrage quotidien : pause de fluidité — 5 min de respiration neutre dès qu'une résistance bloque.`},
-  {id:"p90-10",cat:"Programme 90 jours",phase:"maintien",profil:"Tous",titre:"S10 — La boussole du sens & l'Ikigai",source:"Masterclass 90 Jours — Sagesse japonaise",
-   contenu:`« Seul celui qui a un but peut trouver une joie constante dans son activité quotidienne. »
-
-L'Ikigai : intersection entre Passion, Mission, Vocation et Compétences.
-Le Kodawari : l'exigence et la fierté du travail bien fait.
-Artisan de sa vie : façonner son quotidien comme une œuvre alignée.
-
-Planning quotidien :
-• Lundi — Analyse Passion : Lister les 3 domaines qui vous passionnent le plus en ce moment.
-• Mardi — Analyse Talent : Identifier vos forces uniques (vitesse d'apprentissage, logique, créativité).
-• Mercredi — Analyse Utilité : Définir comment vos compétences apportent une valeur directe aux autres.
-• Jeudi — Analyse Valeur : Vérifier que vos activités principales assurent votre équilibre financier.
-• Vendredi — Synthèse Ikigai : Réajuster vos projets de la semaine pour les rapprocher du centre de votre boussole.
-• Week-end — Planification stratégique : Sanctuariser un créneau fixe pour votre projet de cœur.
-Ancrage quotidien : au moins une action par jour nourrissant sa passion ou mission.`},
-  {id:"p90-11",cat:"Programme 90 jours",phase:"maintien",profil:"Tous",titre:"S11 — La parole impeccable & l'éthique",source:"Masterclass 90 Jours — 4 Accords Toltèques (Don Miguel Ruiz)",
-   contenu:`« Que votre parole soit impeccable. Ne faites aucune supposition. Ne prenez rien personnellement. » — D. M. Ruiz
-
-Parole Impeccable : utiliser ses mots pour construire, pas critiquer.
-Rien de personnel : la réaction des autres reflète leur univers intérieur.
-Zéro Supposition : poser des questions directes plutôt qu'inventer des scénarios.
-
-Planning quotidien :
-• Lundi — Parole claire : Bannir la rouspétance, les jugements et sous-entendus de vos échanges.
-• Mardi — Bouclier émotionnel : Face à une remarque sèche, vous dire : 'Cela appartient à son stress'.
-• Mercredi — Vérification des faits : Poser une question directe au lieu de faire des suppositions.
-• Jeudi — Faire de son mieux : Accepter que votre 'mieux' varie selon votre niveau de fatigue.
-• Vendredi — Nettoyage relationnel : Désamorcer un quiproquo par un message simple et bienveillant.
-• Week-end — Harmonie relationnelle : Pratiquer l'écoute active sans couper la parole ni conseiller sans demande.
-Ancrage quotidien : « Quand tu dis cela, tu veux dire que… ? » avant de réagir.`},
-  {id:"p90-12",cat:"Programme 90 jours",phase:"maintien",profil:"Tous",titre:"S12 — La sérénité absolue & l'éveil",source:"Masterclass 90 Jours — Brené Brown",
-   contenu:`« Le Nirvana est l'extinction complète des feux de la peur, du doute et de l'agitation mentale. »
-
-L'Acceptation Absolue : embrasser pleinement qui l'on est.
-La Puissance de l'Authenticité : abandonner le masquage social épuisant.
-L'Éveil au quotidien : ancrer clarté, paix intérieure et gratitude active.
-
-Planning quotidien :
-• Lundi — Bienveillance envers soi : Cesser tout auto-jugement ou reproche sur votre niveau de productivité.
-• Mardi — Expression authentique : Exprimer clairement une limite ou un besoin avec calme et assurance.
-• Mercredi — Gratitude active : Noter 5 aspects de votre vie pour lesquels vous éprouvez de la reconnaissance.
-• Jeudi — Pardon & Libération : Tourner la page sur une frustration passée pour alléger votre esprit.
-• Vendredi — Consécration du parcours : Célébrer l'accomplissement des 12 semaines de cette masterclass.
-• Week-end — Charte de Vie : Rédiger vos 5 piliers personnels pour maintenir ce cap de sérénité sur le long terme.
-Ancrage quotidien : rituel de gratitude matin/soir.`},
+S'ENTRAÎNER
+Interviewer (pas interroger) sur un sujet personnel en n'utilisant que des reformulations. Une reformulation juste se reconnaît au « oui » de l'interlocuteur. Signes de progrès : discours plus riche, implication accrue, traits personnels révélés, confiance visible.`},
 ];
 
 // ══════════════════════════════════════════
