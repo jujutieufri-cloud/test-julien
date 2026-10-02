@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mon espace — Coaching</title>
+<style>
+  :root{
+    box-sizing:border-box;
+    --bg:#F7F3E8; --card:#FFFDF7; --line:#E4DAC0; --text:#3A3226; --muted:#6B6355;
+    --accent:#9C7A2E; --accentSoft:#FBF5E4;
+    padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  #app{max-width:640px;margin:0 auto;padding:20px 16px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:16px}
+  h1{font-size:19px;margin:4px 0 2px}
+  .muted{color:var(--muted);font-size:13px}
+  .reminder{background:var(--accentSoft);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:18px;font-size:14px;line-height:1.5}
+  .reminder b{color:var(--accent)}
+  .tabs{display:flex;gap:8px;margin:18px 0 14px}
+  .tab-btn{flex:1;padding:10px;border:1px solid var(--line);background:#fff;border-radius:10px;font-weight:600;font-size:13.5px;cursor:pointer;color:var(--text)}
+  .tab-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .outil-desc{color:var(--muted);font-size:13px;margin-bottom:14px;font-style:italic}
+  .rv-summary{background:var(--accentSoft);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.55;margin-bottom:14px}
+  .rv-dom{background:#fff;border:1px solid var(--line);border-radius:14px;margin:10px 0;padding:0 14px}
+  .rv-dom[open]{padding-bottom:14px}
+  .rv-dhead{list-style:none;display:flex;align-items:center;gap:10px;cursor:pointer;padding:13px 0;min-height:44px}
+  .rv-dhead::-webkit-details-marker{display:none}
+  .rv-title{flex:1;font-weight:600;font-size:14.5px;line-height:1.35}
+  .rv-dscore{display:flex;flex-direction:column;align-items:flex-end;color:var(--accent);line-height:1.1}
+  .rv-dscore b{font-size:19px}
+  .rv-dscore small{font-size:10.5px;color:var(--muted)}
+  .rv-chev{font-size:20px;color:var(--muted);transition:transform .2s}
+  .rv-dom[open] .rv-chev{transform:rotate(90deg)}
+  .rv-q{padding:11px 0 9px;border-top:1px solid var(--line)}
+  .rv-q-top{display:flex;align-items:flex-start;gap:10px}
+  .rv-q-text{flex:1;font-size:14.5px;line-height:1.4}
+  .rv-q-score{min-width:24px;text-align:right;font-weight:700;font-size:17px;color:var(--accent)}
+  .rv-slider{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:30px}
+  .rv-slider.untouched{opacity:.5}
+  .rv-scale{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+  .rv-note{width:100%;margin-top:9px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;font:inherit;font-size:13.5px;background:#fff}
+  .rv-saved{font-size:11.5px;color:#4a9e6a;text-align:right;min-height:15px}
+  .btn{display:inline-block;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:11px 18px;font-weight:600;font-size:13.5px;cursor:pointer}
+  .contract-view{max-height:60vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:12px;font-size:12.5px;background:#fff}
+  .empty{color:var(--muted);font-size:13.5px;text-align:center;padding:30px 10px}
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){--bg:#1C1812;--card:#26211A;--line:#3A3226;--text:#F0E8D2;--muted:#B8AC94;--accentSoft:#2E2718}
+    .rv-note,.tab-btn,.contract-view{background:#1C1812;color:var(--text)}
+  }
+</style>
+</head>
+<body>
+<div id="app"><div class="empty">Chargement…</div></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyDMV0s1MPRzjswK_WFKO7VrV3rxl0p4xdM",
+  authDomain: "la-clairiere-3e804.firebaseapp.com",
+  projectId: "la-clairiere-3e804",
+  storageBucket: "la-clairiere-3e804.appspot.com"
+};
+try { firebase.initializeApp(firebaseConfig); } catch (e) { console.error("firebase init:", e); }
+
+/* ═══ Moteur Outils (Ikigaï / Arbre de vie) — identique au côté coach ═══ */
+const OUTILS_DEF = {
+  ikigai: {
+    titre: "Ikigaï",
+    intro: "4 thèmes, chacun exploré par 5 questions notées de 1 à 10. Prends ton temps, il n'y a pas de bonne réponse.",
+    domaines: [
+      { id:"passion", icone:"❤️", court:"Passion", titre:"Passion — Ce que j'aime",
+        questions:[
+          "Je sais nommer ce qui me passionne vraiment.",
+          "Je m'offre régulièrement du temps pour ces activités.",
+          "Quand je m'y consacre, j'oublie le temps qui passe.",
+          "Ces activités me donnent de l'énergie plutôt que d'en prendre.",
+          "J'ose défendre ce que j'aime, même si les autres ne comprennent pas." ] },
+      { id:"talent", icone:"💪", court:"Talent", titre:"Talent — Ce en quoi je suis doué(e)",
+        questions:[
+          "Je sais nommer mes points forts sans hésiter.",
+          "Les autres reconnaissent mes qualités et me sollicitent pour elles.",
+          "J'utilise mes talents dans mon quotidien.",
+          "J'ai confiance dans mes compétences.",
+          "Je continue d'apprendre et de progresser dans ce que je fais bien." ] },
+      { id:"mission", icone:"🌍", court:"Mission", titre:"Mission — Ce dont le monde a besoin",
+        questions:[
+          "Je vois à qui ce que je sais faire peut être utile.",
+          "Je sais quel problème j'ai envie d'aider à résoudre.",
+          "Je ressens que mon action a un effet concret sur les autres.",
+          "Mes valeurs guident ce que je propose autour de moi.",
+          "Je me sens utile là où je suis aujourd'hui." ] },
+      { id:"profession", icone:"💰", court:"Profession", titre:"Profession — Ce pour quoi on peut me payer",
+        questions:[
+          "Je vois des moyens concrets de transformer mes talents en revenus.",
+          "Je connais des personnes prêtes à payer pour ce que je propose.",
+          "Mes revenus actuels couvrent mes besoins essentiels.",
+          "Je sais présenter et valoriser ce que je propose.",
+          "Je me sens légitime de demander une juste rémunération." ] }
+    ]
+  },
+  arbre: {
+    titre: "Arbre de vie",
+    intro: "6 thèmes, chacun exploré par 5 questions notées de 1 à 10. Prends ton temps, il n'y a pas de bonne réponse.",
+    domaines: [
+      { id:"racines", icone:"🌱", court:"Racines", titre:"Racines — D'où je viens, ce qui me porte",
+        questions:[
+          "Je connais mon histoire et d'où je viens.",
+          "Je m'appuie sur des personnes qui comptent pour moi (famille, amis, mentors).",
+          "Je me sens soutenu(e) quand j'en ai besoin.",
+          "Je reconnais ce que mes origines m'ont transmis de précieux.",
+          "Je me sens ancré(e) et stable dans ma vie actuelle." ] },
+      { id:"tronc", icone:"🌳", court:"Tronc", titre:"Tronc — Mes valeurs, mon identité",
+        questions:[
+          "Je sais nommer mes valeurs essentielles.",
+          "Mes choix de vie sont en accord avec mes valeurs.",
+          "Je me sens fidèle à moi-même.",
+          "Je sais dire non à ce qui va contre mes valeurs.",
+          "Je me sens en sécurité dans qui je suis." ] },
+      { id:"branches", icone:"🌿", court:"Branches", titre:"Branches — Mes compétences, mes domaines de vie",
+        questions:[
+          "Je sais nommer mes compétences et mes ressources.",
+          "Je me sens capable de faire face aux imprévus.",
+          "Je m'appuie sur plusieurs domaines de vie qui m'équilibrent (travail, famille, loisirs...).",
+          "Je fais confiance à ma capacité d'apprendre de nouvelles choses.",
+          "Je sais demander de l'aide quand j'en ai besoin." ] },
+      { id:"feuilles", icone:"🍃", court:"Feuilles", titre:"Feuilles — Ce qui me fait grandir en ce moment",
+        questions:[
+          "J'ai un projet ou un objectif qui me motive en ce moment.",
+          "Je passe à l'action, même à tout petits pas.",
+          "J'apprends régulièrement quelque chose de nouveau.",
+          "Je prends le temps de me reposer et de respirer.",
+          "Je me sens en mouvement dans ma vie." ] },
+      { id:"fleurs", icone:"🌸", court:"Fleurs", titre:"Fleurs — La joie, la beauté, la créativité",
+        questions:[
+          "Je vis des moments de joie dans ma semaine.",
+          "Je m'accorde du temps pour des activités créatives ou qui me font plaisir.",
+          "Je remarque la beauté autour de moi.",
+          "Je sais rire et jouer, sans culpabiliser.",
+          "Je m'exprime de façon authentique (paroles, gestes, création)." ] },
+      { id:"fruits", icone:"🍎", court:"Fruits", titre:"Fruits — Ce que je réalise et transmets",
+        questions:[
+          "Je reconnais ce que j'ai accompli dans ma vie.",
+          "Je suis fier(e) de certaines de mes réalisations.",
+          "Je transmets ou partage ce que je sais.",
+          "Je vois l'effet positif de ce que j'apporte aux autres.",
+          "Je me laisse recevoir la reconnaissance des autres." ] }
+    ]
+  }
+};
+
+function esc(s){ return String(s===undefined||s===null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function fmt1(v){ return (Math.round(v*10)/10).toString().replace(".",","); }
+
+const PORTAL = { clientId:null, client:null, sid:null, outils:{ikigai:{q:{},note:{},scores:{}},arbre:{q:{},note:{},scores:{}}}, tab:"ikigai" };
+
+function recalc(def, d){
+  d.scores = {};
+  def.domaines.forEach(dom=>{
+    const q = d.q[dom.id] || {};
+    const vals = Object.keys(q).map(k=>q[k]).filter(v=>typeof v==="number");
+    if (vals.length) d.scores[dom.id] = vals.reduce((a,b)=>a+b,0)/vals.length;
+  });
+}
+function statsOf(def, d){
+  let answered=0,total=0,lowQ=null,highQ=null;
+  def.domaines.forEach(dom=>{
+    total += dom.questions.length;
+    const q = d.q[dom.id]||{};
+    dom.questions.forEach((txt,i)=>{
+      const v=q[i]; if (typeof v!=="number") return;
+      answered++;
+      if (!lowQ||v<lowQ.v) lowQ={v,txt};
+      if (!highQ||v>highQ.v) highQ={v,txt};
+    });
+  });
+  const rated = def.domaines.filter(x=>d.scores[x.id]!==undefined);
+  const avg = rated.length ? rated.reduce((a,x)=>a+d.scores[x.id],0)/rated.length : null;
+  const lowDom = rated.length>1 ? rated.reduce((m,x)=>d.scores[x.id]<d.scores[m.id]?x:m, rated[0]) : null;
+  return {answered,total,avg,lowDom,lowQ,highQ};
+}
+function radarSvg(def, scores){
+  const n=def.domaines.length, cx=190, cy=175, R=100;
+  const ang = i => -Math.PI/2 + i*2*Math.PI/n;
+  const pt = (i,v) => [cx+Math.cos(ang(i))*R*v/10, cy+Math.sin(ang(i))*R*v/10];
+  const f = p => p[0].toFixed(1)+","+p[1].toFixed(1);
+  let rings=""; [2,4,6,8,10].forEach(k=>{ rings += `<polygon points="${def.domaines.map((_,i)=>f(pt(i,k))).join(" ")}" fill="none" stroke="var(--line)" stroke-width="1"/>`; });
+  let axes="",labels="",dots="";
+  def.domaines.forEach((dom,i)=>{
+    const e=pt(i,10);
+    axes += `<line x1="${cx}" y1="${cy}" x2="${e[0].toFixed(1)}" y2="${e[1].toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`;
+    const lx=cx+Math.cos(ang(i))*(R+22), ly=cy+Math.sin(ang(i))*(R+22);
+    labels += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="18">${dom.icone}</text>`;
+    const s=scores[dom.id];
+    if (s!==undefined){ const p=pt(i,s); dots += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="4.5" fill="var(--accent)"/>`; }
+  });
+  const poly = def.domaines.map((dom,i)=>f(pt(i, scores[dom.id]===undefined?0:scores[dom.id]))).join(" ");
+  return `<svg viewBox="0 0 380 350" width="100%" style="max-width:340px;display:block;margin:0 auto">
+    ${rings}${axes}
+    <polygon points="${poly}" fill="rgba(156,122,46,0.18)" stroke="var(--accent)" stroke-width="2.3" stroke-linejoin="round"/>
+    ${dots}${labels}
+  </svg>`;
+}
+function summaryHtml(def, d){
+  const st = statsOf(def, d);
+  if (!st.answered) return `<span>Aucune question notée pour l'instant.</span>`;
+  let h = `<div><b>Moyenne :</b> ${fmt1(st.avg)}/10 · ${st.answered}/${st.total} questions notées</div>`;
+  if (st.lowDom) h += `<div><b>À regarder en premier :</b> ${st.lowDom.icone} ${esc(st.lowDom.court)} (${fmt1(d.scores[st.lowDom.id])}/10)</div>`;
+  return h;
+}
+function headScoreHtml(dom, d){
+  const q=d.q[dom.id]||{}; const n=Object.keys(q).filter(k=>typeof q[k]==="number").length;
+  const s=d.scores[dom.id];
+  return `<b>${s===undefined?"—":fmt1(s)}</b><small>${n}/${dom.questions.length}</small>`;
+}
+function questionHtml(tool, dom, i, d){
+  const v=(d.q[dom.id]||{})[i]; const has=typeof v==="number";
+  return `<div class="rv-q-top">
+      <div class="rv-q-text">${esc(dom.questions[i])}</div>
+      <div class="rv-q-score" id="qs-${tool}-${dom.id}-${i}">${has?v:"—"}</div>
+    </div>
+    <input type="range" class="rv-slider${has?"":" untouched"}" min="1" max="10" step="1" value="${has?v:5}"
+      oninput="slide('${tool}','${dom.id}',${i},this)" onpointerup="slideCommit('${tool}','${dom.id}',${i},this)">
+    <div class="rv-scale"><span>1 · pas du tout</span><span>10 · tout à fait</span></div>`;
+}
+function domainHtml(tool, dom, d, open){
+  const qs = dom.questions.map((_,i)=>{
+    const has = typeof (d.q[dom.id]||{})[i] === "number";
+    return `<div class="rv-q${has?" has":""}" id="q-${tool}-${dom.id}-${i}">${questionHtml(tool,dom,i,d)}</div>`;
+  }).join("");
+  return `<details class="rv-dom" id="dom-${tool}-${dom.id}"${open?" open":""}>
+    <summary class="rv-dhead">
+      <span class="rv-title">${dom.icone} ${esc(dom.titre)}</span>
+      <span class="rv-dscore" id="ds-${tool}-${dom.id}">${headScoreHtml(dom,d)}</span>
+      <span class="rv-chev">›</span>
+    </summary>
+    ${qs}
+    <input type="text" class="rv-note" placeholder="Tes mots sur ce thème (facultatif)" value="${esc(d.note[dom.id]||"")}" oninput="noteChange('${tool}','${dom.id}',this.value)">
+  </details>`;
+}
+function panelHtml(tool){
+  const def = OUTILS_DEF[tool], d = PORTAL.outils[tool];
+  return `<p class="outil-desc">${esc(def.intro)}</p>
+    <div id="radar-${tool}">${radarSvg(def, d.scores)}</div>
+    <div class="rv-summary" id="sum-${tool}">${summaryHtml(def, d)}</div>
+    ${def.domaines.map((dom,k)=>domainHtml(tool, dom, d, k===0)).join("")}
+    <div class="rv-saved" id="saved-${tool}"></div>`;
+}
+function refreshRadar(tool){
+  const def = OUTILS_DEF[tool], d = PORTAL.outils[tool];
+  recalc(def, d);
+  const r = document.getElementById("radar-"+tool); if (r) r.innerHTML = radarSvg(def, d.scores);
+  const s = document.getElementById("sum-"+tool); if (s) s.innerHTML = summaryHtml(def, d);
+  def.domaines.forEach(dom=>{ const h=document.getElementById("ds-"+tool+"-"+dom.id); if (h) h.innerHTML = headScoreHtml(dom, d); });
+}
+let _saveTimer=null;
+function persist(){
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(()=>{
+    firebase.firestore().collection("outils").doc(PORTAL.sid).set({
+      clientId: PORTAL.clientId, ikigai: PORTAL.outils.ikigai, arbre: PORTAL.outils.arbre,
+      updatedAt: new Date().toISOString()
+    }, { merge:true }).then(()=>{
+      ["ikigai","arbre"].forEach(t=>{ const el=document.getElementById("saved-"+t); if (el) el.textContent="✓ Enregistré"; });
+    }).catch(e=>console.error("Enregistrement impossible:", e));
+  }, 700);
+}
+function slide(tool, domId, i, el){
+  const d = PORTAL.outils[tool];
+  if (!d.q[domId]) d.q[domId]={};
+  const val = Number(el.value);
+  d.q[domId][i] = val;
+  el.classList.remove("untouched");
+  const row = el.closest(".rv-q"); if (row) row.classList.add("has");
+  const sc = document.getElementById(`qs-${tool}-${domId}-${i}`); if (sc) sc.textContent = String(val);
+  refreshRadar(tool); persist();
+}
+function slideCommit(tool, domId, i, el){ if (el.classList.contains("untouched")) slide(tool, domId, i, el); }
+function noteChange(tool, domId, val){ PORTAL.outils[tool].note[domId]=val; persist(); }
+function switchTab(tool){
+  PORTAL.tab = tool;
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.toggle("active", b.dataset.tool===tool));
+  document.getElementById("panel").innerHTML = panelHtml(tool);
+}
+
+function frenchDate(iso){
+  if (!iso) return null;
+  const d = new Date(iso+"T00:00:00");
+  if (isNaN(d)) return null;
+  return d.toLocaleDateString("fr-FR", {weekday:"long", day:"numeric", month:"long"});
+}
+
+function renderContractButton(){
+  const box = document.getElementById("contractZone");
+  firebase.firestore().collection("clients").doc(PORTAL.clientId).collection("contracts")
+    .orderBy("createdAt","desc").limit(1).get().then(qs=>{
+      if (qs.empty) { box.innerHTML = ""; return; }
+      const doc = qs.docs[0].data();
+      box.innerHTML = `<div class="card">
+        <div style="font-weight:700;margin-bottom:10px">📄 Mon contrat ${doc.status==="signed" ? "(signé)" : "(brouillon)"}</div>
+        <button class="btn" id="btnShowContract" style="background:transparent;color:var(--accent);border:1px solid var(--accent);padding:9px 14px">Afficher</button>
+        <div id="contractHtml" style="display:none;margin-top:12px" class="contract-view"></div>
+      </div>`;
+      document.getElementById("btnShowContract").addEventListener("click", function(){
+        const z = document.getElementById("contractHtml");
+        if (z.style.display==="none"){ z.style.display="block"; z.innerHTML = doc.htmlContent || ""; this.textContent="Masquer"; }
+        else { z.style.display="none"; this.textContent="Afficher"; }
+      });
+    }).catch(()=>{ box.innerHTML=""; });
+}
+
+function renderPortal(){
+  const app = document.getElementById("app");
+  const nom = (PORTAL.client && PORTAL.client.name) || "";
+  const next = frenchDate(PORTAL.client && PORTAL.client.nextSession);
+  app.innerHTML = `
+    <h1>👋 Bonjour ${esc(nom)}</h1>
+    <p class="muted" style="margin-bottom:16px">Ton espace personnel de coaching</p>
+    ${next ? `<div class="reminder">🗓️ Ta prochaine séance : <b>${esc(next)}</b>${PORTAL.client.nextSessionHeure ? " à " + esc(PORTAL.client.nextSessionHeure) : ""}</div>` : ""}
+    <div id="contractZone"></div>
+    <div class="card">
+      <div style="font-weight:700;margin-bottom:4px">🛠️ Mes outils</div>
+      <p class="muted" style="margin-top:0">À remplir avant notre prochaine séance, si tu en as l'occasion — pas d'obligation.</p>
+      <div class="tabs">
+        <button class="tab-btn active" data-tool="ikigai" onclick="switchTab('ikigai')">🎯 Ikigaï</button>
+        <button class="tab-btn" data-tool="arbre" onclick="switchTab('arbre')">🌳 Arbre de Vie</button>
+      </div>
+      <div id="panel">${panelHtml("ikigai")}</div>
+    </div>
+  `;
+  renderContractButton();
+}
+
+(function init(){
+  const params = new URLSearchParams(location.search);
+  const token = params.get("t");
+  const app = document.getElementById("app");
+  if (!token){ app.innerHTML = '<div class="empty">Lien invalide.<br>Demande un nouveau lien à ton coach.</div>'; return; }
+
+  firebase.auth().signInAnonymously().then(function(){
+    return firebase.firestore().collection("portalLinks").doc(token).get();
+  }).then(function(snap){
+    if (!snap.exists){ app.innerHTML = '<div class="empty">Ce lien a expiré.<br>Demande un nouveau lien à ton coach.</div>'; return; }
+    const clientId = snap.data().clientId;
+    PORTAL.clientId = clientId;
+    PORTAL.sid = clientId + "_current";
+    return firebase.firestore().collection("clients").doc(clientId).get().then(function(csnap){
+      PORTAL.client = csnap.exists ? csnap.data() : {};
+      return firebase.firestore().collection("outils").doc(PORTAL.sid).get();
+    }).then(function(osnap){
+      if (osnap.exists){
+        const data = osnap.data();
+        if (data.ikigai) PORTAL.outils.ikigai = Object.assign({q:{},note:{},scores:{}}, data.ikigai);
+        if (data.arbre) PORTAL.outils.arbre = Object.assign({q:{},note:{},scores:{}}, data.arbre);
+      }
+      recalc(OUTILS_DEF.ikigai, PORTAL.outils.ikigai);
+      recalc(OUTILS_DEF.arbre, PORTAL.outils.arbre);
+      renderPortal();
+    });
+  }).catch(function(e){
+    console.error("portail:", e);
+    app.innerHTML = '<div class="empty">⚠️ Problème de connexion.<br>Réessaie dans un instant.</div>';
+  });
+})();
+</script>
+</body>
+</html>

@@ -3051,6 +3051,38 @@ const FICHES_THEMES = [
    deroule:"1. Faire le point sur le vécu actuel et les besoins\n2. Identifier les aménagements possibles (quotidien, pro, social)\n3. Explorer les ressources et soutiens mobilisables\n4. Renforcer la confiance et l'autonomie\n5. Définir une action concrète à mettre en place"},
 ];
 
+function showPortalLink(c, wrap) {
+  const existingBox = document.getElementById("portalLinkBox");
+  if (existingBox) existingBox.remove();
+
+  function render(token) {
+    const url = new URL("portail.html", location.href).href + "?t=" + token;
+    const box = h("div",{id:"portalLinkBox", style:"background:#FBF5E4;border:1px solid #E4DAC0;border-radius:10px;padding:12px 14px;margin-top:12px"});
+    box.appendChild(h("div",{style:"font-size:12px;color:#6B6355;margin-bottom:6px"}, "Lien à transmettre à " + c.name + " (par SMS ou email) :"));
+    box.appendChild(h("div",{style:"font-size:13px;word-break:break-all;color:#9C7A2E;font-weight:600"}, url));
+    const copyBtn = h("button",{class:"btn",style:"margin-top:8px;padding:6px 12px;font-size:12px"}, "Copier le lien");
+    copyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(url).then(() => { copyBtn.textContent = "✓ Copié"; setTimeout(()=>{copyBtn.textContent="Copier le lien";}, 1500); });
+    });
+    box.appendChild(copyBtn);
+    wrap.appendChild(box);
+  }
+
+  if (c.portalToken) { render(c.portalToken); return; }
+
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let token = "";
+  for (let i = 0; i < 24; i++) token += chars[Math.floor(Math.random() * chars.length)];
+
+  firebase.firestore().collection("portalLinks").doc(token).set({
+    clientId: c.id, createdAt: new Date().toISOString()
+  }).then(() => {
+    c.portalToken = token;
+    save();
+    render(token);
+  }).catch(e => { alert("Erreur lors de la génération du lien : " + e.message); });
+}
+
 function buildFiche(c) {
   let editMode = false;
   const wrap = h("div",{});
@@ -3171,7 +3203,9 @@ function buildFiche(c) {
     });
     const contractBtn = h("button",{class:"btn",style:"border-color:#9C7A2E44;color:#9C7A2E"},"📋 Contrat");
     contractBtn.addEventListener("click",()=>{ openContractModal(c.id); });
-    row.appendChild(editBtn); row.appendChild(contractBtn); row.appendChild(delBtn);
+    const portalBtn = h("button",{class:"btn",style:"border-color:#9C7A2E44;color:#9C7A2E"},"🔗 Portail");
+    portalBtn.addEventListener("click",()=>{ showPortalLink(c, wrap); });
+    row.appendChild(editBtn); row.appendChild(contractBtn); row.appendChild(portalBtn); row.appendChild(delBtn);
     wrap.appendChild(row);
   }
 
