@@ -4961,7 +4961,7 @@ class ContractGenerator {
     
     // Coach
     html = html.replace("{{coachName}}", this.coach.name || "Coach Julien Tieufri");
-    html = html.replace("{{coachEmail}}", this.coach.email || "email@example.fr");
+    html = html.replace("{{coachEmail}}", this.coach.email || "julien.coaching60@gmail.com");
     html = html.replace("{{coachSiret}}", this.coach.siret || "À REMPLIR");
     
     // Client
@@ -5120,7 +5120,7 @@ function generateContractPreview() {
     const gen = new ContractGenerator(
       {
         name: "Coach Julien Tieufri",
-        email: "julien.coaching@example.fr",
+        email: "julien.coaching60@gmail.com",
         tel: "+33 6 XX XX XX XX",
         siret: "SIRET_À_REMPLIR"
       },
