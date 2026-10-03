@@ -2673,7 +2673,7 @@ function renderClientDetail() {
 
   // Subtabs
   const stabs = h("div",{class:"subtabs"});
-  [["fiche","◈ Fiche"],["protocole","🧭 Protocole"],["paiements","€ Paiements"],["notes-c","◻ Notes"]].forEach(([id,lbl])=>{
+  [["fiche","◈ Fiche"],["protocole","🧭 Protocole"],["parcours","🧗 Parcours"],["paiements","€ Paiements"],["notes-c","◻ Notes"]].forEach(([id,lbl])=>{
     const b = h("button",{class:"subtab"+(state.subTab===id?" active":"")},lbl);
     b.addEventListener("click",()=>{ state.subTab=id; render(); });
     stabs.appendChild(b);
@@ -2684,6 +2684,7 @@ function renderClientDetail() {
   const content = h("div",{class:"fade"});
   if (state.subTab==="fiche")     content.appendChild(buildFiche(c));
   if (state.subTab==="protocole") content.appendChild(buildProtocole(c));
+  if (state.subTab==="parcours")  content.appendChild(buildParcours(c));
   if (state.subTab==="paiements") content.appendChild(buildPaiements(c));
   if (state.subTab==="notes-c")   content.appendChild(buildNotesClient(c));
   box.appendChild(content);
@@ -3306,6 +3307,202 @@ function buildPaiements(c) {
     }
   }
   render2();
+  return wrap;
+}
+
+function parcoursDefaut() {
+  return {
+    phases: ["Cadrage","Exploration","Plan d'action","Mise en œuvre","Bilan"].map((label,i) => ({ id:"p"+i+"_"+Date.now(), label, done:false })),
+    objectifs: []
+  };
+}
+
+function echangeEntry(author, text) {
+  return { author, text, createdAt: new Date().toISOString() };
+}
+
+function buildEchangesThread(c, author) {
+  const wrap = h("div",{style:"margin-top:10px"});
+  const list = h("div",{style:"max-height:320px;overflow-y:auto;border:1px solid #E4DAC0;border-radius:10px;padding:10px;background:#FFFDF7;margin-bottom:10px"});
+  const entries = (c.echanges || []).slice().sort((a,b)=> new Date(a.createdAt) - new Date(b.createdAt));
+  if (!entries.length) {
+    list.appendChild(h("p",{style:"color:#6B6355;font-size:13px;text-align:center;padding:14px 0"},"Aucun échange pour l'instant."));
+  } else {
+    entries.forEach(e => {
+      const isCoach = e.author === "coach";
+      const row = h("div",{style:`margin-bottom:10px;text-align:${isCoach?"right":"left"}`});
+      const bubble = h("div",{style:`display:inline-block;max-width:80%;text-align:left;padding:8px 12px;border-radius:12px;font-size:13.5px;line-height:1.4;background:${isCoach?"#9C7A2E1c":"#E4DAC055"};color:#2E2A20`});
+      bubble.appendChild(h("div",{style:"font-size:10.5px;font-weight:700;color:#9C7A2E;margin-bottom:3px"}, isCoach ? "Toi" : (c.name||"Client")));
+      bubble.appendChild(h("div",{}, e.text));
+      row.appendChild(bubble);
+      list.appendChild(row);
+    });
+  }
+  wrap.appendChild(list);
+
+  const inputRow = h("div",{style:"display:flex;gap:8px"});
+  const ta = textareaEl({value:"",placeholder:"Écrire un message…",height:"50px"});
+  ta.style.flex = "1";
+  const sendBtn = h("button",{class:"btn"},"Envoyer");
+  sendBtn.addEventListener("click", () => {
+    const text = ta.value.trim();
+    if (!text) return;
+    if (!c.echanges) c.echanges = [];
+    c.echanges.push(echangeEntry(author, text));
+    ClientsManager.saveClient(c.id, { echanges: c.echanges });
+    render();
+  });
+  inputRow.appendChild(ta); inputRow.appendChild(sendBtn);
+  wrap.appendChild(inputRow);
+  return wrap;
+}
+
+function buildParcours(c) {
+  const wrap = h("div",{});
+  if (!c.parcours) c.parcours = parcoursDefaut();
+
+  wrap.appendChild(lbl("ÉTAPES DE L'ACCOMPAGNEMENT"));
+  const phasesBox = h("div",{style:"margin-bottom:20px"});
+  function renderPhases() {
+    phasesBox.innerHTML = "";
+    c.parcours.phases.forEach((ph, idx) => {
+      const row = h("div",{style:"display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #E4DAC033"});
+      const cb = h("input",{type:"checkbox"});
+      cb.checked = !!ph.done;
+      cb.addEventListener("change", () => {
+        ph.done = cb.checked;
+        ClientsManager.saveClient(c.id, { parcours: c.parcours });
+      });
+      const label = h("span",{style:`flex:1;font-size:14px;${ph.done?"text-decoration:line-through;color:#6B6355":"color:#2E2A20"}`}, ph.label);
+      const delBtn = h("button",{class:"btn-sm",style:"color:#b33"},"✕");
+      delBtn.addEventListener("click", () => {
+        c.parcours.phases.splice(idx,1);
+        ClientsManager.saveClient(c.id, { parcours: c.parcours });
+        renderPhases();
+      });
+      row.appendChild(cb); row.appendChild(label); row.appendChild(delBtn);
+      phasesBox.appendChild(row);
+    });
+  }
+  renderPhases();
+  wrap.appendChild(phasesBox);
+
+  const addPhaseRow = h("div",{style:"display:flex;gap:8px;margin-bottom:28px"});
+  const addPhaseInp = inputEl({value:"",placeholder:"Ajouter une étape…"});
+  addPhaseInp.style.flex = "1";
+  const addPhaseBtn = h("button",{class:"btn-sm"},"+ Étape");
+  addPhaseBtn.addEventListener("click", () => {
+    const v = addPhaseInp.value.trim();
+    if (!v) return;
+    c.parcours.phases.push({ id:"p_"+Date.now(), label:v, done:false });
+    ClientsManager.saveClient(c.id, { parcours: c.parcours });
+    addPhaseInp.value = "";
+    renderPhases();
+  });
+  addPhaseRow.appendChild(addPhaseInp); addPhaseRow.appendChild(addPhaseBtn);
+  wrap.appendChild(addPhaseRow);
+
+  wrap.appendChild(lbl("OBJECTIFS"));
+  const objBox = h("div",{style:"margin-bottom:16px"});
+  function renderObjectifs() {
+    objBox.innerHTML = "";
+    if (!c.parcours.objectifs.length) {
+      objBox.appendChild(h("p",{style:"color:#6B6355;font-size:13px"},"Aucun objectif fixé pour l'instant."));
+    }
+    c.parcours.objectifs.forEach((ob, idx) => {
+      const card = h("div",{style:"border:1px solid #E4DAC0;border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#FFFDF7"});
+      const head = h("div",{style:"display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"});
+      head.appendChild(h("span",{style:"font-weight:600;font-size:14px"}, ob.titre));
+      const delBtn = h("button",{class:"btn-sm",style:"color:#b33"},"✕");
+      delBtn.addEventListener("click", () => {
+        c.parcours.objectifs.splice(idx,1);
+        ClientsManager.saveClient(c.id, { parcours: c.parcours });
+        renderObjectifs();
+      });
+      head.appendChild(delBtn);
+      card.appendChild(head);
+      const slider = h("input",{type:"range",min:"0",max:"100",step:"5",value:String(ob.progression||0)});
+      slider.style.width = "100%";
+      const pct = h("div",{style:"font-size:12px;color:#9C7A2E;font-weight:700;text-align:right"}, (ob.progression||0)+"%");
+      slider.addEventListener("input", () => { pct.textContent = slider.value+"%"; });
+      slider.addEventListener("change", () => {
+        ob.progression = Number(slider.value);
+        ClientsManager.saveClient(c.id, { parcours: c.parcours });
+      });
+      card.appendChild(slider); card.appendChild(pct);
+      objBox.appendChild(card);
+    });
+  }
+  renderObjectifs();
+  wrap.appendChild(objBox);
+
+  const addObjRow = h("div",{style:"display:flex;gap:8px;margin-bottom:28px"});
+  const addObjInp = inputEl({value:"",placeholder:"Ajouter un objectif…"});
+  addObjInp.style.flex = "1";
+  const addObjBtn = h("button",{class:"btn-sm"},"+ Objectif");
+  addObjBtn.addEventListener("click", () => {
+    const v = addObjInp.value.trim();
+    if (!v) return;
+    c.parcours.objectifs.push({ id:"o_"+Date.now(), titre:v, progression:0 });
+    ClientsManager.saveClient(c.id, { parcours: c.parcours });
+    addObjInp.value = "";
+    renderObjectifs();
+  });
+  addObjRow.appendChild(addObjInp); addObjRow.appendChild(addObjBtn);
+  wrap.appendChild(addObjRow);
+
+  wrap.appendChild(lbl("EXERCICES ENTRE LES SÉANCES"));
+  wrap.appendChild(h("p",{style:"color:#6B6355;font-size:12.5px;margin:4px 0 10px"},"Le client les voit dans son portail et peut les cocher une fois faits."));
+  const exBox = h("div",{style:"margin-bottom:12px"});
+  function renderExercices() {
+    exBox.innerHTML = "";
+    if (!c.exercices) c.exercices = [];
+    if (!c.exercices.length) {
+      exBox.appendChild(h("p",{style:"color:#6B6355;font-size:13px"},"Aucun exercice assigné pour l'instant."));
+    }
+    c.exercices.forEach((ex, idx) => {
+      const row = h("div",{style:"border:1px solid #E4DAC0;border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#FFFDF7"});
+      const head = h("div",{style:"display:flex;justify-content:space-between;align-items:flex-start;gap:8px"});
+      const titleWrap = h("div",{style:"flex:1"});
+      titleWrap.appendChild(h("div",{style:`font-weight:600;font-size:13.5px;${ex.done?"text-decoration:line-through;color:#6B6355":"color:#2E2A20"}`}, (ex.done?"✅ ":"⬜ ")+ex.titre));
+      if (ex.consigne) titleWrap.appendChild(h("div",{style:"font-size:12.5px;color:#6B6355;margin-top:3px"}, ex.consigne));
+      head.appendChild(titleWrap);
+      const delBtn = h("button",{class:"btn-sm",style:"color:#b33"},"✕");
+      delBtn.addEventListener("click", () => {
+        c.exercices.splice(idx,1);
+        ClientsManager.saveClient(c.id, { exercices: c.exercices });
+        renderExercices();
+      });
+      head.appendChild(delBtn);
+      row.appendChild(head);
+      exBox.appendChild(row);
+    });
+  }
+  renderExercices();
+  wrap.appendChild(exBox);
+
+  const addExTitre = inputEl({value:"",placeholder:"Titre de l'exercice…"});
+  const addExConsigne = textareaEl({value:"",placeholder:"Consigne (facultatif)…",height:"50px"});
+  const addExBtn = h("button",{class:"btn-sm"},"+ Assigner l'exercice");
+  addExBtn.addEventListener("click", () => {
+    const titre = addExTitre.value.trim();
+    if (!titre) return;
+    if (!c.exercices) c.exercices = [];
+    c.exercices.push({ id:"ex_"+Date.now(), titre, consigne:addExConsigne.value.trim(), done:false });
+    ClientsManager.saveClient(c.id, { exercices: c.exercices });
+    addExTitre.value = ""; addExConsigne.value = "";
+    renderExercices();
+  });
+  wrap.appendChild(addExTitre);
+  wrap.appendChild(addExConsigne);
+  const addExRow = h("div",{style:"margin-bottom:28px;margin-top:6px"});
+  addExRow.appendChild(addExBtn);
+  wrap.appendChild(addExRow);
+
+  wrap.appendChild(lbl("ÉCHANGES AVEC LE CLIENT"));
+  wrap.appendChild(h("p",{style:"color:#6B6355;font-size:12.5px;margin:4px 0 10px"},"Visible par le client dans son portail, et réciproquement."));
+  wrap.appendChild(buildEchangesThread(c, "coach"));
+
   return wrap;
 }
 

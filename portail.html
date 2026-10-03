@@ -295,6 +295,92 @@ function frenchDate(iso){
   return d.toLocaleDateString("fr-FR", {weekday:"long", day:"numeric", month:"long"});
 }
 
+function parcoursHtml(parcours){
+  parcours = parcours || { phases: [], objectifs: [] };
+  const phasesHtml = (parcours.phases||[]).map(ph => `
+    <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)">
+      <span style="font-size:17px">${ph.done ? "✅" : "⬜"}</span>
+      <span style="font-size:14px;${ph.done ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(ph.label)}</span>
+    </div>`).join("");
+  const objHtml = (parcours.objectifs||[]).map(ob => `
+    <div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:5px">
+        <span>${esc(ob.titre)}</span><b style="color:var(--accent)">${ob.progression||0}%</b>
+      </div>
+      <div style="background:var(--line);border-radius:6px;height:8px;overflow:hidden">
+        <div style="background:var(--accent);height:100%;width:${ob.progression||0}%"></div>
+      </div>
+    </div>`).join("");
+  return `
+    <div style="font-weight:700;margin-bottom:8px">🧗 Mon parcours</div>
+    ${phasesHtml || '<p class="muted" style="margin:4px 0">Les étapes seront ajoutées par ton coach.</p>'}
+    ${objHtml ? `<div style="margin-top:16px">${objHtml}</div>` : ""}
+  `;
+}
+
+function exercicesHtml(client){
+  const exos = client.exercices || [];
+  if (!exos.length) return "";
+  const rows = exos.map((ex, idx) => `
+    <label style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer">
+      <input type="checkbox" ${ex.done ? "checked" : ""} onchange="toggleExercice(${idx}, this.checked)" style="margin-top:3px">
+      <span>
+        <span style="font-size:14px;${ex.done ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(ex.titre)}</span>
+        ${ex.consigne ? `<div style="font-size:12.5px;color:var(--muted);margin-top:2px">${esc(ex.consigne)}</div>` : ""}
+      </span>
+    </label>`).join("");
+  return `<div class="card"><div style="font-weight:700;margin-bottom:6px">📝 Mes exercices</div>${rows}</div>`;
+}
+
+function toggleExercice(idx, done){
+  PORTAL.client.exercices[idx].done = done;
+  firebase.firestore().collection("clients").doc(PORTAL.clientId).update({
+    exercices: PORTAL.client.exercices
+  }).catch(e => { console.error("exercice:", e); });
+}
+
+function echangeEntry(author, text){ return { author, text, createdAt: new Date().toISOString() }; }
+
+function echangesHtml(client){
+  const entries = (client.echanges || []).slice().sort((a,b)=> new Date(a.createdAt) - new Date(b.createdAt));
+  const list = entries.length ? entries.map(e => {
+    const isClient = e.author === "client";
+    return `<div style="margin-bottom:10px;text-align:${isClient ? "right" : "left"}">
+      <div style="display:inline-block;max-width:80%;text-align:left;padding:8px 12px;border-radius:12px;font-size:13.5px;line-height:1.4;background:${isClient ? "var(--accentSoft)" : "#fff"};border:1px solid var(--line)">
+        <div style="font-size:10.5px;font-weight:700;color:var(--accent);margin-bottom:3px">${isClient ? "Toi" : "Ton coach"}</div>
+        <div>${esc(e.text)}</div>
+      </div>
+    </div>`;
+  }).join("") : '<p class="muted" style="text-align:center;padding:14px 0">Aucun échange pour le moment.</p>';
+  return `
+    <div style="font-weight:700;margin-bottom:10px">💬 Échanger avec mon coach</div>
+    <div id="echangesList" style="max-height:280px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px">${list}</div>
+    <div style="display:flex;gap:8px">
+      <textarea id="echangeInput" class="rv-note" style="flex:1;min-height:44px" placeholder="Écrire un message…"></textarea>
+      <button class="btn" id="echangeSend">Envoyer</button>
+    </div>
+  `;
+}
+
+function sendEchange(){
+  const input = document.getElementById("echangeInput");
+  const text = input.value.trim();
+  if (!text) return;
+  if (!PORTAL.client.echanges) PORTAL.client.echanges = [];
+  PORTAL.client.echanges.push(echangeEntry("client", text));
+  firebase.firestore().collection("clients").doc(PORTAL.clientId).update({
+    echanges: firebase.firestore.FieldValue.arrayUnion(PORTAL.client.echanges[PORTAL.client.echanges.length - 1])
+  }).then(() => {
+    input.value = "";
+    document.getElementById("echangeZone").innerHTML = echangesHtml(PORTAL.client);
+    document.getElementById("echangeSend").addEventListener("click", sendEchange);
+  }).catch(e => {
+    console.error("échange:", e);
+    PORTAL.client.echanges.pop();
+    alert("Message non envoyé, réessaie dans un instant.");
+  });
+}
+
 function renderContractButton(){
   const box = document.getElementById("contractZone");
   firebase.firestore().collection("clients").doc(PORTAL.clientId).collection("contracts")
@@ -323,6 +409,8 @@ function renderPortal(){
     <p class="muted" style="margin-bottom:16px">Ton espace personnel de coaching</p>
     ${next ? `<div class="reminder">🗓️ Ta prochaine séance : <b>${esc(next)}</b>${PORTAL.client.nextSessionHeure ? " à " + esc(PORTAL.client.nextSessionHeure) : ""}</div>` : ""}
     <div id="contractZone"></div>
+    ${(PORTAL.client.parcours && (PORTAL.client.parcours.phases||[]).length) ? `<div class="card">${parcoursHtml(PORTAL.client.parcours)}</div>` : ""}
+    ${exercicesHtml(PORTAL.client)}
     <div class="card">
       <div style="font-weight:700;margin-bottom:4px">🛠️ Mes outils</div>
       <p class="muted" style="margin-top:0">À remplir avant notre prochaine séance, si tu en as l'occasion — pas d'obligation.</p>
@@ -332,8 +420,10 @@ function renderPortal(){
       </div>
       <div id="panel">${panelHtml("ikigai")}</div>
     </div>
+    <div class="card" id="echangeZone">${echangesHtml(PORTAL.client)}</div>
   `;
   renderContractButton();
+  document.getElementById("echangeSend").addEventListener("click", sendEchange);
 }
 
 (function init(){
