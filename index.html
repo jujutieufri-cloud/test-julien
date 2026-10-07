@@ -1830,6 +1830,7 @@ function creerOuMajClientDepuisRdv(req) {
   if (client) {
     client.sessions = (client.sessions || 0) + 1;
     client.nextSession = req.date || client.nextSession || "";
+    client.nextSessionHeure = req.heure || client.nextSessionHeure || "";
     client.sessionHistory = client.sessionHistory || [];
     client.sessionHistory.push("Séance " + client.sessionHistory.length + 1 + " — " + (req.motif || "RDV") + (req.theme ? " (" + req.theme + ")" : "") + (req.date ? " le " + req.date : ""));
     appliquerForfait(client, req.motif);
@@ -1851,6 +1852,7 @@ function creerOuMajClientDepuisRdv(req) {
       objective: req.motif || "",
       sessions: 1,
       nextSession: req.date || "",
+      nextSessionHeure: req.heure || "",
       status: "actif",
       notes: req.message || "",
       sessionHistory: ["Séance 1 — " + (req.motif || "RDV") + (req.theme ? " (" + req.theme + ")" : "") + (req.date ? " le " + req.date : "")],
@@ -2128,6 +2130,7 @@ function buildAgendaForm() {
       if (client) {
         client.sessions = (client.sessions || 0) + 1;
         client.nextSession = fd.date || client.nextSession || "";
+        client.nextSessionHeure = fd.heure || client.nextSessionHeure || "";
         client.sessionHistory = client.sessionHistory || [];
         client.sessionHistory.push("Séance " + client.sessionHistory.length + 1 + " — " + (fd.motif || "RDV (agenda)") + (fd.date ? " (" + fd.date + ")" : ""));
         appliquerForfait(client, fd.motif);
@@ -2685,7 +2688,7 @@ function renderDashboard() {
         h("div",{style:"color:#5A5648;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"},c.objective||"")
       ),
       h("div",{style:"text-align:right;flex-shrink:0"},
-        h("div",{style:"color:#9C7A2E;font-size:12px;font-weight:600"},c.nextSession),
+        h("div",{style:"color:#9C7A2E;font-size:12px;font-weight:600"},c.nextSession + (c.nextSessionHeure ? " · " + c.nextSessionHeure : "")),
         h("div",{style:"margin-top:3px"},badgeProfil(c.profile))
       )
     );
@@ -3401,7 +3404,7 @@ function buildFiche(c) {
     ));
     if (c.nextSession) g.appendChild(h("div",{},
       h("div",{style:"color:#6B6355;font-size:13px;letter-spacing:.08em;margin-bottom:5px"},"PROCHAINE SÉANCE"),
-      h("div",{style:"color:#9C7A2E;font-size:14px;font-weight:600"},c.nextSession)
+      h("div",{style:"color:#9C7A2E;font-size:14px;font-weight:600"},c.nextSession + (c.nextSessionHeure ? " à " + c.nextSessionHeure : ""))
     ));
     wrap.appendChild(g);
     if (c.forfaitNom && c.forfaitTotal) {
@@ -3452,6 +3455,7 @@ function buildFiche(c) {
     const tl = inputEl({type:"tel",value:c.tel||"",onInput:v=>ed.tel=v}); g.appendChild(field("TÉLÉPHONE",tl));
     const ob = h("div",{class:"span2"}); const oi = inputEl({value:c.objective||"",onInput:v=>ed.objective=v}); ob.appendChild(field("OBJECTIF",oi)); g.appendChild(ob);
     const db = h("div",{}); const di = inputEl({type:"date",value:c.nextSession||"",onChange:v=>ed.nextSession=v}); db.appendChild(field("PROCHAINE SÉANCE",di)); g.appendChild(db);
+    const dhb = h("div",{}); const dhi = inputEl({type:"time",value:c.nextSessionHeure||"",onChange:v=>ed.nextSessionHeure=v}); dhb.appendChild(field("HEURE",dhi)); g.appendChild(dhb);
     wrap.appendChild(g);
     const nt = textareaEl({value:c.notes||"",height:"80px",onInput:v=>ed.notes=v});
     wrap.appendChild(h("div",{style:"margin-top:12px"},field("NOTES",nt)));
