@@ -381,6 +381,68 @@ function sendEchange(){
   });
 }
 
+const RYTHMES = {
+  play:    { court:"Play",    label:"J'avance !",  emoji:"▶️", color:"#3E9B4F" },
+  pause:   { court:"Pause",   label:"Je souffle…", emoji:"⏸️", color:"#4A90C8" },
+  blocage: { court:"Blocage", label:"Je coince !", emoji:"🧩", color:"#E08A1E" },
+  sos:     { court:"SOS",     label:"Urgence",     emoji:"🆘", color:"#D9534F" }
+};
+
+function rythmesHtml(client) {
+  const cur = client.rythme && client.rythme.etat;
+  const btns = Object.keys(RYTHMES).map(k => {
+    const r = RYTHMES[k], on = cur === k;
+    return `<button type="button" onclick="setRythme('${k}')" style="border:2px solid ${r.color};background:${on ? r.color : "#fff"};color:${on ? "#fff" : r.color};border-radius:14px;padding:12px 8px;font-weight:700;font-size:13.5px;cursor:pointer;min-height:64px;line-height:1.3">${r.emoji}<br>${r.court}<br><span style="font-weight:500;font-size:12px">${esc(r.label)}</span></button>`;
+  }).join("");
+  const msgs = {
+    play: "Super, continue à ton rythme 🌱",
+    pause: "Prends le temps de souffler. Tu reprends quand tu le sens.",
+    blocage: "Merci de me l'avoir dit. Ton coach le verra à sa prochaine ouverture de l'application. Tu peux aussi lui écrire dans « Échanger avec mon coach » plus bas."
+  };
+  let msg = "";
+  if (cur === "sos") {
+    msg = `<div style="margin-top:12px;border:2px solid #D9534F;background:#FFF5F3;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.5">
+      <b>Ton coach n'est pas prévenu instantanément.</b><br>
+      Si tu es en danger ou en grande détresse, appelle maintenant :<br>
+      📞 <a href="tel:3114"><b>3114</b></a> — numéro national de prévention du suicide, gratuit, 24h/24 et 7j/7<br>
+      📞 <a href="tel:15"><b>15</b></a> — SAMU · 📞 <a href="tel:112"><b>112</b></a> — urgences<br>
+      Tu peux aussi écrire à ton coach dans « Échanger avec mon coach » plus bas.</div>`;
+  } else if (cur && msgs[cur]) {
+    msg = `<p class="muted" style="margin:12px 0 0;font-size:13.5px">${esc(msgs[cur])}</p>`;
+  }
+  return `<div style="font-weight:700;margin-bottom:4px">🎛️ Mon rythme</div>
+    <p class="muted" style="margin-top:0">Indique où tu en es en ce moment. Tu peux changer à tout moment.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${btns}</div>${msg}`;
+}
+
+function setRythme(etat) {
+  if (!RYTHMES[etat]) return;
+  const entry = { etat: etat, date: new Date().toISOString() };
+  const prev = PORTAL.client.rythme;
+  PORTAL.client.rythme = entry;
+  firebase.firestore().collection("clients").doc(PORTAL.clientId).update({
+    rythme: entry,
+    rythmeHistorique: firebase.firestore.FieldValue.arrayUnion(entry)
+  }).then(() => {
+    document.getElementById("rythmeZone").innerHTML = rythmesHtml(PORTAL.client);
+  }).catch(e => {
+    console.error("rythme:", e);
+    PORTAL.client.rythme = prev;
+    document.getElementById("rythmeZone").innerHTML = rythmesHtml(PORTAL.client);
+    alert("Ton rythme n'a pas pu être enregistré. Réessaie dans un instant.");
+  });
+}
+
+function agendaLien(client) {
+  const date = client.nextSession, heure = client.nextSessionHeure || "";
+  const p = x => String(x).padStart(2, "0");
+  const ymd = d => d.getFullYear() + p(d.getMonth()+1) + p(d.getDate());
+  let dates;
+  if (!heure) { const nd = new Date(date + "T00:00:00"); nd.setDate(nd.getDate() + 1); dates = date.replace(/-/g, "") + "/" + ymd(nd); }
+  else { const st = new Date(date + "T" + heure + ":00"), en = new Date(st.getTime() + 3600000); const f = d => ymd(d) + "T" + p(d.getHours()) + p(d.getMinutes()) + "00"; dates = f(st) + "/" + f(en); }
+  return "https://calendar.google.com/calendar/render?" + new URLSearchParams({ action:"TEMPLATE", text:"Séance de coaching", dates:dates }).toString();
+}
+
 function renderContractButton(){
   const box = document.getElementById("contractZone");
   firebase.firestore().collection("clients").doc(PORTAL.clientId).collection("contracts")
@@ -407,7 +469,8 @@ function renderPortal(){
   app.innerHTML = `
     <h1>👋 Bonjour ${esc(nom)}</h1>
     <p class="muted" style="margin-bottom:16px">Ton espace personnel de coaching</p>
-    ${next ? `<div class="reminder">🗓️ Ta prochaine séance : <b>${esc(next)}</b>${PORTAL.client.nextSessionHeure ? " à " + esc(PORTAL.client.nextSessionHeure) : ""}</div>` : ""}
+    ${next ? `<div class="reminder">🗓️ Ta prochaine séance : <b>${esc(next)}</b>${PORTAL.client.nextSessionHeure ? " à " + esc(PORTAL.client.nextSessionHeure) : ""}<br><a href="${agendaLien(PORTAL.client)}" target="_blank" rel="noopener" style="font-size:13px;color:var(--accent);font-weight:600;text-decoration:none">📅 Ajouter à mon agenda</a></div>` : ""}
+    <div class="card" id="rythmeZone">${rythmesHtml(PORTAL.client)}</div>
     <div id="contractZone"></div>
     ${(PORTAL.client.parcours && (PORTAL.client.parcours.phases||[]).length) ? `<div class="card">${parcoursHtml(PORTAL.client.parcours)}</div>` : ""}
     ${exercicesHtml(PORTAL.client)}

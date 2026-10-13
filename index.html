@@ -1925,6 +1925,9 @@ function renderAgendaTab() {
   const syncBtn = h("button",{class:"btn-g"},"↻ Resynchroniser les créneaux");
   syncBtn.addEventListener("click", () => resynchroniserCreneaux());
   hdr.appendChild(syncBtn);
+  const expAll = h("button",{class:"btn-g"},"📥 Exporter l'agenda (.ics)");
+  expAll.addEventListener("click", () => telechargerIcs("agenda-coachingstudio.ics", rdvToIcs((state.appointments || []).filter(a => a.date).map(a => ({ id:a.id, date:a.date, heure:a.heure || "", motif:a.motif || "", titre:"Séance — " + (a.clientName || "client") })))));
+  hdr.appendChild(expAll);
   wrap.appendChild(hdr);
 
   // --- Sélecteur de vue ---
@@ -2742,6 +2745,7 @@ function renderDashboard() {
     ),
     statsRow, midRow, actions
   );
+  wrap.insertBefore(buildAlertesRythmes(), wrap.children[1] || null);
   return wrap;
 }
 
@@ -3285,6 +3289,92 @@ const FICHES_THEMES = [
    deroule:"1. Faire le point sur le vécu actuel et les besoins\n2. Identifier les aménagements possibles (quotidien, pro, social)\n3. Explorer les ressources et soutiens mobilisables\n4. Renforcer la confiance et l'autonomie\n5. Définir une action concrète à mettre en place"},
 ];
 
+function rdvFrDateLong(date, heure) {
+  const d = new Date(date + "T00:00:00");
+  const base = isNaN(d) ? date : d.toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long", year:"numeric" });
+  return base + (heure ? " à " + heure : "");
+}
+
+function rdvDates(r) {
+  const p = x => String(x).padStart(2, "0");
+  const ymd = d => d.getFullYear() + p(d.getMonth()+1) + p(d.getDate());
+  if (!r.heure) {
+    const nd = new Date(r.date + "T00:00:00"); nd.setDate(nd.getDate() + 1);
+    return { allDay:true, start:r.date.replace(/-/g, ""), end:ymd(nd) };
+  }
+  const st = new Date(r.date + "T" + r.heure + ":00"), en = new Date(st.getTime() + 60*60000);
+  const f = d => ymd(d) + "T" + p(d.getHours()) + p(d.getMinutes()) + "00";
+  return { allDay:false, start:f(st), end:f(en) };
+}
+function googleCalUrl(r, titre) {
+  const dt = rdvDates(r);
+  return "https://calendar.google.com/calendar/render?" + new URLSearchParams({ action:"TEMPLATE", text:titre || "Séance de coaching", dates:dt.start + "/" + dt.end, details:r.motif || "" }).toString();
+}
+function icsEscape(t) { return String(t || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n"); }
+function rdvToIcs(items) {
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
+  const L = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//CoachingStudio//FR","CALSCALE:GREGORIAN","METHOD:PUBLISH"];
+  items.forEach(r => {
+    const dt = rdvDates(r);
+    L.push("BEGIN:VEVENT", "UID:" + r.id + "@coachingstudio", "DTSTAMP:" + stamp);
+    if (dt.allDay) L.push("DTSTART;VALUE=DATE:" + dt.start, "DTEND;VALUE=DATE:" + dt.end);
+    else L.push("DTSTART:" + dt.start, "DTEND:" + dt.end);
+    L.push("SUMMARY:" + icsEscape(r.titre || "Séance de coaching"));
+    if (r.motif) L.push("DESCRIPTION:" + icsEscape(r.motif));
+    L.push("END:VEVENT");
+  });
+  L.push("END:VCALENDAR");
+  return L.join("\r\n") + "\r\n";
+}
+function telechargerIcs(nom, contenu) {
+  const url = URL.createObjectURL(new Blob([contenu], { type:"text/calendar;charset=utf-8" }));
+  const a = document.createElement("a"); a.href = url; a.download = nom;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function buildNextSessionAgendaLinks(c) {
+  const r = { id:"next-" + c.id, date:c.nextSession, heure:c.nextSessionHeure || "", motif:"" };
+  const row = h("div",{style:"margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;align-items:center"});
+  row.appendChild(h("a",{href:googleCalUrl(r, "Séance — " + c.name), target:"_blank", rel:"noopener", style:"color:#9C7A2E;font-size:12.5px;text-decoration:none;font-weight:600"},"📅 Ajouter à Google Agenda"));
+  const ics = h("button",{class:"btn-sm"},"📥 .ics");
+  ics.addEventListener("click", () => telechargerIcs("seance-" + (c.name || "client").replace(/\s+/g, "-") + ".ics", rdvToIcs([{ ...r, titre:"Séance — " + c.name }])));
+  row.appendChild(ics);
+  return row;
+}
+
+const RYTHMES = {
+  play:    { court:"Play",    label:"J'avance !",  emoji:"▶️", color:"#3E9B4F" },
+  pause:   { court:"Pause",   label:"Je souffle…", emoji:"⏸️", color:"#4A90C8" },
+  blocage: { court:"Blocage", label:"Je coince !", emoji:"🧩", color:"#E08A1E" },
+  sos:     { court:"SOS",     label:"Urgence",     emoji:"🆘", color:"#D9534F" }
+};
+function rythmeInfo(e) { return RYTHMES[e] || null; }
+
+function buildRythmeSection(c) {
+  const box = h("div",{style:"margin-top:22px"});
+  box.appendChild(h("div",{style:"color:#6B6355;font-size:13px;letter-spacing:.08em;margin-bottom:8px"},"RYTHME DU CLIENT"));
+  const info = c.rythme && rythmeInfo(c.rythme.etat);
+  if (!info) { box.appendChild(h("p",{style:"color:#6B6355;font-size:13px"},"Le client n'a pas encore indiqué son rythme.")); return box; }
+  box.appendChild(h("div",{style:"display:inline-block;padding:8px 14px;border-radius:10px;font-weight:700;font-size:14px;color:#fff;background:" + info.color}, info.emoji + " " + info.court + " — " + info.label));
+  const d = c.rythme.date ? new Date(c.rythme.date) : null;
+  if (d && !isNaN(d)) box.appendChild(h("div",{style:"color:#6B6355;font-size:12px;margin-top:6px"}, "Signalé le " + d.toLocaleDateString("fr-FR",{day:"numeric",month:"short"}) + " à " + d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})));
+  const hist = (c.rythmeHistorique || []).slice(-6, -1).reverse();
+  if (hist.length) box.appendChild(h("div",{style:"margin-top:8px;font-size:12px;color:#6B6355"}, "Avant : " + hist.map(x => { const i = rythmeInfo(x.etat); return i ? i.emoji : ""; }).join(" ")));
+  return box;
+}
+
+function buildAlertesRythmes() {
+  const wrap = h("div",{});
+  const urgents = (state.clients || []).filter(c => c.rythme && (c.rythme.etat === "sos" || c.rythme.etat === "blocage"));
+  if (!urgents.length) return wrap;
+  urgents.sort((a, b) => (a.rythme.etat === "sos" ? 0 : 1) - (b.rythme.etat === "sos" ? 0 : 1));
+  const card = h("div",{style:"border:2px solid #D9534F55;background:#FFF5F3;border-radius:12px;padding:14px 16px;margin-bottom:18px"});
+  card.appendChild(h("div",{style:"font-weight:700;color:#B0413E;font-size:14px;margin-bottom:8px"},"⚠️ Clients à regarder en priorité"));
+  urgents.forEach(c => { const i = rythmeInfo(c.rythme.etat); card.appendChild(h("div",{style:"font-size:13.5px;margin:4px 0;color:#2E2A20"}, i.emoji + " " + c.name + " — " + i.court)); });
+  wrap.appendChild(card);
+  return wrap;
+}
+
 function showPortalLink(c, wrap) {
   const existingBox = document.getElementById("portalLinkBox");
   if (existingBox) existingBox.remove();
@@ -3404,9 +3494,11 @@ function buildFiche(c) {
     ));
     if (c.nextSession) g.appendChild(h("div",{},
       h("div",{style:"color:#6B6355;font-size:13px;letter-spacing:.08em;margin-bottom:5px"},"PROCHAINE SÉANCE"),
-      h("div",{style:"color:#9C7A2E;font-size:14px;font-weight:600"},c.nextSession + (c.nextSessionHeure ? " à " + c.nextSessionHeure : ""))
+      h("div",{style:"color:#9C7A2E;font-size:14px;font-weight:600"}, rdvFrDateLong(c.nextSession, c.nextSessionHeure)),
+      buildNextSessionAgendaLinks(c)
     ));
     wrap.appendChild(g);
+    wrap.appendChild(buildRythmeSection(c));
     if (c.forfaitNom && c.forfaitTotal) {
       const pct = Math.min(100, Math.round((c.forfaitUtilisees||0) / c.forfaitTotal * 100));
       const forfaitBox = h("div",{style:"margin-top:18px;background:#FFFFFF;padding:14px 16px;border-radius:8px;border:1px solid #E4DAC0"});
