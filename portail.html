@@ -318,18 +318,61 @@ function parcoursHtml(parcours){
   `;
 }
 
-function exercicesHtml(client){
-  const exos = client.exercices || [];
-  if (!exos.length) return "";
-  const rows = exos.map((ex, idx) => `
+function exerciceSimpleHtml(ex, idx){
+  return `
     <label style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer">
       <input type="checkbox" ${ex.done ? "checked" : ""} onchange="toggleExercice(${idx}, this.checked)" style="margin-top:3px">
       <span>
         <span style="font-size:14px;${ex.done ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(ex.titre)}</span>
         ${ex.consigne ? `<div style="font-size:12.5px;color:var(--muted);margin-top:2px">${esc(ex.consigne)}</div>` : ""}
       </span>
-    </label>`).join("");
+    </label>`;
+}
+
+// Exercice avec questions : le client répond directement, l'enregistrement est automatique.
+function exerciceStructureHtml(ex, idx, rep){
+  const remplis = ex.champs.filter(c => String(rep[c.id] || "").trim()).length;
+  const champs = ex.champs.map(c => `
+    <div style="margin:12px 0">
+      <label for="rep_${idx}_${esc(c.id)}" style="font-weight:600;font-size:13.5px">${esc(c.label)}</label>
+      ${c.aide ? `<div class="muted" style="font-size:12.5px;margin:2px 0 4px">${esc(c.aide)}</div>` : ""}
+      <textarea id="rep_${idx}_${esc(c.id)}" rows="3" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit;font-size:14px" data-champ="${esc(c.id)}" oninput="saisieReponse(${idx}, this.dataset.champ, this.value)">${esc(rep[c.id] || "")}</textarea>
+    </div>`).join("");
+  return `
+    <details style="border-bottom:1px solid var(--line);padding:10px 0">
+      <summary style="cursor:pointer;font-size:14px;font-weight:600">${esc(ex.titre)} <span class="muted" style="font-weight:400;font-size:12.5px">· ${remplis}/${ex.champs.length} rempli(s)${ex.done ? " · terminé ✅" : ""}</span></summary>
+      ${ex.consigne ? `<p class="muted" style="font-size:13px;white-space:pre-line">${esc(ex.consigne)}</p>` : ""}
+      ${champs}
+      <label style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13.5px"><input type="checkbox" ${ex.done ? "checked" : ""} onchange="toggleExercice(${idx}, this.checked)"> J'ai terminé cet exercice</label>
+      <div id="msg_${idx}" class="muted" style="font-size:12px;min-height:16px;margin-top:4px"></div>
+    </details>`;
+}
+
+function exercicesHtml(client){
+  const exos = client.exercices || [];
+  if (!exos.length) return "";
+  const rep = client.reponsesExercices || {};
+  const rows = exos.map((ex, idx) => (ex.champs && ex.champs.length) ? exerciceStructureHtml(ex, idx, rep[ex.id] || {}) : exerciceSimpleHtml(ex, idx)).join("");
   return `<div class="card"><div style="font-weight:700;margin-bottom:6px">📝 Mes exercices</div>${rows}</div>`;
+}
+
+const _repTimers = {};
+function saisieReponse(idx, champId, valeur){
+  const ex = (PORTAL.client.exercices || [])[idx];
+  if (!ex) return;
+  PORTAL.client.reponsesExercices = PORTAL.client.reponsesExercices || {};
+  (PORTAL.client.reponsesExercices[ex.id] = PORTAL.client.reponsesExercices[ex.id] || {})[champId] = valeur;
+  const msg = document.getElementById("msg_" + idx);
+  if (msg) msg.textContent = "…";
+  const cle = ex.id + "." + champId;
+  clearTimeout(_repTimers[cle]);
+  _repTimers[cle] = setTimeout(() => {
+    firebase.firestore().collection("clients").doc(PORTAL.clientId).update({
+      ["reponsesExercices." + ex.id + "." + champId]: valeur,
+      ["reponsesExercices." + ex.id + "._maj"]: new Date().toISOString()
+    }).then(() => { if (msg) msg.textContent = "✓ Enregistré"; })
+      .catch(e => { console.error("réponse:", e); if (msg) msg.textContent = "⚠️ Non enregistré, vérifie ta connexion"; });
+  }, 800);
 }
 
 function toggleExercice(idx, done){
@@ -443,6 +486,52 @@ function agendaLien(client) {
   return "https://calendar.google.com/calendar/render?" + new URLSearchParams({ action:"TEMPLATE", text:"Séance de coaching", dates:dates }).toString();
 }
 
+function plantSvg(stage) {
+  const top = { 1:115, 2:80, 3:55, 4:38 }[stage];
+  const leaf = (x, y, rot) => `<ellipse cx="${x}" cy="${y}" rx="10" ry="4.8" fill="#5FA05A" transform="rotate(${rot} ${x} ${y})"/>`;
+  const flower = (x, y, c) => { let u = ""; for (let i = 0; i < 5; i++) u += `<ellipse cx="${x}" cy="${y-8}" rx="4.8" ry="7.5" fill="${c}" transform="rotate(${i*72} ${x} ${y})"/>`; return u + `<circle cx="${x}" cy="${y}" r="3.6" fill="#F2C94C"/>`; };
+  const bud = (x, y) => `<ellipse cx="${x}" cy="${y}" rx="4" ry="6" fill="#E88A8A"/>`;
+  const pairs = { 1:1, 2:2, 3:3, 4:3 }[stage];
+  let leaves = "";
+  for (let k = 0; k < pairs; k++) { const y = 138 - k * 26; leaves += leaf(68, y, -30) + leaf(92, y - 6, 30); }
+  let haut = "";
+  if (stage === 3) haut = bud(80, top - 4) + bud(66, top + 16) + bud(94, top + 12);
+  if (stage === 4) haut = flower(80, top, "#E87A7A") + flower(60, top + 24, "#F29BA0") + flower(100, top + 20, "#E87A7A");
+  if (stage <= 2) haut = leaf(72, top, -40) + leaf(88, top - 2, 40);
+  return `<svg viewBox="0 0 160 190" width="130" height="154" role="img" aria-label="Plante, étape ${stage} sur 4"><path d="M80 152 L80 ${top}" stroke="#4E8B4A" stroke-width="4" stroke-linecap="round" fill="none"/>${leaves}${haut}<ellipse cx="80" cy="152" rx="34" ry="6" fill="#6B4A32"/><path d="M46 152 L54 186 L106 186 L114 152 Z" fill="#C8734A"/><rect x="44" y="148" width="72" height="9" rx="3" fill="#B5633C"/></svg>`;
+}
+function progressionParcours(p) {
+  if (!p) return 0;
+  const ph = p.phases || [];
+  if (ph.length) return ph.filter(x => x.done).length / ph.length;
+  const ob = p.objectifs || [];
+  if (ob.length) return ob.reduce((a, o) => a + (o.progression || 0), 0) / ob.length / 100;
+  return 0;
+}
+function planteHtml(client) {
+  const r = progressionParcours(client.parcours), st = r < 0.25 ? 1 : r < 0.5 ? 2 : r < 0.75 ? 3 : 4;
+  const noms = ["Le lancement", "La mise en place", "La pratique", "La floraison"];
+  return `<div class="card" id="planteZone" style="display:flex;align-items:center;gap:14px">${plantSvg(st)}<div><div class="muted" style="font-size:12px;letter-spacing:.08em">ÉVOLUTION DE MON PROJET</div><div style="font-size:17px;font-weight:700;margin:4px 0">Étape ${st} · ${noms[st-1]}</div><div class="muted" style="font-size:13px">${Math.round(r * 100)}% des étapes franchies</div></div></div>`;
+}
+function rdvPortailListe(client) {
+  const l = (client.rendezVous || []).filter(r => r && r.date);
+  if (l.length) return l;
+  return client.nextSession ? [{ id: "next", date: client.nextSession, heure: client.nextSessionHeure || "", motif: "" }] : [];
+}
+function rdvPortailHtml(client) {
+  const tous = rdvPortailListe(client);
+  const p2 = x => String(x).padStart(2, "0"), d0 = new Date();
+  const maintenant = d0.getFullYear() + "-" + p2(d0.getMonth()+1) + "-" + p2(d0.getDate()) + "T" + p2(d0.getHours()) + ":" + p2(d0.getMinutes());
+  const cle = r => r.date + "T" + (r.heure || "00:00");
+  const jolie = d => { const x = new Date(d + "T00:00:00"); return isNaN(x) ? d : x.toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long", year:"numeric" }); };
+  const avenir = tous.filter(r => cle(r) >= maintenant).sort((a, b) => cle(a) < cle(b) ? -1 : 1);
+  const passes = tous.filter(r => cle(r) < maintenant).sort((a, b) => cle(a) < cle(b) ? 1 : -1);
+  const ligne = (r, lien) => `<div style="padding:8px 10px;border:1px solid #E4DAC0;border-radius:8px;margin-bottom:6px;font-size:14px"><b>${esc(jolie(r.date))}</b>${r.heure ? " à " + esc(r.heure) : ""}${r.motif ? '<span class="muted"> — ' + esc(r.motif) + "</span>" : ""}${lien ? '<br><a href="' + agendaLien({ nextSession: r.date, nextSessionHeure: r.heure }) + '" target="_blank" rel="noopener" style="font-size:12.5px;color:var(--accent);font-weight:600;text-decoration:none">📅 Ajouter à mon agenda</a>' : ""}</div>`;
+  const bloc = (titre, liste, lien) => `<div style="font-weight:700;font-size:13px;margin:10px 0 6px">${titre} (${liste.length})</div>` + (liste.length ? liste.map(r => ligne(r, lien)).join("") : '<div class="muted" style="font-size:13px">Aucun</div>');
+  if (!tous.length) return `<div class="card" id="rdvZone"><div style="font-weight:700">📅 Mes rendez-vous</div><p class="muted">Aucun rendez-vous enregistré pour le moment.</p></div>`;
+  return `<div class="card" id="rdvZone"><div style="font-weight:700">📅 Mes rendez-vous</div>${bloc("À venir", avenir, true)}${bloc("Passés", passes, false)}</div>`;
+}
+
 function renderContractButton(){
   const box = document.getElementById("contractZone");
   firebase.firestore().collection("clients").doc(PORTAL.clientId).collection("contracts")
@@ -462,6 +551,24 @@ function renderContractButton(){
     }).catch(()=>{ box.innerHTML=""; });
 }
 
+// Les outils (Ikigaï, Arbre de vie) restent masqués tant que le coach ne les a pas activés pour ce client.
+function outilsActifs(client) {
+  const po = (client && client.portailOutils) || {};
+  return ["ikigai", "arbre"].filter(k => po[k] === true);
+}
+function outilsCardHtml(client) {
+  const actifs = outilsActifs(client);
+  if (!actifs.length) return "";
+  const noms = { ikigai: "🎯 Ikigaï", arbre: "🌳 Arbre de Vie" };
+  PORTAL.tab = actifs[0];
+  return `<div class="card">
+      <div style="font-weight:700;margin-bottom:4px">🛠️ Mes outils</div>
+      <p class="muted" style="margin-top:0">À remplir avant notre prochaine séance, si tu en as l'occasion — pas d'obligation.</p>
+      <div class="tabs">${actifs.map((k, i) => `<button class="tab-btn${i === 0 ? " active" : ""}" data-tool="${k}" onclick="switchTab('${k}')">${noms[k]}</button>`).join("")}</div>
+      <div id="panel">${panelHtml(actifs[0])}</div>
+    </div>`;
+}
+
 function renderPortal(){
   const app = document.getElementById("app");
   const nom = (PORTAL.client && PORTAL.client.name) || "";
@@ -471,18 +578,12 @@ function renderPortal(){
     <p class="muted" style="margin-bottom:16px">Ton espace personnel de coaching</p>
     ${next ? `<div class="reminder">🗓️ Ta prochaine séance : <b>${esc(next)}</b>${PORTAL.client.nextSessionHeure ? " à " + esc(PORTAL.client.nextSessionHeure) : ""}<br><a href="${agendaLien(PORTAL.client)}" target="_blank" rel="noopener" style="font-size:13px;color:var(--accent);font-weight:600;text-decoration:none">📅 Ajouter à mon agenda</a></div>` : ""}
     <div class="card" id="rythmeZone">${rythmesHtml(PORTAL.client)}</div>
+    ${planteHtml(PORTAL.client)}
+    ${rdvPortailHtml(PORTAL.client)}
     <div id="contractZone"></div>
     ${(PORTAL.client.parcours && (PORTAL.client.parcours.phases||[]).length) ? `<div class="card">${parcoursHtml(PORTAL.client.parcours)}</div>` : ""}
     ${exercicesHtml(PORTAL.client)}
-    <div class="card">
-      <div style="font-weight:700;margin-bottom:4px">🛠️ Mes outils</div>
-      <p class="muted" style="margin-top:0">À remplir avant notre prochaine séance, si tu en as l'occasion — pas d'obligation.</p>
-      <div class="tabs">
-        <button class="tab-btn active" data-tool="ikigai" onclick="switchTab('ikigai')">🎯 Ikigaï</button>
-        <button class="tab-btn" data-tool="arbre" onclick="switchTab('arbre')">🌳 Arbre de Vie</button>
-      </div>
-      <div id="panel">${panelHtml("ikigai")}</div>
-    </div>
+    ${outilsCardHtml(PORTAL.client)}
     <div class="card" id="echangeZone">${echangesHtml(PORTAL.client)}</div>
   `;
   renderContractButton();

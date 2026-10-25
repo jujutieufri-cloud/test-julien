@@ -701,6 +701,650 @@ const DEROULES = [
 //  GESTIONNAIRES FIRESTORE (Sync temps réel)
 // ══════════════════════════════════════════
 
+// Protège la copie locale : une liste vide (mauvais compte) ne doit jamais effacer les clients mémorisés.
+// ---------- Rendez-vous du client (passés / à venir) ----------
+function rdvKey(r) { return (r.date || "") + "T" + (r.heure || "00:00"); }
+function rdvNowKey() { const d = new Date(), p = x => String(x).padStart(2, "0"); return d.getFullYear() + "-" + p(d.getMonth()+1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes()); }
+function rdvFrDate(date) { const d = new Date(date + "T00:00:00"); return isNaN(d) ? date : d.toLocaleDateString("fr-FR", { weekday:"short", day:"numeric", month:"short", year:"numeric" }); }
+function rdvListeClient(clientId) {
+  return (state.appointments || []).filter(a => a.clientId === clientId && a.date).map(a => ({ id: a.id, date: a.date, heure: a.heure || "", motif: a.motif || "" }));
+}
+function rdvDuClient(c) {
+  const local = rdvListeClient(c.id);
+  const liste = local.length ? local : (c.rendezVous || []);
+  return liste.filter(r => r && r.date);
+}
+// La copie des rendez-vous d'un client est gardée dans sa fiche (Firestore) : le portail client peut la lire.
+function synchroniserRdvClient(clientId) {
+  if (!clientId) return;
+  const client = (state.clients || []).find(c => c.id === clientId);
+  if (!client) return;
+  const rendezVous = rdvListeClient(clientId);
+  client.rendezVous = rendezVous;
+  ClientsManager.saveClient(clientId, { rendezVous });
+}
+let _rdvReconcilie = false;
+function reconcilierRendezVousClients() {
+  if (_rdvReconcilie) return;
+  _rdvReconcilie = true;
+  (state.clients || []).forEach(c => {
+    const tri = l => l.slice().sort((a, b) => a.id < b.id ? -1 : 1);
+    const calcule = tri(rdvListeClient(c.id));
+    if (!calcule.length) return;                       // jamais d'écrasement par une liste vide
+    if (JSON.stringify(calcule) === JSON.stringify(tri(c.rendezVous || []))) return;
+    c.rendezVous = calcule;
+    firebase.firestore().collection("clients").doc(c.id).set({ rendezVous: calcule }, { merge: true }).catch(e => console.error("rendez-vous clients:", e));
+  });
+}
+function buildRdvSection(c) {
+  const box = h("div",{style:"margin-top:22px"});
+  const head = h("div",{style:"display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"});
+  head.appendChild(h("div",{style:"color:#6B6355;font-size:13px;letter-spacing:.08em"},"RENDEZ-VOUS"));
+  const tous = rdvDuClient(c);
+  if (tous.length) {
+    const exp = h("button",{class:"btn-sm"},"📥 Exporter (.ics)");
+    exp.addEventListener("click", () => telechargerIcs("rendez-vous-" + (c.name || "client").replace(/\s+/g, "-") + ".ics", rdvToIcs(tous.map(r => ({ ...r, titre: "Séance — " + c.name })))));
+    head.appendChild(exp);
+  }
+  box.appendChild(head);
+  if (!tous.length) { box.appendChild(h("p",{style:"color:#6B6355;font-size:13px"},"Aucun rendez-vous enregistré pour ce client.")); return box; }
+  const maintenant = rdvNowKey();
+  const avenir = tous.filter(r => rdvKey(r) >= maintenant).sort((a, b) => rdvKey(a) < rdvKey(b) ? -1 : 1);
+  const passes = tous.filter(r => rdvKey(r) < maintenant).sort((a, b) => rdvKey(a) < rdvKey(b) ? 1 : -1);
+  function groupe(titre, liste, couleur, avecGoogle) {
+    const g = h("div",{style:"margin-bottom:14px"});
+    g.appendChild(h("div",{style:"font-weight:700;font-size:13px;color:" + couleur + ";margin-bottom:6px"}, titre + " (" + liste.length + ")"));
+    if (!liste.length) g.appendChild(h("div",{style:"color:#6B6355;font-size:12.5px"},"Aucun"));
+    liste.forEach(r => {
+      const row = h("div",{style:"display:flex;justify-content:space-between;gap:8px;padding:7px 10px;border:1px solid #E4DAC0;border-radius:8px;margin-bottom:5px;background:#FFFDF7;font-size:13.5px;color:#2E2A20"});
+      row.appendChild(h("span",{}, rdvFrDate(r.date) + (r.heure ? " · " + r.heure : "") + (r.motif ? " — " + r.motif : "")));
+      if (avecGoogle) row.appendChild(h("a",{href: googleCalUrl(r, "Séance — " + c.name), target:"_blank", rel:"noopener", style:"color:#9C7A2E;font-size:12px;white-space:nowrap;text-decoration:none"},"📅 Google Agenda"));
+      g.appendChild(row);
+    });
+    return g;
+  }
+  box.appendChild(groupe("À venir", avenir, "#9C7A2E", true));
+  box.appendChild(groupe("Passés", passes, "#6B6355", false));
+  return box;
+}
+
+// ---------- Plante d'évolution du projet ----------
+function parcoursProgress(p) {
+  if (!p) return 0;
+  const ph = p.phases || [];
+  if (ph.length) return ph.filter(x => x.done).length / ph.length;
+  const ob = p.objectifs || [];
+  if (ob.length) return ob.reduce((t, o) => t + (o.progression || 0), 0) / ob.length / 100;
+  return 0;
+}
+function plantStage(r) { return r < 0.25 ? 1 : r < 0.5 ? 2 : r < 0.75 ? 3 : 4; }
+const PLANT_NOMS = ["Le lancement", "La mise en place", "La pratique", "La floraison"];
+function plantSvg(stage) {
+  const top = { 1:115, 2:80, 3:55, 4:38 }[stage];
+  const leaf = (x, y, rot) => `<ellipse cx="${x}" cy="${y}" rx="10" ry="4.8" fill="#5FA05A" transform="rotate(${rot} ${x} ${y})"/>`;
+  const flower = (x, y, c) => { let t = ""; for (let i = 0; i < 5; i++) t += `<ellipse cx="${x}" cy="${y-8}" rx="4.8" ry="7.5" fill="${c}" transform="rotate(${i*72} ${x} ${y})"/>`; return t + `<circle cx="${x}" cy="${y}" r="3.6" fill="#F2C94C"/>`; };
+  const bud = (x, y) => `<ellipse cx="${x}" cy="${y}" rx="4" ry="6" fill="#E88A8A"/>`;
+  const pairs = { 1:1, 2:2, 3:3, 4:3 }[stage];
+  let leaves = "";
+  for (let k = 0; k < pairs; k++) { const y = 138 - k * 26; leaves += leaf(68, y, -30) + leaf(92, y - 6, 30); }
+  let haut = "";
+  if (stage === 3) haut = bud(80, top - 4) + bud(66, top + 16) + bud(94, top + 12);
+  if (stage === 4) haut = flower(80, top, "#E87A7A") + flower(60, top + 24, "#F29BA0") + flower(100, top + 20, "#E87A7A");
+  if (stage <= 2) haut = leaf(72, top, -40) + leaf(88, top - 2, 40);
+  return `<svg viewBox="0 0 160 190" width="150" height="178" role="img" aria-label="Plante, étape ${stage} sur 4"><path d="M80 152 L80 ${top}" stroke="#4E8B4A" stroke-width="4" stroke-linecap="round" fill="none"/>${leaves}${haut}<ellipse cx="80" cy="152" rx="34" ry="6" fill="#6B4A32"/><path d="M46 152 L54 186 L106 186 L114 152 Z" fill="#C8734A"/><rect x="44" y="148" width="72" height="9" rx="3" fill="#B5633C"/></svg>`;
+}
+function buildPlantBlock(c) {
+  const r = parcoursProgress(c.parcours), st = plantStage(r);
+  const box = h("div",{style:"display:flex;align-items:center;gap:16px;border:1px solid #E4DAC0;border-radius:14px;padding:12px 16px;margin-bottom:22px;background:#FFFDF7"});
+  const holder = h("div",{}); holder.innerHTML = plantSvg(st);
+  box.appendChild(holder);
+  const txt = h("div",{});
+  txt.appendChild(h("div",{style:"font-size:12px;letter-spacing:.08em;color:#6B6355"},"ÉVOLUTION DU PROJET"));
+  txt.appendChild(h("div",{style:"font-size:17px;font-weight:700;color:#2E2A20;margin:4px 0"}, "Étape " + st + " · " + PLANT_NOMS[st-1]));
+  txt.appendChild(h("div",{style:"font-size:13px;color:#6B6355"}, Math.round(r * 100) + "% des étapes du parcours franchies"));
+  box.appendChild(txt);
+  return box;
+}
+
+const EXERCICES_CATALOGUE = [
+ {
+  "id": "speedboat",
+  "titre": "🚤 Le Speed Boat — où en est mon projet ?",
+  "duree": "15–20 min",
+  "resume": "Bilan imagé d'un projet : ce qui pousse, ce qui freine, et le premier geste.",
+  "consigne": "Imagine ton projet comme un bateau rapide qui file vers une île de rêve. Note ce qui t'aide à avancer et ce qui te retient. Réponds spontanément, quelques mots suffisent, il n'y a pas de mauvaise réponse.",
+  "source": "D'après les supports de formation de Delphine Thomas",
+  "champs": [
+   {
+    "id": "ile",
+    "label": "🏝️ L'île de rêve — mon objectif",
+    "aide": "Où veux-tu arriver ? À quoi sauras-tu que tu y es ?"
+   },
+   {
+    "id": "vents",
+    "label": "💨 Les vents favorables",
+    "aide": "Ce qui te pousse et te motive ; les opportunités autour de toi qui facilitent le voyage."
+   },
+   {
+    "id": "bateau",
+    "label": "⛵ Le bateau — mes atouts",
+    "aide": "Tes talents, tes compétences, les personnes qui t'entourent dans ce projet."
+   },
+   {
+    "id": "tresor",
+    "label": "💎 Le trésor dans la cale",
+    "aide": "Un talent ou une ressource que tu n'utilises pas encore et qui serait précieux."
+   },
+   {
+    "id": "ancres",
+    "label": "⚓ Les ancres",
+    "aide": "Ce qui te freine de l'intérieur : habitudes, croyances, fatigue, doutes."
+   },
+   {
+    "id": "monstres",
+    "label": "🐙 Les monstres marins et les récifs",
+    "aide": "Les dangers connus et les obstacles possibles qui pourraient te faire échouer ; tes craintes."
+   },
+   {
+    "id": "courants",
+    "label": "🌊 Les courants contraires",
+    "aide": "Ce qui freine de l'extérieur et avec quoi tu dois composer (contraintes, entourage, contexte)."
+   },
+   {
+    "id": "malle",
+    "label": "🧳 La vieille malle",
+    "aide": "Le sujet que tu évites d'aborder, le non-dit qui pèse."
+   },
+   {
+    "id": "geste",
+    "label": "🧭 Mon premier geste",
+    "aide": "Une chose concrète, cette semaine, pour amplifier un vent ou alléger une ancre."
+   }
+  ]
+ },
+ {
+  "id": "swot",
+  "titre": "🔍 Mon SWOT personnel",
+  "duree": "15 min",
+  "resume": "Forces, faiblesses (internes) et opportunités, menaces (externes) sur un projet.",
+  "consigne": "Pense à un projet ou à une situation qui compte pour toi. Les forces et les faiblesses viennent de toi (interne). Les opportunités et les menaces viennent de l'extérieur.",
+  "source": "D'après les supports de formation de Delphine Thomas",
+  "champs": [
+   {
+    "id": "forces",
+    "label": "💪 Mes forces",
+    "aide": "Ce que je fais bien, ce qui m'aide dans ce projet."
+   },
+   {
+    "id": "faiblesses",
+    "label": "🌱 Mes faiblesses",
+    "aide": "Ce que je fais moins bien, ce qui me limite aujourd'hui."
+   },
+   {
+    "id": "opportunites",
+    "label": "🌟 Les opportunités",
+    "aide": "Ce qui, autour de moi, peut m'aider ou m'ouvrir des portes."
+   },
+   {
+    "id": "menaces",
+    "label": "⚠️ Les menaces",
+    "aide": "Ce qui, autour de moi, pourrait me gêner ou me faire échouer."
+   },
+   {
+    "id": "action",
+    "label": "🎯 Mon action",
+    "aide": "Comment utiliser une de mes forces pour saisir une opportunité ou contrer une menace ?"
+   }
+  ]
+ },
+ {
+  "id": "poles",
+  "titre": "🎡 Mes 3 pôles : je ressens, je pense, je fais",
+  "duree": "10–15 min",
+  "resume": "Repérer comment fonctionnent émotions, pensées et actions dans une situation vécue.",
+  "consigne": "À chaque instant, je ressens, je pense et je fais. Ces trois pôles s'influencent comme une roue, et elle peut démarrer par n'importe lequel. Choisis une situation récente et décris-la sous les trois angles.",
+  "source": "D'après les supports de formation de Delphine Thomas",
+  "champs": [
+   {
+    "id": "situation",
+    "label": "📍 La situation",
+    "aide": "Que s'est-il passé ? Où, quand, avec qui ?"
+   },
+   {
+    "id": "ressens",
+    "label": "❤️ Je ressens (états internes)",
+    "aide": "Les émotions et les sensations dans le corps : « je ressens que… », « j'ai le sentiment que… »."
+   },
+   {
+    "id": "pense",
+    "label": "💭 Je pense (processus internes)",
+    "aide": "Les pensées, les images, ce que je me dis : « je me dis que… », « je crois que… »."
+   },
+   {
+    "id": "fais",
+    "label": "🏃 Je fais (comportements externes)",
+    "aide": "Ce qu'une caméra aurait filmé : mes gestes, mes actions, ce que j'ai dit ou évité."
+   },
+   {
+    "id": "dominant",
+    "label": "🔎 Le pôle qui domine chez moi",
+    "aide": "Dans cette situation, est-ce plutôt le ressenti, la pensée ou l'action ?"
+   },
+   {
+    "id": "levier",
+    "label": "🔧 Mon levier",
+    "aide": "Si je changeais un seul pôle (une pensée, un geste, une façon de respirer), qu'est-ce qui changerait ?"
+   }
+  ]
+ },
+ {
+  "id": "swotpoles",
+  "titre": "🧩 Mon SWOT par pôle",
+  "duree": "20 min",
+  "resume": "Croiser le SWOT avec les trois pôles : forces et faiblesses côté ressenti, pensée, action.",
+  "consigne": "Cet exercice prolonge « Mes 3 pôles ». Pour chacun des trois pôles, note ce qui est une force et ce qui est une faiblesse chez toi. Termine par ce que tu vois autour de toi.",
+  "source": "D'après les supports de formation de Delphine Thomas",
+  "champs": [
+   {
+    "id": "ressenti_force",
+    "label": "❤️ Ressenti — ma force",
+    "aide": "Qu'est-ce que je ressens ou perçois bien (empathie, intuition, énergie…) ?"
+   },
+   {
+    "id": "ressenti_faiblesse",
+    "label": "❤️ Ressenti — ma faiblesse",
+    "aide": "Quelle émotion me submerge ou me fuit ?"
+   },
+   {
+    "id": "pensee_force",
+    "label": "💭 Pensée — ma force",
+    "aide": "Comment est-ce que je réfléchis bien (analyse, créativité, recul…) ?"
+   },
+   {
+    "id": "pensee_faiblesse",
+    "label": "💭 Pensée — ma faiblesse",
+    "aide": "Quelles pensées me freinent (doutes, boucles, jugements) ?"
+   },
+   {
+    "id": "action_force",
+    "label": "🏃 Action — ma force",
+    "aide": "Qu'est-ce que je sais bien faire passer à l'acte ?"
+   },
+   {
+    "id": "action_faiblesse",
+    "label": "🏃 Action — ma faiblesse",
+    "aide": "Qu'est-ce que je remets à plus tard ou que j'évite ?"
+   },
+   {
+    "id": "opportunites",
+    "label": "🌟 Opportunités",
+    "aide": "Ce qui autour de moi peut m'aider."
+   },
+   {
+    "id": "menaces",
+    "label": "⚠️ Menaces",
+    "aide": "Ce qui autour de moi peut me gêner."
+   }
+  ]
+ },
+ {
+  "id": "positions",
+  "titre": "🪑 Les 3 positions de perception",
+  "duree": "20–30 min",
+  "resume": "Regarder une situation tendue de trois points de vue pour retrouver du choix.",
+  "consigne": "Quelle que soit la situation, nous la voyons souvent d'un seul point de vue, ce qui limite nos choix. Choisis une situation avec une personne qui te pose difficulté. Pour chaque position, change de place (ou de pièce). Entre deux positions, « secoue » ton état : marche quelques pas, regarde ailleurs. Si c'est trop pénible, arrête-toi et écris à ton coach.",
+  "source": "D'après les supports de formation de Delphine Thomas",
+  "champs": [
+   {
+    "id": "situation",
+    "label": "📍 La situation",
+    "aide": "Décris en quelques lignes la situation et la personne concernée."
+   },
+   {
+    "id": "pos1",
+    "label": "1️⃣ Première position — mon point de vue",
+    "aide": "Je suis pleinement moi. Qu'est-ce que je vois, ressens, pense ? Quels sont mes critères ?"
+   },
+   {
+    "id": "pos2",
+    "label": "2️⃣ Deuxième position — la place de l'autre",
+    "aide": "Je me mets à la place de l'autre, avec ses croyances et ses critères. Que perçoit-elle de moi et de nos échanges ?"
+   },
+   {
+    "id": "pos3",
+    "label": "3️⃣ Troisième position — l'observateur",
+    "aide": "Je regarde de l'extérieur, avec curiosité. En quoi ce que je fais déclenche sa réponse, et sa réponse mon action suivante ?"
+   },
+   {
+    "id": "retour",
+    "label": "↩️ Retour à moi",
+    "aide": "Compte tenu de ce que j'ai découvert, que pourrais-je faire de différent pour changer cette interaction dans un sens plus positif ?"
+   }
+  ]
+ },
+ {
+  "id": "waltdisney",
+  "titre": "🎬 La méthode Walt Disney : rêveur, réaliste, critique",
+  "duree": "30–45 min",
+  "resume": "Construire une solution en trois étapes : rêver, rendre réaliste, améliorer.",
+  "consigne": "Trois regards, dans cet ordre. Le rêveur n'a aucune censure. Le réaliste cherche comment ça peut prendre vie. Le critique n'est pas là pour détruire mais pour améliorer. Tu peux fermer les yeux et laisser venir les images avant d'écrire.",
+  "source": "D'après les supports de formation de Delphine Thomas",
+  "champs": [
+   {
+    "id": "objectif",
+    "label": "💭 Rêveur — mon objectif",
+    "aide": "Quel est l'objectif ? Quel est le but de ce projet ?"
+   },
+   {
+    "id": "motivation",
+    "label": "💭 Rêveur — ce qui me motive",
+    "aide": "En quoi cela me motive-t-il ? Qu'est-ce que cela m'apportera ?"
+   },
+   {
+    "id": "solutions",
+    "label": "💭 Rêveur — mes solutions, même folles",
+    "aide": "Toutes les idées qui te viennent, y compris la baguette magique."
+   },
+   {
+    "id": "trois",
+    "label": "💭 Mes 3 solutions retenues",
+    "aide": "Garde-en trois, dont une vraiment farfelue."
+   },
+   {
+    "id": "realiste",
+    "label": "🛠️ Réaliste — comment ça prend vie",
+    "aide": "Pour chaque solution : que faire, de quelles ressources et de quelles personnes ai-je besoin, quels obstacles, comment les contourner ?"
+   },
+   {
+    "id": "critique",
+    "label": "🔎 Critique — pour améliorer",
+    "aide": "Pour chaque solution : avantages, inconvénients et coûts, ce qui ne dépend pas de moi, ce qui pourrait l'améliorer."
+   },
+   {
+    "id": "plan",
+    "label": "✅ Mon plan d'action",
+    "aide": "Qui fait quoi, pour quand, avec quels moyens ?"
+   }
+  ]
+ },
+ {
+  "id": "courbe",
+  "titre": "📉 La courbe du changement : où en suis-je ?",
+  "duree": "15 min",
+  "resume": "Se situer sur la courbe de deuil d'un changement et trouver le prochain pas.",
+  "consigne": "Changer, c'est aussi faire le deuil de ce qui était avant. On passe souvent par sept étapes, sans ordre strict : 1 le choc ou la perte, 2 le déni, 3 la colère (puis la peur), 4 le marchandage, 5 la tristesse, 6 l'expérimentation et les décisions, 7 l'intégration. Si ça remue trop, arrête-toi et écris à ton coach.",
+  "source": "D'après les supports de formation de Delphine Thomas",
+  "champs": [
+   {
+    "id": "changement",
+    "label": "🌊 Le changement que je vis",
+    "aide": "Que se passe-t-il ? Qu'est-ce qui change ou qu'est-ce que je perds ?"
+   },
+   {
+    "id": "etape",
+    "label": "📍 L'étape où je me reconnais aujourd'hui",
+    "aide": "Laquelle (1 à 7) et pourquoi ? Plusieurs sont possibles."
+   },
+   {
+    "id": "ressens",
+    "label": "❤️ Ce que je ressens en ce moment",
+    "aide": "Sans me juger."
+   },
+   {
+    "id": "renoncer",
+    "label": "🎒 À quoi dois-je renoncer ?",
+    "aide": "Mes repères, mes habitudes, ce que je laisse derrière moi."
+   },
+   {
+    "id": "besoin",
+    "label": "🤝 Ce dont j'ai besoin pour avancer",
+    "aide": "Écoute, temps, information, soutien, consolation…"
+   },
+   {
+    "id": "pas",
+    "label": "👣 Un petit pas d'expérimentation",
+    "aide": "Un essai simple, cette semaine, dans la direction du changement."
+   }
+  ]
+ },
+ {
+  "id": "ecologie",
+  "titre": "⚖️ Écologie du changement : ce que je gagne, ce que je perds",
+  "duree": "20 min",
+  "resume": "Peser avantages et inconvénients de la situation actuelle et de la situation désirée.",
+  "consigne": "Pour qu'un changement soit durable, il doit respecter ce qui compte pour toi. Remplis les quatre cases en pensant à une même situation, en toute honnêteté.",
+  "source": "D'après les supports de formation de Delphine Thomas",
+  "champs": [
+   {
+    "id": "actuelle_inconvenients",
+    "label": "📍 Situation actuelle — les inconvénients",
+    "aide": "Ce qui me pèse aujourd'hui."
+   },
+   {
+    "id": "actuelle_avantages",
+    "label": "📍 Situation actuelle — les avantages",
+    "aide": "Ce que cette situation m'apporte, même si je veux en sortir."
+   },
+   {
+    "id": "desiree_inconvenients",
+    "label": "🌅 Situation désirée — les inconvénients",
+    "aide": "Ce que je risque de perdre ou de devoir affronter."
+   },
+   {
+    "id": "desiree_avantages",
+    "label": "🌅 Situation désirée — les avantages",
+    "aide": "Ce que j'y gagne."
+   },
+   {
+    "id": "ajustement",
+    "label": "🔧 Ce que je découvre",
+    "aide": "Comment ajuster mon projet pour garder les avantages importants et accepter les inconvénients ?"
+   }
+  ]
+ },
+ {
+  "id": "quatorze",
+  "titre": "🙃 Les 14 merveilleuses façons de ne pas réussir",
+  "duree": "10–15 min",
+  "resume": "Exercice à l'envers pour faire apparaître les freins cachés, avec légèreté.",
+  "consigne": "Un exercice à l'envers, et un peu drôle. Écris 14 façons de ne PAS atteindre ton objectif, même les plus absurdes. Cela fait apparaître ce qui te freine sans que tu aies à l'avouer directement.",
+  "source": "D'après les supports de formation de Delphine Thomas",
+  "champs": [
+   {
+    "id": "objectif",
+    "label": "🎯 Mon objectif",
+    "aide": "Celui que je veux atteindre."
+   },
+   {
+    "id": "facons",
+    "label": "🙃 Mes 14 façons de ne pas y arriver",
+    "aide": "Une par ligne, de 1 à 14. Laisse-toi aller, même l'absurde compte."
+   },
+   {
+    "id": "reconnu",
+    "label": "👀 Celles que je reconnais déjà",
+    "aide": "Lesquelles je fais déjà, parfois sans m'en rendre compte ?"
+   },
+   {
+    "id": "parade",
+    "label": "🛡️ Ma parade",
+    "aide": "Pour la plus probable : que puis-je faire pour l'éviter ?"
+   }
+  ]
+ },
+ {
+  "id": "hudson",
+  "titre": "🔄 Mes cycles de vie (modèle de Hudson)",
+  "duree": "20 min",
+  "resume": "Relire ses transitions de vie pour comprendre la phase que l'on traverse.",
+  "consigne": "Une vie se compose de cycles, avec des phases d'alignement, de désynchronisation, de désengagement et de réintégration. Prends le temps de relire ton parcours d'adulte.",
+  "source": "D'après les supports de formation de Delphine Thomas",
+  "champs": [
+   {
+    "id": "cycles",
+    "label": "🔁 Mes cycles",
+    "aide": "Combien de cycles de changement ai-je vécus depuis que je suis adulte ?"
+   },
+   {
+    "id": "reussites",
+    "label": "🌟 Difficultés et réussites",
+    "aide": "Qu'est-ce qui a été difficile ? Qu'est-ce qui a bien marché ?"
+   },
+   {
+    "id": "transitions",
+    "label": "🌉 Mes transitions",
+    "aide": "Comment se sont passés mes passages d'un cycle à l'autre ?"
+   },
+   {
+    "id": "phase",
+    "label": "📍 La phase que je traverse",
+    "aide": "Où suis-je aujourd'hui ?"
+   },
+   {
+    "id": "temps",
+    "label": "⏳ La phase où je passe le plus de temps",
+    "aide": "Laquelle, et qu'est-ce que cela dit de moi ?"
+   },
+   {
+    "id": "prefere",
+    "label": "💚 La phase où je me plais le plus",
+    "aide": "Qu'est-ce que j'y retrouve ?"
+   }
+  ]
+ }
+];
+
+// Envoie un exercice du catalogue dans le parcours du client (il apparaît tout de suite dans son espace).
+function envoyerExercice(c, cat) {
+  if (!c.exercices) c.exercices = [];
+  c.exercices.push({
+    id: "ex_" + Date.now() + "_" + cat.id, catalogueId: cat.id, titre: cat.titre, consigne: cat.consigne,
+    champs: cat.champs.map(ch => ({ id: ch.id, label: ch.label, aide: ch.aide || "" })),
+    done: false, envoyeLe: new Date().toISOString()
+  });
+  ClientsManager.saveClient(c.id, { exercices: c.exercices });
+}
+
+// Réponses du client à un exercice structuré (lecture seule pour le coach).
+function buildReponsesExercice(c, ex) {
+  const rep = (c.reponsesExercices && c.reponsesExercices[ex.id]) || {};
+  const remplis = ex.champs.filter(ch => String(rep[ch.id] || "").trim()).length;
+  const det = h("details",{style:"margin-top:8px"});
+  let maj = "";
+  if (rep._maj) { const d = new Date(rep._maj); if (!isNaN(d)) maj = " · mis à jour le " + d.toLocaleDateString("fr-FR", { day:"numeric", month:"short" }); }
+  det.appendChild(h("summary",{style:"cursor:pointer;font-size:12.5px;color:#9C7A2E;font-weight:600"}, "Réponses du client : " + remplis + "/" + ex.champs.length + maj));
+  ex.champs.forEach(ch => {
+    det.appendChild(h("div",{style:"font-size:12px;color:#6B6355;margin-top:8px"}, ch.label));
+    det.appendChild(h("div",{style:"font-size:13px;color:#2E2A20;white-space:pre-wrap"}, String(rep[ch.id] || "").trim() || "—"));
+  });
+  return det;
+}
+
+// Catalogue : aperçu de chaque exercice + bouton « Envoyer ».
+function buildCatalogueExercices(c, apres) {
+  const box = h("div",{style:"margin-bottom:20px"});
+  function dessiner() {
+    box.innerHTML = "";
+    EXERCICES_CATALOGUE.forEach(cat => {
+      const envoyes = (c.exercices || []).filter(e => e.catalogueId === cat.id);
+      const enCours = envoyes.find(e => !e.done);
+      const row = h("div",{style:"border:1px solid #E4DAC0;border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#FFFDF7"});
+      const top = h("div",{style:"display:flex;justify-content:space-between;align-items:flex-start;gap:8px"});
+      const txt = h("div",{style:"flex:1"});
+      txt.appendChild(h("div",{style:"font-weight:600;font-size:13.5px;color:#2E2A20"}, cat.titre));
+      txt.appendChild(h("div",{style:"font-size:12.5px;color:#6B6355;margin-top:2px"}, cat.resume + " · " + cat.duree));
+      top.appendChild(txt);
+      const btn = h("button",{class: enCours ? "btn-g" : "btn-sm"}, enCours ? "✓ Envoyé" : (envoyes.length ? "📤 Renvoyer" : "📤 Envoyer"));
+      btn.disabled = !!enCours;
+      btn.addEventListener("click", () => { envoyerExercice(c, cat); dessiner(); if (apres) apres(); });
+      top.appendChild(btn);
+      row.appendChild(top);
+      const det = h("details",{style:"margin-top:6px"});
+      det.appendChild(h("summary",{style:"cursor:pointer;font-size:12px;color:#9C7A2E"}, "Aperçu (" + cat.champs.length + " questions)"));
+      det.appendChild(h("div",{style:"font-size:12.5px;color:#5A5648;margin-top:6px;white-space:pre-wrap"}, cat.consigne));
+      cat.champs.forEach(ch => det.appendChild(h("div",{style:"font-size:12.5px;color:#2E2A20;margin-top:4px"}, "• " + ch.label)));
+      det.appendChild(h("div",{style:"font-size:11.5px;color:#6B6355;margin-top:6px;font-style:italic"}, cat.source));
+      row.appendChild(det);
+      box.appendChild(row);
+    });
+  }
+  dessiner();
+  return box;
+}
+
+function protegerCopieLocale(nouvelles) {
+  try {
+    const avant = localStorage.getItem("cs4-clients");
+    if (avant && avant !== "[]" && (!nouvelles || nouvelles.length === 0)) localStorage.setItem("cs4-clients-sauvegarde", avant);
+  } catch (e) {}
+}
+
+// Diagnostic : retrouve les clients et séances rattachés à un autre identifiant de compte (ou sans identifiant).
+async function diagnosticClients() {
+  const user = firebase.auth().currentUser;
+  if (!user) throw new Error("tu n'es pas connecté");
+  const db = firebase.firestore();
+  const [cs, ss] = await Promise.all([db.collection("clients").get(), db.collection("sessions").get()]);
+  const groupes = {};
+  const g = u => (groupes[u] = groupes[u] || { uid: u, clients: [], sessions: [] });
+  cs.forEach(d => { const x = d.data() || {}; g(x.coachUid || "(aucun)").clients.push({ id: d.id, nom: x.name || x.nom || "(sans nom)" }); });
+  ss.forEach(d => { const x = d.data() || {}; g(x.coachUid || "(aucun)").sessions.push({ id: d.id }); });
+  let sauvegarde = 0;
+  try { sauvegarde = (JSON.parse(localStorage.getItem("cs4-clients-sauvegarde") || "[]") || []).length; } catch (e) {}
+  return { uid: user.uid, email: user.email || "", total: cs.size, moi: groupes[user.uid] || { clients: [], sessions: [] }, autres: Object.values(groupes).filter(x => x.uid !== user.uid), sauvegarde };
+}
+
+// Rattache les clients et séances d'un autre identifiant au compte connecté. Rien n'est supprimé.
+async function rattacherClients(groupe, uid) {
+  const db = firebase.firestore();
+  const ops = [];
+  groupe.clients.forEach(c => ops.push(db.collection("clients").doc(c.id)));
+  groupe.sessions.forEach(x => ops.push(db.collection("sessions").doc(x.id)));
+  const ancien = groupe.uid === "(aucun)" ? null : groupe.uid;
+  for (let i = 0; i < ops.length; i += 400) {
+    const batch = db.batch();
+    ops.slice(i, i + 400).forEach(ref => batch.set(ref, { coachUid: uid, ancienCoachUid: ancien }, { merge: true }));
+    await batch.commit();
+  }
+  return ops.length;
+}
+
+function buildDiagnosticCard() {
+  const card = h("div",{style:"border:1px solid #E4DAC0;border-radius:12px;padding:14px 16px;margin-top:22px;background:#FFFDF7"});
+  card.appendChild(h("div",{style:"font-weight:700;color:#2E2A20;font-size:14px"},"🩺 Retrouver mes clients"));
+  const info = h("div",{style:"font-size:13.5px;color:#5A5648;margin:6px 0 10px;line-height:1.45"},"Un client n'apparaît plus ? Ce diagnostic cherche les clients rattachés à un autre compte ou sans compte. Il ne supprime rien.");
+  const zone = h("div",{});
+  const actions = h("div",{style:"display:flex;gap:8px;flex-wrap:wrap"});
+  card.appendChild(info); card.appendChild(zone); card.appendChild(actions);
+  const bouton = (lib, fn, primaire) => { const b = h("button",{class: primaire ? "btn" : "btn-g"}, lib); b.addEventListener("click", async () => { b.disabled = true; try { await fn(); } finally { b.disabled = false; } }); return b; };
+
+  async function lancer() {
+    zone.textContent = "Recherche en cours…"; actions.innerHTML = "";
+    let r;
+    try { r = await diagnosticClients(); }
+    catch (e) { zone.textContent = "Diagnostic impossible : " + e.message; actions.appendChild(bouton("Réessayer", lancer)); return; }
+    zone.innerHTML = "";
+    const ligne = t => zone.appendChild(h("div",{style:"font-size:13.5px;margin:4px 0;color:#2E2A20"}, t));
+    ligne("Compte connecté : " + (r.email || "?") + " (" + r.uid + ")");
+    ligne("✅ Clients rattachés à ce compte : " + r.moi.clients.length + " sur " + r.total + " dans la base");
+    if (r.sauvegarde) ligne("💾 Une sauvegarde locale de " + r.sauvegarde + " client(s) existe sur cet appareil.");
+    if (!r.autres.length) { ligne(r.total ? "Rien à réparer : tous les clients sont rattachés à ce compte." : "La base ne contient aucun client."); actions.appendChild(bouton("Relancer", lancer)); return; }
+    r.autres.forEach(gr => {
+      const noms = gr.clients.slice(0, 10).map(c => c.nom).join(", ") + (gr.clients.length > 10 ? "…" : "");
+      ligne("⚠️ " + gr.clients.length + " client(s) et " + gr.sessions.length + " séance(s) rattachés à " + (gr.uid === "(aucun)" ? "aucun compte" : "un autre compte (" + gr.uid.slice(0, 8) + "…)") + (noms ? " : " + noms : ""));
+      actions.appendChild(bouton("Rattacher à mon compte (" + (gr.clients.length + gr.sessions.length) + ")", async () => {
+        if (!confirm("Rattacher " + gr.clients.length + " client(s) et " + gr.sessions.length + " séance(s) à ton compte actuel ?\n\nRien n'est supprimé. L'ancien identifiant est conservé dans le champ « ancienCoachUid ».")) return;
+        try { const n = await rattacherClients(gr, r.uid); alert("✅ " + n + " élément(s) rattaché(s). Ils apparaissent dans ta liste de clients (rafraîchis la page si besoin)."); }
+        catch (e) { alert("Rattachement impossible : " + e.message); }
+        await lancer();
+      }, true));
+    });
+    actions.appendChild(bouton("Relancer", lancer));
+  }
+  actions.appendChild(bouton("Lancer le diagnostic", lancer, true));
+  return card;
+}
+
 const ClientsManager = {
   data: null,
   unsubClients: null,
@@ -722,10 +1366,12 @@ const ClientsManager = {
           this.data = [];
           snap.forEach(doc => this.data.push({ id: doc.id, ...doc.data() }));
           this.data.sort((a,b) => (a.name||a.nom||"").localeCompare(b.name||b.nom||""));
+          protegerCopieLocale(this.data);
           localStorage.setItem("cs4-clients", JSON.stringify(this.data));
           state.clients = this.data;
           if (cb) cb();
           render();
+          reconcilierRendezVousClients();
         }, e => {
           console.error("listen clients:", e);
           this.data = JSON.parse(localStorage.getItem("cs4-clients") || "null") || SAMPLE;
@@ -793,7 +1439,7 @@ const ClientsManager = {
 //  ÉTAT GLOBAL
 // ══════════════════════════════════════════
 let state = {
-  tab: "dashboard",
+  tab: "accueil",
   clients: JSON.parse(localStorage.getItem("cs4-clients") || "null") || SAMPLE,
   ressources: JSON.parse(localStorage.getItem("cs4-ressources") || "[]"),
   notes: localStorage.getItem("cs4-notes") || "",
@@ -1657,7 +2303,7 @@ const RdvRequests = {
         this.items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         this.autoConfirmerClientsExistants();
         this.nettoyerAnciennesDemandes();
-        if (state.tab === "rdv" || state.tab === "agenda") render();
+        if (state.tab === "rdv" || state.tab === "agenda" || state.tab === "accueil") render();
       }, e => console.error("listen rdvRequests:", e));
   },
   autoConfirmerClientsExistants() {
@@ -1778,8 +2424,324 @@ function normalizePhone(raw) {
   return d;
 }
 
+const GCAL = { etat: "inconnu" };
+const GCAL_SCRIPT = [
+  "var DUREE_MIN = 60, HORIZON_JOURS = 45, BLOQUER_JOURNEE_ENTIERE = false;",
+  "var FB_KEY = \"AIzaSyDMV0s1MPRzjswK_WFKO7VrV3rxl0p4xdM\", FB_PROJET = \"la-clairiere-3e804\";",
+  "var JOURS = [\"dimanche\", \"lundi\", \"mardi\", \"mercredi\", \"jeudi\", \"vendredi\", \"samedi\"];",
+  "var HORAIRES_DEFAUT = { lundi: { plages: [{ ouvert: true, debut: \"09:00\", fin: \"12:00\" }, { ouvert: true, debut: \"14:00\", fin: \"18:00\" }] }, mardi: { plages: [{ ouvert: true, debut: \"09:00\", fin: \"12:00\" }, { ouvert: true, debut: \"14:00\", fin: \"18:00\" }] }, mercredi: { plages: [{ ouvert: true, debut: \"09:00\", fin: \"12:00\" }, { ouvert: true, debut: \"14:00\", fin: \"18:00\" }] }, jeudi: { plages: [{ ouvert: true, debut: \"09:00\", fin: \"12:00\" }, { ouvert: true, debut: \"14:00\", fin: \"18:00\" }] }, vendredi: { plages: [{ ouvert: true, debut: \"09:00\", fin: \"12:00\" }, { ouvert: true, debut: \"14:00\", fin: \"18:00\" }] } };",
+  "",
+  "function rep(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }",
+  "function p2(n) { return (n < 10 ? \"0\" : \"\") + n; }",
+  "function ymd(d) { return d.getFullYear() + \"-\" + p2(d.getMonth() + 1) + \"-\" + p2(d.getDate()); }",
+  "function debut(r) { var p = r.date.split(\"-\"), h = (r.heure || \"0:0\").split(\":\"); return new Date(+p[0], +p[1] - 1, +p[2], +h[0], +h[1]); }",
+  "function dateOk(s) { return /^\\d{4}-\\d{2}-\\d{2}$/.test(s || \"\"); }",
+  "",
+  "// ---------- Évènements Google Agenda ----------",
+  "function poser(cal, props, cle, r, idEvExistant) {",
+  "  if (!r || !r.id || !dateOk(r.date)) throw new Error(\"rendez-vous invalide\");",
+  "  var titre = String(r.titre || \"Séance de coaching\").slice(0, 200), desc = String(r.motif || \"\").slice(0, 2000);",
+  "  var sig = [r.date, r.heure || \"\", titre, desc].join(\"|\");",
+  "  var idEv = idEvExistant || props.getProperty(cle), ev = null;",
+  "  if (idEv) { try { ev = cal.getEventById(idEv); } catch (x) { ev = null; } }",
+  "  if (ev && props.getProperty(\"sig_\" + cle) === sig) { props.setProperty(cle, ev.getId()); return false; }",
+  "  var d = debut(r);",
+  "  if (r.heure) {",
+  "    var f = new Date(d.getTime() + DUREE_MIN * 60000);",
+  "    if (ev && !ev.isAllDayEvent()) { ev.setTitle(titre); ev.setTime(d, f); ev.setDescription(desc); }",
+  "    else { if (ev) ev.deleteEvent(); ev = cal.createEvent(titre, d, f, { description: desc }); }",
+  "  } else {",
+  "    if (ev && ev.isAllDayEvent()) { ev.setTitle(titre); ev.setAllDayDate(d); ev.setDescription(desc); }",
+  "    else { if (ev) ev.deleteEvent(); ev = cal.createAllDayEvent(titre, d, { description: desc }); }",
+  "  }",
+  "  props.setProperty(cle, ev.getId());",
+  "  props.setProperty(\"sig_\" + cle, sig);",
+  "  return true;",
+  "}",
+  "function retirer(cal, props, cle) {",
+  "  var idEv = props.getProperty(cle);",
+  "  if (idEv) { try { var ev = cal.getEventById(idEv); if (ev) ev.deleteEvent(); } catch (x) {} }",
+  "  props.deleteProperty(cle); props.deleteProperty(\"sig_\" + cle);",
+  "}",
+  "// Depuis l'application : un rendez-vous issu d'une demande du site reprend l'évènement « À confirmer » (pas de doublon).",
+  "function upsertApp(cal, props, r) {",
+  "  if (!r || !r.id || !dateOk(r.date)) throw new Error(\"rendez-vous invalide\");",
+  "  var cleRdv = \"rdv_\" + r.id, cleReq = r.reqId ? \"req_\" + r.reqId : null;",
+  "  poser(cal, props, cleRdv, r, props.getProperty(cleRdv) || (cleReq ? props.getProperty(cleReq) : null));",
+  "  if (cleReq) { props.setProperty(cleReq, props.getProperty(cleRdv)); props.setProperty(\"adopte_\" + r.reqId, \"1\"); }",
+  "}",
+  "function supprimerApp(cal, props, r) {",
+  "  retirer(cal, props, \"rdv_\" + r.id);",
+  "  if (r.reqId) { props.deleteProperty(\"req_\" + r.reqId); props.deleteProperty(\"sig_req_\" + r.reqId); props.setProperty(\"adopte_\" + r.reqId, \"1\"); }",
+  "}",
+  "",
+  "// ---------- Firestore (même accès que ton site de réservation) ----------",
+  "function jsonFetch(url, opts) {",
+  "  opts = opts || {}; opts.muteHttpExceptions = true;",
+  "  var r = UrlFetchApp.fetch(url, opts), txt = r.getContentText(), j = null;",
+  "  try { j = txt ? JSON.parse(txt) : null; } catch (x) {}",
+  "  return { code: r.getResponseCode(), json: j };",
+  "}",
+  "function jeton(props) {",
+  "  var exp = Number(props.getProperty(\"fb_exp\") || 0), tok = props.getProperty(\"fb_id\"), rt = props.getProperty(\"fb_refresh\"), r;",
+  "  if (tok && Date.now() < exp - 120000) return tok;",
+  "  if (rt) {",
+  "    r = jsonFetch(\"https://securetoken.googleapis.com/v1/token?key=\" + FB_KEY, { method: \"post\", payload: { grant_type: \"refresh_token\", refresh_token: rt } });",
+  "    if (r.code === 200 && r.json && r.json.id_token) {",
+  "      props.setProperty(\"fb_id\", r.json.id_token); props.setProperty(\"fb_refresh\", r.json.refresh_token || rt);",
+  "      props.setProperty(\"fb_exp\", String(Date.now() + Number(r.json.expires_in || 3600) * 1000)); return r.json.id_token;",
+  "    }",
+  "  }",
+  "  r = jsonFetch(\"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=\" + FB_KEY, { method: \"post\", contentType: \"application/json\", payload: JSON.stringify({ returnSecureToken: true }) });",
+  "  if (r.code !== 200 || !r.json || !r.json.idToken) throw new Error(\"connexion Firebase impossible (\" + r.code + \")\");",
+  "  props.setProperty(\"fb_id\", r.json.idToken); props.setProperty(\"fb_refresh\", r.json.refreshToken);",
+  "  props.setProperty(\"fb_exp\", String(Date.now() + Number(r.json.expiresIn || 3600) * 1000));",
+  "  return r.json.idToken;",
+  "}",
+  "function fromFs(v) {",
+  "  if (!v) return null;",
+  "  if (\"stringValue\" in v) return v.stringValue;",
+  "  if (\"integerValue\" in v) return Number(v.integerValue);",
+  "  if (\"doubleValue\" in v) return v.doubleValue;",
+  "  if (\"booleanValue\" in v) return v.booleanValue;",
+  "  if (\"mapValue\" in v) { var o = {}, f = v.mapValue.fields || {}; Object.keys(f).forEach(function (k) { o[k] = fromFs(f[k]); }); return o; }",
+  "  if (\"arrayValue\" in v) return (v.arrayValue.values || []).map(fromFs);",
+  "  return null;",
+  "}",
+  "function docToObj(d) { var o = {}, f = d.fields || {}; Object.keys(f).forEach(function (k) { o[k] = fromFs(f[k]); }); o._id = d.name.split(\"/\").pop(); return o; }",
+  "function fsBase() { return \"https://firestore.googleapis.com/v1/projects/\" + FB_PROJET + \"/databases/(default)/documents\"; }",
+  "function fsListe(props, coll) {",
+  "  var out = [], page = \"\", n = 0;",
+  "  do {",
+  "    var r = jsonFetch(fsBase() + \"/\" + coll + \"?pageSize=300\" + (page ? \"&pageToken=\" + encodeURIComponent(page) : \"\"), { headers: { Authorization: \"Bearer \" + jeton(props) } });",
+  "    if (r.code !== 200) throw new Error(\"lecture \" + coll + \" impossible (\" + r.code + \")\");",
+  "    ((r.json && r.json.documents) || []).forEach(function (d) { out.push(docToObj(d)); });",
+  "    page = (r.json && r.json.nextPageToken) || \"\"; n++;",
+  "  } while (page && n < 10);",
+  "  return out;",
+  "}",
+  "function fsReglages(props) {",
+  "  var r = jsonFetch(fsBase() + \"/settings/coach\", { headers: { Authorization: \"Bearer \" + jeton(props) } });",
+  "  var s = (r.code === 200 && r.json) ? docToObj(r.json) : {};",
+  "  return { horaires: s.horaires || HORAIRES_DEFAUT, duree: Number(s.dureeRdv) || DUREE_MIN };",
+  "}",
+  "function fsBloquer(props, date, heure) {",
+  "  var champs = { date: { stringValue: date }, heure: { stringValue: heure }, reservedAt: { stringValue: new Date().toISOString() }, clientId: { stringValue: \"gcal\" } };",
+  "  var r = jsonFetch(fsBase() + \"/bookedSlots/\" + encodeURIComponent(date + \"_\" + heure) + \"?currentDocument.exists=false\", { method: \"patch\", contentType: \"application/json\", payload: JSON.stringify({ fields: champs }), headers: { Authorization: \"Bearer \" + jeton(props) } });",
+  "  return r.code === 200;",
+  "}",
+  "function fsDebloquer(props, id) {",
+  "  var r = jsonFetch(fsBase() + \"/bookedSlots/\" + encodeURIComponent(id), { method: \"delete\", headers: { Authorization: \"Bearer \" + jeton(props) } });",
+  "  return r.code === 200;",
+  "}",
+  "",
+  "// ---------- Créneaux du site (même logique que rdv-booking.html) ----------",
+  "function genererCreneaux(deb, fin, duree) {",
+  "  var slots = [], a = deb.split(\":\").map(Number), b = fin.split(\":\").map(Number), h = a[0], m = a[1];",
+  "  while (h < b[0] || (h === b[0] && m < b[1])) { slots.push(p2(h) + \":\" + p2(m)); m += duree; if (m >= 60) { h += Math.floor(m / 60); m = m % 60; } }",
+  "  return slots;",
+  "}",
+  "function creneauxDuJour(horaires, dateStr, duree) {",
+  "  var p = dateStr.split(\"-\"), h = horaires[JOURS[new Date(+p[0], +p[1] - 1, +p[2]).getDay()]], res = [];",
+  "  ((h && h.plages) || []).forEach(function (pl) { if (pl.ouvert) res = res.concat(genererCreneaux(pl.debut, pl.fin, duree)); });",
+  "  return res;",
+  "}",
+  "",
+  "// ---------- Synchronisation automatique ----------",
+  "function siteVersGoogle(cal, props, requetes) {",
+  "  var aujourdhui = ymd(new Date()), n = 0;",
+  "  requetes.forEach(function (q) {",
+  "    var cle = \"req_\" + q._id, st = q.status || \"nouveau\";",
+  "    if (st === \"rejete\" || st === \"annule\") {",
+  "      if (props.getProperty(cle) && !props.getProperty(\"adopte_\" + q._id)) { retirer(cal, props, cle); n++; }",
+  "      else { props.deleteProperty(cle); props.deleteProperty(\"sig_\" + cle); }",
+  "      return;",
+  "    }",
+  "    if (props.getProperty(\"adopte_\" + q._id)) return;",
+  "    if (!dateOk(q.date) || !q.heure || q.date < aujourdhui) return;",
+  "    var nom = ((q.prenom || \"\") + \" \" + (q.nom || \"\")).trim() || \"Client\";",
+  "    var l = [\"Demande reçue via le site de réservation\"];",
+  "    if (q.motif) l.push(\"Motif : \" + q.motif); if (q.theme) l.push(\"Thème : \" + q.theme);",
+  "    if (q.tel) l.push(\"Tél : \" + q.tel); if (q.email) l.push(\"Email : \" + q.email); if (q.message) l.push(\"Message : \" + q.message);",
+  "    if (poser(cal, props, cle, { id: q._id, date: q.date, heure: q.heure, titre: (st === \"confirme\" ? \"Séance — \" : \"⏳ À confirmer — \") + nom, motif: l.join(\"\\n\") })) n++;",
+  "  });",
+  "  return n;",
+  "}",
+  "function idsPropres(props) {",
+  "  var set = {}, all = props.getProperties();",
+  "  Object.keys(all).forEach(function (k) { if (k.indexOf(\"rdv_\") === 0 || k.indexOf(\"req_\") === 0) set[all[k]] = true; });",
+  "  return set;",
+  "}",
+  "function googleVersSite(cal, props, reg) {",
+  "  var debutP = new Date(); debutP.setHours(0, 0, 0, 0);",
+  "  var finP = new Date(debutP.getTime() + HORIZON_JOURS * 86400000), maintenant = new Date(), propres = idsPropres(props), voulus = {};",
+  "  cal.getEvents(debutP, finP).forEach(function (ev) {",
+  "    if (ev.isAllDayEvent() && !BLOQUER_JOURNEE_ENTIERE) return;",
+  "    if (propres[ev.getId()]) return;",
+  "    if (ev.getTransparency() === CalendarApp.EventTransparency.TRANSPARENT) return;",
+  "    if (ev.getMyStatus() === CalendarApp.GuestStatus.NO) return;",
+  "    var s = ev.getStartTime(), e = ev.getEndTime(), jour = new Date(s.getFullYear(), s.getMonth(), s.getDate()), garde = 0;",
+  "    while (jour < e && garde++ < HORIZON_JOURS + 2) {",
+  "      var dstr = ymd(jour);",
+  "      creneauxDuJour(reg.horaires, dstr, reg.duree).forEach(function (hh) {",
+  "        var cs = debut({ date: dstr, heure: hh }), ce = new Date(cs.getTime() + reg.duree * 60000);",
+  "        if (cs > maintenant && s < ce && e > cs) voulus[dstr + \"_\" + hh] = { date: dstr, heure: hh };",
+  "      });",
+  "      jour = new Date(jour.getFullYear(), jour.getMonth(), jour.getDate() + 1);",
+  "    }",
+  "  });",
+  "  var existants = fsListe(props, \"bookedSlots\"), ids = {}, n = 0;",
+  "  existants.forEach(function (d) { ids[d._id] = true; });",
+  "  Object.keys(voulus).forEach(function (id) { if (!ids[id] && fsBloquer(props, voulus[id].date, voulus[id].heure)) n++; });",
+  "  existants.forEach(function (d) { if (d.clientId === \"gcal\" && !voulus[d._id] && fsDebloquer(props, d._id)) n++; });",
+  "  return n;",
+  "}",
+  "function synchro() {",
+  "  var lock = LockService.getScriptLock();",
+  "  if (!lock.tryLock(25000)) return;",
+  "  var props = PropertiesService.getScriptProperties(), res = { quand: new Date().toISOString(), versGoogle: 0, versSite: 0, erreur: \"\" };",
+  "  try {",
+  "    var cal = CalendarApp.getDefaultCalendar();",
+  "    try { res.versGoogle = siteVersGoogle(cal, props, fsListe(props, \"rdvRequests\")); } catch (e1) { res.erreur = \"site→Google : \" + String(e1.message || e1); }",
+  "    try { res.versSite = googleVersSite(cal, props, fsReglages(props)); } catch (e2) { res.erreur += (res.erreur ? \" | \" : \"\") + \"Google→site : \" + String(e2.message || e2); }",
+  "  } catch (e) { res.erreur = String(e.message || e); }",
+  "  finally { res.erreur = res.erreur.slice(0, 250); props.setProperty(\"last_sync\", JSON.stringify(res)); try { lock.releaseLock(); } catch (x) {} }",
+  "}",
+  "function declencheurInstalle() { return ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === \"synchro\"; }); }",
+  "function installerDeclencheur() {",
+  "  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === \"synchro\") ScriptApp.deleteTrigger(t); });",
+  "  ScriptApp.newTrigger(\"synchro\").timeBased().everyMinutes(5).create();",
+  "  synchro();",
+  "}",
+  "function arreterDeclencheur() { ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === \"synchro\") ScriptApp.deleteTrigger(t); }); }",
+  "",
+  "// ---------- Appels depuis l'application CoachingStudio ----------",
+  "function etat(cal, props) { var l = props.getProperty(\"last_sync\"), d = null; try { d = l ? JSON.parse(l) : null; } catch (x) {} return { ok: true, compte: cal.getName(), auto: { installe: declencheurInstalle(), derniere: d } }; }",
+  "function doPost(e) {",
+  "  var lock = LockService.getScriptLock();",
+  "  try {",
+  "    lock.waitLock(20000);",
+  "    var d = JSON.parse(e.postData.contents), cal = CalendarApp.getDefaultCalendar(), props = PropertiesService.getScriptProperties();",
+  "    if (d.action === \"ping\") return rep(etat(cal, props));",
+  "    if (d.action === \"upsert\") { upsertApp(cal, props, d.rdv); return rep({ ok: true }); }",
+  "    if (d.action === \"delete\") { supprimerApp(cal, props, d.rdv); return rep({ ok: true }); }",
+  "    if (d.action === \"bulk\") {",
+  "      var n = 0, echecs = 0;",
+  "      (d.liste || []).slice(0, 200).forEach(function (r) { try { upsertApp(cal, props, r); n++; } catch (x) { echecs++; } });",
+  "      return rep({ ok: true, nb: n, echecs: echecs });",
+  "    }",
+  "    return rep({ ok: false, erreur: \"action inconnue\" });",
+  "  } catch (err) { return rep({ ok: false, erreur: String(err.message || err) }); }",
+  "  finally { try { lock.releaseLock(); } catch (x) {} }",
+  "}",
+  "function doGet() { return rep(etat(CalendarApp.getDefaultCalendar(), PropertiesService.getScriptProperties())); }"
+].join("\n");
+
+function gcalUrl() { try { return localStorage.getItem("cs4-gcal-url") || ""; } catch (e) { return ""; } }
+
+// Dialogue avec TON script Google Apps Script (qui tourne dans ton compte Google).
+async function gcalAppel(corps) {
+  const url = gcalUrl();
+  if (!url) throw new Error("agenda Google pas encore relié");
+  let r;
+  try { r = await fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(corps) }); }
+  catch (e) { throw new Error("connexion impossible (réseau ou navigateur)"); }
+  let j; try { j = await r.json(); } catch (e) { throw new Error("réponse illisible : vérifie l'adresse du script"); }
+  if (!j.ok) throw new Error(j.erreur || "refusé par le script");
+  return j;
+}
+
+function gcalPayload(a) {
+  return { id: a.id, reqId: a.reqId || "", date: a.date, heure: a.heure || "", titre: "Séance — " + (a.clientName || "client"), motif: a.motif || "" };
+}
+
+// Automatique, jamais bloquant : si Google est indisponible, l'agenda de l'app fonctionne comme avant.
+function gcalSyncRdv(action, a) {
+  if (!gcalUrl() || !a || !a.id || (action === "upsert" && !a.date)) return;
+  gcalAppel({ action: action === "delete" ? "delete" : "upsert", rdv: gcalPayload(a) })
+    .then(() => { GCAL.etat = "ok"; })
+    .catch(e => { GCAL.etat = "erreur"; console.warn("Google Agenda :", e.message); });
+}
+
+async function gcalToutSynchroniser() {
+  const d = new Date(), p = x => String(x).padStart(2, "0");
+  const aujourdhui = d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+  const liste = (state.appointments || []).filter(a => a.date && a.date >= aujourdhui).map(gcalPayload);
+  if (!liste.length) return { ok: true, nb: 0, echecs: 0, vide: true };
+  return gcalAppel({ action: "bulk", liste });
+}
+
+function gcalDerniere() { try { return JSON.parse(localStorage.getItem("cs4-gcal-last") || "null"); } catch (e) { return null; } }
+
+// Panneau Google Agenda : relie ton agenda via un petit script Google, sans Google Cloud ni Vercel.
+function buildGcalCard() {
+  const card = h("div",{style:"border:1px solid #E4DAC0;border-radius:12px;padding:14px 16px;margin-bottom:18px;background:#FFFDF7"});
+  const etat = h("div",{style:"font-size:13.5px;color:#5A5648;margin:6px 0 10px;line-height:1.45"},"Vérification…");
+  const actions = h("div",{style:"display:flex;gap:8px;flex-wrap:wrap"});
+  card.appendChild(h("div",{style:"font-weight:700;color:#2E2A20;font-size:14px"},"📅 Google Agenda"));
+  card.appendChild(etat); card.appendChild(actions);
+
+  function bouton(libelle, fn, primaire) {
+    const b = h("button",{class: primaire ? "btn" : "btn-g"}, libelle);
+    b.addEventListener("click", async () => { b.disabled = true; try { await fn(); } finally { b.disabled = false; } });
+    return b;
+  }
+  function afficher(emoji, texte, couleur, boutons) {
+    etat.textContent = emoji + " " + texte; etat.style.color = couleur;
+    actions.innerHTML = ""; boutons.forEach(x => actions.appendChild(x));
+  }
+
+  const copier = async () => {
+    try { await navigator.clipboard.writeText(GCAL_SCRIPT); alert("✅ Script copié.\n\nDans Google Apps Script : efface tout le code, colle ce script, enregistre (disquette).\n\nPremière fois : Déployer > Nouveau déploiement > Application Web (exécuter en tant que : Moi, accès : Tout le monde) et copie l'adresse en /exec.\n\nMise à jour d'un script déjà déployé : Déployer > Gérer les déploiements > crayon > Version : Nouvelle version > Déployer (l'adresse ne change pas).\n\nPuis, une seule fois : choisis la fonction « installerDeclencheur » dans la barre du haut, touche Exécuter et accepte les autorisations."); }
+    catch (e) { alert("La copie automatique n'est pas possible sur ce navigateur."); }
+  };
+  const lier = async () => {
+    const u = (prompt("Colle ici l'adresse de ton application web Google.\n\nElle commence par https://script.google.com/macros/s/ et finit par /exec") || "").trim();
+    if (!u) return;
+    if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(u)) { alert("Cette adresse ne ressemble pas à celle d'une application web Google Apps Script (elle doit finir par /exec)."); return; }
+    try { localStorage.setItem("cs4-gcal-url", u); } catch (e) { alert("Impossible d'enregistrer l'adresse sur ce navigateur."); return; }
+    await verifier();
+  };
+  const delier = async () => {
+    if (!confirm("Délier Google Agenda de cet appareil ?\n\nLes évènements déjà créés dans ton agenda restent en place.")) return;
+    try { localStorage.removeItem("cs4-gcal-url"); localStorage.removeItem("cs4-gcal-last"); } catch (e) {}
+    await verifier();
+  };
+  async function synchroniser() {
+    afficher("🔄", "Synchronisation en cours…", "#5A5648", []);
+    try {
+      const r = await gcalToutSynchroniser();
+      if (!r.vide) localStorage.setItem("cs4-gcal-last", JSON.stringify({ n: r.nb, echecs: r.echecs || 0, quand: new Date().toLocaleString("fr-FR", { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" }) }));
+    } catch (e) { /* l'état réel s'affiche juste après */ }
+    await verifier();
+  }
+
+  async function verifier() {
+    if (!gcalUrl()) return afficher("⚪", "Pas encore relié. Sans Google Cloud ni Vercel : (1) copie le script, (2) colle-le dans Google Apps Script et déploie, (3) colle ici l'adresse obtenue, (4) lance « installerDeclencheur » une fois dans Google Apps Script pour activer la synchro automatique toutes les 5 minutes.", "#6B6355",
+      [bouton("1. Copier le script", copier), bouton("2. Ouvrir Google Apps Script", async () => { window.open("https://script.new", "_blank"); }), bouton("3. Coller l'adresse", lier, true)]);
+    try {
+      const st = await gcalAppel({ action: "ping" });
+      const last = gcalDerniere(), auto = st.auto, suffixe = last ? " · dernière synchro manuelle : " + last.quand + " (" + last.n + " rendez-vous" + (last.echecs ? ", " + last.echecs + " en échec" : "") + ")" : "";
+      const base = "Connecté" + (st.compte ? " · " + st.compte : "");
+      if (!auto) return afficher("🟠", base + " — ton script est une ancienne version : copie le nouveau, remplace-le dans Google Apps Script, redéploie (nouvelle version), puis lance « installerDeclencheur ».", "#B26A00", [bouton("Copier le nouveau script", copier, true), bouton("Revérifier", verifier), bouton("Délier", delier)]);
+      if (!auto.installe) return afficher("🟠", base + " — la synchro automatique (toutes les 5 min) n'est pas encore activée : dans Google Apps Script, choisis la fonction « installerDeclencheur », touche Exécuter et accepte les autorisations.", "#B26A00", [bouton("Revérifier", verifier, true), bouton("Synchroniser maintenant", synchroniser), bouton("Délier", delier)]);
+      const dr = auto.derniere, min = dr && dr.quand ? Math.round((Date.now() - new Date(dr.quand).getTime()) / 60000) : null;
+      let ligne, emoji = "🟢", couleur = "#2F7D3B";
+      if (!dr) ligne = " — automatique activé, première exécution en attente (moins de 5 min).";
+      else if (dr.erreur) { emoji = "🟠"; couleur = "#B26A00"; ligne = " — automatique activé, mais la dernière exécution a rencontré une erreur : " + dr.erreur; }
+      else if (min > 20) { emoji = "🟠"; couleur = "#B26A00"; ligne = " — automatique activé, mais aucune exécution depuis " + min + " min."; }
+      else ligne = " — automatique toutes les 5 min · dernière exécution il y a " + (min < 1 ? "moins d'une minute" : min + " min") + (dr.versGoogle || dr.versSite ? " (" + (dr.versGoogle || 0) + " vers Google, " + (dr.versSite || 0) + " créneau(x) du site mis à jour)" : "") + ".";
+      return afficher(emoji, base + ligne + suffixe, couleur, [bouton("Synchroniser maintenant", synchroniser, true), bouton("Revérifier", verifier), bouton("Délier", delier)]);
+    } catch (e) {
+      return afficher("🔴", "Le script ne répond pas correctement : " + e.message, "#B0413E", [bouton("Réessayer", verifier), bouton("Changer l'adresse", lier), bouton("Délier", delier)]);
+    }
+  }
+  verifier();
+  return card;
+}
+
 function ajouterRdvAgenda({ clientId, clientName, date, heure, motif, notes, source, reqId }) {
-  state.appointments.push({
+  const nouveauRdv = {
     id: "a" + Date.now() + Math.random().toString(36).slice(2,6),
     clientId: clientId || null,
     clientName: clientName || "Client",
@@ -1789,8 +2751,11 @@ function ajouterRdvAgenda({ clientId, clientName, date, heure, motif, notes, sou
     notes: notes || "",
     source: source || "manuel",
     reqId: reqId || null
-  });
+  };
+  state.appointments.push(nouveauRdv);
   save();
+  gcalSyncRdv("upsert", nouveauRdv);
+  if (nouveauRdv.clientId) synchroniserRdvClient(nouveauRdv.clientId);
   if (date && heure) {
     const slotId = date + "_" + heure;
     firebase.firestore().collection("bookedSlots").doc(slotId).set({ date, heure })
@@ -1802,6 +2767,8 @@ function supprimerRdvAgenda(id) {
   const item = state.appointments.find(a => a.id === id);
   state.appointments = state.appointments.filter(a => a.id !== id);
   save();
+  if (item) gcalSyncRdv("delete", item);
+  if (item && item.clientId) synchroniserRdvClient(item.clientId);
   if (item && item.date && item.heure) {
     const slotId = item.date + "_" + item.heure;
     firebase.firestore().collection("bookedSlots").doc(slotId).delete()
@@ -1929,6 +2896,7 @@ function renderAgendaTab() {
   expAll.addEventListener("click", () => telechargerIcs("agenda-coachingstudio.ics", rdvToIcs((state.appointments || []).filter(a => a.date).map(a => ({ id:a.id, date:a.date, heure:a.heure || "", motif:a.motif || "", titre:"Séance — " + (a.clientName || "client") })))));
   hdr.appendChild(expAll);
   wrap.appendChild(hdr);
+  wrap.appendChild(buildGcalCard());
 
   // --- Sélecteur de vue ---
   const viewRow = h("div",{style:"display:flex;gap:8px;margin-bottom:18px"});
@@ -2584,6 +3552,7 @@ function field(labelText, inputElement) {
 //  NAVIGATION
 // ══════════════════════════════════════════
 const TABS = [
+  {id:"accueil",       icon:"🧭", label:"Accueil (brouillon)", cat:null, pole:null},
   {id:"dashboard",    icon:"⬡", label:"Tableau de bord", cat:null, pole:null},
 
   // ── PÔLE : SUIVI CLIENTS ──
@@ -2605,6 +3574,116 @@ const TABS = [
   {id:"reglages",     icon:"⚙️", label:"Site internet & réglages", pole:"Gestion", cat:"Site internet"},
   {id:"notes",        icon:"◻", label:"Journal de bord",           pole:"Gestion", cat:"Administratif"},
 ];
+
+// ═════════ BROUILLON : page d'accueil organisée comme la maquette « Architecture et organisation générale » ═════════
+const SITE_PUBLIC_URL = "https://julien-coaching.vercel.app/rdv-booking.html";
+
+function accueilStats() {
+  const now = new Date(), p = x => String(x).padStart(2, "0");
+  const ymd = d => d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+  const lundi = new Date(now.getFullYear(), now.getMonth(), now.getDate()); lundi.setDate(lundi.getDate() - ((lundi.getDay() + 6) % 7));
+  const dimanche = new Date(lundi); dimanche.setDate(lundi.getDate() + 6);
+  const rdvs = (state.appointments || []).filter(a => a.date);
+  const cle = a => a.date + "T" + (a.heure || "00:00");
+  const maintenant = ymd(now) + "T" + p(now.getHours()) + ":" + p(now.getMinutes());
+  return {
+    actifs: (state.clients || []).filter(c => c.status === "actif").length,
+    semaine: rdvs.filter(a => a.date >= ymd(lundi) && a.date <= ymd(dimanche)).length,
+    mois: rdvs.filter(a => a.date.startsWith(now.getFullYear() + "-" + p(now.getMonth() + 1))).length,
+    nouvelles: ((typeof RdvRequests !== "undefined" && RdvRequests.items) || []).filter(r => r.status === "nouveau").length,
+    aRegarder: (state.clients || []).filter(c => c.rythme && (c.rythme.etat === "sos" || c.rythme.etat === "blocage")).length,
+    prochains: rdvs.filter(a => cle(a) >= maintenant).sort((a, b) => cle(a) < cle(b) ? -1 : 1).slice(0, 4)
+  };
+}
+
+function renderAccueilTab() {
+  try { if (CoachLink.user) RdvRequests.listen(); } catch (e) {}
+  const st = accueilStats();
+  const wrap = h("div",{style:"max-width:760px"});
+  const OR = "#9C7A2E", BORD = "#E4DAC0", FOND = "#FFFDF7", TXT = "#2E2A20", MUET = "#6B6355";
+  const pastille = (t, c) => h("span",{style:"display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:999px;margin-left:8px;vertical-align:middle;color:#fff;background:" + c}, t);
+  const section = titre => h("div",{style:"font-size:12px;font-weight:700;letter-spacing:.14em;color:" + OR + ";margin:30px 0 12px;padding-bottom:6px;border-bottom:2px solid " + BORD}, titre);
+  const carte = (titre, badge) => { const c = h("div",{style:"border:1px solid " + BORD + ";border-radius:16px;padding:14px 16px;background:" + FOND + ";margin-bottom:12px"});
+    const t = h("div",{style:"font-weight:700;font-size:15px;color:" + TXT + ";margin-bottom:8px"}, titre); if (badge) t.appendChild(pastille("NOUVEAU", OR)); c.appendChild(t); return c; };
+  function ligne(emoji, libelle, cible) {
+    const aVenir = cible === null;
+    const b = h("button",{style:"display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;background:none;padding:9px 4px;border-top:1px solid " + BORD + ";font:inherit;font-size:14px;color:" + (aVenir ? MUET : TXT) + ";opacity:" + (aVenir ? ".65" : "1") + ";cursor:" + (aVenir ? "default" : "pointer")});
+    b.appendChild(h("span",{style:"width:24px;text-align:center"}, emoji));
+    b.appendChild(h("span",{style:"flex:1"}, libelle));
+    if (aVenir) { b.disabled = true; b.appendChild(pastille("À VENIR", "#9A9484")); }
+    else b.appendChild(h("span",{style:"color:" + OR}, "›"));
+    if (!aVenir) b.addEventListener("click", () => { if (typeof cible === "string") setState({ tab: cible, selClientId: null }); else cible(); });
+    return b;
+  }
+  const tuile = (n, lib, cible) => { const t = h("button",{style:"border:1px solid " + BORD + ";border-radius:14px;background:" + FOND + ";padding:12px 8px;text-align:center;font:inherit;cursor:pointer"});
+    t.appendChild(h("div",{style:"font-size:26px;font-weight:700;color:" + OR}, String(n))); t.appendChild(h("div",{style:"font-size:12px;color:" + MUET + ";margin-top:2px"}, lib));
+    t.addEventListener("click", () => setState({ tab: cible, selClientId: null })); return t; };
+
+  // En-tête
+  wrap.appendChild(h("h1",{style:"font-size:30px;color:" + TXT + ";font-weight:600;font-style:italic;margin:0"}, "Architecture et organisation générale"));
+  wrap.appendChild(h("p",{style:"color:" + MUET + ";font-size:14px;margin:6px 0 10px"}, "Un écosystème complet pour votre pratique et vos coachés."));
+  const leg = h("div",{style:"font-size:12.5px;color:" + MUET + ";background:#F3EBD6;border-radius:10px;padding:8px 12px"});
+  leg.appendChild(document.createTextNode("🧪 Brouillon de mise en page, pour test. Chaque ligne ouvre un écran qui existe déjà. Ce qui n'existe pas encore est marqué"));
+  leg.appendChild(pastille("À VENIR", "#9A9484")); wrap.appendChild(leg);
+
+  // 1. Accès & portail
+  wrap.appendChild(section("ACCÈS & PORTAIL"));
+  const site = carte("Site public (clients)");
+  site.appendChild(h("p",{style:"font-size:13px;color:" + MUET + ";margin:0 0 8px"}, "Les clients réservent un créneau en ligne ; leurs demandes arrivent dans « Demandes RDV »."));
+  site.appendChild(ligne("🌐", "Ouvrir la réservation en ligne", () => window.open(SITE_PUBLIC_URL, "_blank")));
+  site.appendChild(ligne("📅", "Demandes de rendez-vous reçues", "rdv"));
+  wrap.appendChild(site);
+  const prat = carte("Espace praticien (connexion)");
+  prat.appendChild(h("p",{style:"font-size:13px;color:" + MUET + ";margin:0 0 8px"}, CoachLink.user ? "🔒 Connecté : " + (CoachLink.user.email || "compte coach") : "Non connecté : la page d'accès sécurisée s'affiche dans « Demandes RDV »."));
+  prat.appendChild(ligne("🔗", "Espace client : lien personnel dans chaque fiche (bouton « 🔗 Portail »)", "clients"));
+  wrap.appendChild(prat);
+
+  // 2. Cœur : tableau de bord
+  wrap.appendChild(section("CŒUR DE L'APPLICATION — TABLEAU DE BORD"));
+  const grille = h("div",{style:"display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px"});
+  grille.appendChild(tuile(st.actifs, "Clients actifs", "clients")); grille.appendChild(tuile(st.semaine, "Séances cette semaine", "agenda"));
+  grille.appendChild(tuile(st.mois, "Séances ce mois", "agenda")); grille.appendChild(tuile(st.nouvelles, "Nouvelles demandes", "rdv"));
+  wrap.appendChild(grille);
+  const proch = carte("Prochains rendez-vous");
+  if (!st.prochains.length) proch.appendChild(h("p",{style:"font-size:13px;color:" + MUET + ";margin:0"}, "Aucun rendez-vous à venir."));
+  st.prochains.forEach(a => proch.appendChild(ligne("🗓️", rdvFrDate(a.date) + (a.heure ? " · " + a.heure : "") + " — " + (a.clientName || "Client"), "agenda")));
+  wrap.appendChild(proch);
+  const notif = carte("Centre de notifications");
+  notif.appendChild(ligne("📅", st.nouvelles + " nouvelle(s) demande(s) de rendez-vous", "rdv"));
+  notif.appendChild(ligne("⚠️", st.aRegarder + " client(s) à regarder en priorité (SOS ou blocage)", "dashboard"));
+  wrap.appendChild(notif);
+  wrap.appendChild(ligne("⬡", "Ouvrir le tableau de bord complet", "dashboard"));
+
+  // 3. Modules de gestion & préparation
+  wrap.appendChild(section("MODULES DE GESTION & PRÉPARATION"));
+  const m1 = carte("1. Agenda & rendez-vous");
+  [["🗓️", "Vue calendrier (liste, semaine, mois)", "agenda"], ["📅", "Demandes RDV", "rdv"], ["🔄", "Synchronisation Google Agenda (panneau dans l'Agenda)", "agenda"], ["🕘", "Mes disponibilités et horaires du site", "reglages"]].forEach(x => m1.appendChild(ligne(x[0], x[1], x[2])));
+  wrap.appendChild(m1);
+  const m2 = carte("2. Gestion des clients");
+  [["◉", "Mes clients : fiches, rendez-vous, parcours", "clients"], ["📋", "INTAKE (questionnaire d'entrée)", "intake"], ["🧭", "La Clairière", "clairiere"]].forEach(x => m2.appendChild(ligne(x[0], x[1], x[2])));
+  wrap.appendChild(m2);
+  const m3 = carte("3. Services & tarifs");
+  m3.appendChild(ligne("💰", "Finances", "finances")); m3.appendChild(ligne("📊", "Statistiques", "statistiques")); m3.appendChild(ligne("✍️", "Édition des prestations et des tarifs", null));
+  wrap.appendChild(m3);
+  const m4 = carte("4. Préparation des séances", true);
+  [["▣", "Bibliothèque coach (fiches et techniques)", "bibliotheque"], ["📖", "Déroulés de séance", "deroules"], ["🛠️", "Outils Coaching (Ikigaï, Arbre de vie)", "outils"], ["📚", "Exercices prêts à envoyer : dans le Parcours de la fiche client", "clients"], ["◇", "Mes ressources", "ressources"], ["🌱", "Reconversion / Burnout", "reconversion"]].forEach(x => m4.appendChild(ligne(x[0], x[1], x[2])));
+  wrap.appendChild(m4);
+  const m5 = carte("5. Déroulement de séance", true);
+  [["🧠", "EN LIVE : séance guidée", "live"], ["📋", "INTAKE", "intake"], ["◻", "Journal de bord (notes)", "notes"]].forEach(x => m5.appendChild(ligne(x[0], x[1], x[2])));
+  m5.appendChild(ligne("⏱️", "Chronomètre et rappel de temps", null));
+  wrap.appendChild(m5);
+  const com = carte("Communication avec les coachés", true);
+  [["🔗", "Espace client : lien personnel par fiche", "clients"], ["💬", "Échanges avec le client (dans sa fiche, onglet Parcours)", "clients"], ["📤", "Exercices envoyés et réponses reçues", "clients"], ["🎛️", "Rythme du client : Play, Pause, Blocage, SOS", "clients"]].forEach(x => com.appendChild(ligne(x[0], x[1], x[2])));
+  com.appendChild(ligne("⏰", "Rappels automatiques par SMS et email", null));
+  wrap.appendChild(com);
+
+  // 4. Configuration & paramètres
+  wrap.appendChild(section("CONFIGURATION & PARAMÈTRES"));
+  const cf = carte("Réglages");
+  [["💬", "Message d'information du site", "reglages"], ["🏖️", "Congés & fermetures", "reglages"], ["⚙️", "Paramètres généraux (site internet & réglages)", "reglages"]].forEach(x => cf.appendChild(ligne(x[0], x[1], x[2])));
+  wrap.appendChild(cf);
+  return wrap;
+}
 
 function renderNav() {
   const nav = document.getElementById("nav");
@@ -2746,6 +3825,7 @@ function renderDashboard() {
     statsRow, midRow, actions
   );
   wrap.insertBefore(buildAlertesRythmes(), wrap.children[1] || null);
+  wrap.appendChild(buildDiagnosticCard());
   return wrap;
 }
 
@@ -3389,6 +4469,20 @@ function showPortalLink(c, wrap) {
       navigator.clipboard.writeText(url).then(() => { copyBtn.textContent = "✓ Copié"; setTimeout(()=>{copyBtn.textContent="Copier le lien";}, 1500); });
     });
     box.appendChild(copyBtn);
+    // Interrupteurs : Ikigaï et Arbre de vie n'apparaissent chez le client que si tu les actives ici.
+    const sec = h("div",{style:"margin-top:12px;padding-top:10px;border-top:1px dashed #E4DAC0"});
+    sec.appendChild(h("div",{style:"font-size:12px;color:#6B6355;margin-bottom:6px"}, "Outils visibles dans l'espace de " + c.name + " (masqués tant que tu ne les actives pas) :"));
+    [["ikigai", "🎯 Ikigaï"], ["arbre", "🌳 Arbre de vie"]].forEach(([k, lib]) => {
+      const lab = h("label",{style:"display:flex;align-items:center;gap:8px;font-size:13.5px;margin:4px 0;cursor:pointer"});
+      const cb = h("input",{type:"checkbox"});
+      cb.checked = !!(c.portailOutils && c.portailOutils[k]);
+      cb.addEventListener("change", () => {
+        c.portailOutils = Object.assign({}, c.portailOutils, { [k]: cb.checked });
+        ClientsManager.saveClient(c.id, { portailOutils: c.portailOutils });
+      });
+      lab.appendChild(cb); lab.appendChild(document.createTextNode(lib)); sec.appendChild(lab);
+    });
+    box.appendChild(sec);
     wrap.appendChild(box);
   }
 
@@ -3499,6 +4593,7 @@ function buildFiche(c) {
     ));
     wrap.appendChild(g);
     wrap.appendChild(buildRythmeSection(c));
+    wrap.appendChild(buildRdvSection(c));
     if (c.forfaitNom && c.forfaitTotal) {
       const pct = Math.min(100, Math.round((c.forfaitUtilisees||0) / c.forfaitTotal * 100));
       const forfaitBox = h("div",{style:"margin-top:18px;background:#FFFFFF;padding:14px 16px;border-radius:8px;border:1px solid #E4DAC0"});
@@ -3686,6 +4781,7 @@ function buildEchangesThread(c, author) {
 function buildParcours(c) {
   const wrap = h("div",{});
   if (!c.parcours) c.parcours = parcoursDefaut();
+  wrap.appendChild(buildPlantBlock(c));
 
   wrap.appendChild(lbl("ÉTAPES DE L'ACCOMPAGNEMENT"));
   const phasesBox = h("div",{style:"margin-bottom:20px"});
@@ -3801,11 +4897,16 @@ function buildParcours(c) {
       });
       head.appendChild(delBtn);
       row.appendChild(head);
+      if (ex.champs && ex.champs.length) row.appendChild(buildReponsesExercice(c, ex));
       exBox.appendChild(row);
     });
   }
   renderExercices();
   wrap.appendChild(exBox);
+
+  wrap.appendChild(lbl("📚 EXERCICES PRÊTS À ENVOYER"));
+  wrap.appendChild(h("p",{style:"color:#6B6355;font-size:12.5px;margin:4px 0 10px"},"Touche « Envoyer » : l'exercice apparaît dans l'espace de " + c.name + ", qui répond directement aux questions. Tu retrouves ses réponses dans la liste ci-dessus."));
+  wrap.appendChild(buildCatalogueExercices(c, renderExercices));
 
   const addExTitre = inputEl({value:"",placeholder:"Titre de l'exercice…"});
   const addExConsigne = textareaEl({value:"",placeholder:"Consigne (facultatif)…",height:"50px"});
@@ -4563,6 +5664,7 @@ function renderNow() {
   else if (state.tab==="live") content = renderLiveTab();
   else if (state.tab==="agenda") content = renderAgendaTab();
   else if (state.tab==="finances") content = renderFinancesTab();
+  else if (state.tab==="accueil") content = renderAccueilTab();
   else if (state.tab==="statistiques") content = renderStatistiquesTab();
   else if (state.tab==="clairiere") content = renderClairiereTab();
   else if (state.tab==="reconversion") content = renderReconversionTab();
