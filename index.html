@@ -3674,7 +3674,7 @@ function renderAccueilTab() {
   m5.appendChild(ligne("⏱️", "Chronomètre et rappel de temps", null));
   wrap.appendChild(m5);
   const com = carte("Communication avec les coachés", true);
-  [["🔗", "Espace client : lien personnel par fiche", "clients"], ["💬", "Échanges avec le client (dans sa fiche, onglet Parcours)", "clients"], ["📤", "Exercices envoyés et réponses reçues", "clients"], ["🎛️", "Rythme du client : Play, Pause, Blocage, SOS", "clients"]].forEach(x => com.appendChild(ligne(x[0], x[1], x[2])));
+  [["🔗", "Espace client : lien personnel par fiche", "clients"], ["💬", "Échanges avec le client (dans sa fiche, onglet Parcours)", "clients"], ["📤", "Exercices envoyés et réponses reçues", "clients"], ["🎛️", "Rythme du client : Play, Pause, Blocage, SOS", "clients"], ["💌", "Relances en un clic par WhatsApp, SMS ou email (dans la fiche)", "clients"]].forEach(x => com.appendChild(ligne(x[0], x[1], x[2])));
   com.appendChild(ligne("⏰", "Rappels automatiques par SMS et email", null));
   wrap.appendChild(com);
 
@@ -3809,6 +3809,90 @@ function renderExercicesTab() {
     row.appendChild(det); wrap.appendChild(row);
   });
   return wrap;
+}
+
+// ═════════ BROUILLON : relances en un clic + export du dossier client (RGPD) ═════════
+// Numéro au format international sans « + » (exigé par WhatsApp). Renvoie null si le numéro est inutilisable.
+function numeroInternational(tel) {
+  let t = String(tel || "").replace(/\(0\)/g, "").replace(/[\s.\-()]/g, "");   // « +33 (0)6… » : le 0 entre parenthèses se retire
+  if (!/^\+?\d{8,15}$|^00\d{8,15}$/.test(t)) return null;
+  if (t.startsWith("+")) return t.slice(1);
+  if (t.startsWith("00")) return t.slice(2);
+  if (/^0\d{9}$/.test(t)) return "33" + t.slice(1);
+  return t;
+}
+
+const RELANCES = [
+  { id: "rdv", icone: "🗓️", titre: "Rappel de rendez-vous", sujet: "Rappel de notre prochaine séance", texte: "Bonjour {prenom}, petit rappel : notre prochaine séance a lieu {quand}. Dis-moi si tu as un empêchement. À très vite !" },
+  { id: "exercice", icone: "📝", titre: "Exercice pas encore fait", sujet: "Ton exercice", texte: "Bonjour {prenom}, as-tu pu commencer {exercice} ? Même quelques lignes suffisent, ça m'aide à préparer notre prochaine séance. Aucune pression 🌱" },
+  { id: "encouragement", icone: "💪", titre: "Encouragement", sujet: "Un petit mot pour toi", texte: "Bonjour {prenom}, je pense à toi. Ce que tu mets en place demande de l'énergie, et chaque petit pas compte. Je suis là si tu veux en parler." },
+  { id: "blocage", icone: "🧩", titre: "Après un blocage signalé", sujet: "Ton blocage", texte: "Bonjour {prenom}, j'ai vu que tu avais signalé un blocage. Merci de me l'avoir dit. Veux-tu qu'on en parle avant la séance ? Dis-moi quand ça t'arrange." },
+  { id: "recadrage", icone: "🤝", titre: "Recadrage bienveillant", sujet: "On fait le point ?", texte: "Bonjour {prenom}, j'ai remarqué que nos derniers échanges ont été difficiles à tenir. Rien de grave : peux-tu me dire ce qui t'a freiné·e ? On ajustera ensemble, sans jugement." },
+  { id: "silence", icone: "🌙", titre: "Reprise après un silence", sujet: "Comment vas-tu ?", texte: "Bonjour {prenom}, ça fait un moment que je n'ai pas eu de tes nouvelles. Comment vas-tu ? Quand tu te sens prêt·e, on reprend à ton rythme." },
+  { id: "felicitations", icone: "🌟", titre: "Félicitations", sujet: "Bravo !", texte: "Bravo {prenom} ! J'ai vu ton avancée et ta régularité. Continue comme ça, tu peux être fier·e de toi." }
+];
+
+function relanceTexte(c, modele) {
+  const prenom = String(c.name || "").trim().split(/\s+/)[0] || "";
+  const encours = (c.exercices || []).filter(e => !e.done)[0];
+  const quand = c.nextSession ? "le " + rdvFrDateLong(c.nextSession, c.nextSessionHeure) : "prochainement (je te confirme la date)";
+  const exercice = encours && encours.titre ? "l'exercice « " + String(encours.titre).replace(/^[^\p{L}\p{N}]+/u, "") + " »" : "l'exercice de la semaine";
+  return modele.texte.replace("{prenom}", prenom || "").replace("{quand}", quand).replace("{exercice}", exercice).replace(/^Bonjour ,/, "Bonjour,");
+}
+
+function buildRelancesSection(c) {
+  const box = h("details",{style:"margin-top:22px"});
+  box.appendChild(h("summary",{style:"cursor:pointer;color:#6B6355;font-size:13px;letter-spacing:.08em"}, "💌 RELANCES EN UN CLIC"));
+  box.appendChild(h("p",{style:"color:#6B6355;font-size:12.5px;margin:8px 0"}, "Le message s'ouvre dans ton application WhatsApp, SMS ou email, prérempli : tu peux le modifier avant d'envoyer. Rien ne part tout seul."));
+  const num = numeroInternational(c.tel), mail = String(c.email || "").trim();
+  if (!num) box.appendChild(h("p",{style:"color:#B26A00;font-size:12.5px;margin:0 0 8px"}, "Aucun numéro utilisable dans la fiche : WhatsApp et SMS sont désactivés."));
+  if (!mail) box.appendChild(h("p",{style:"color:#B26A00;font-size:12.5px;margin:0 0 8px"}, "Aucun email dans la fiche : l'envoi par email est désactivé."));
+  RELANCES.forEach(m => {
+    const texte = relanceTexte(c, m);
+    const carte = h("div",{style:"border:1px solid #E4DAC0;border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#FFFDF7"});
+    carte.appendChild(h("div",{style:"font-weight:600;font-size:13.5px;color:#2E2A20"}, m.icone + " " + m.titre));
+    carte.appendChild(h("div",{style:"font-size:12.5px;color:#5A5648;margin:4px 0 8px;white-space:pre-wrap"}, texte));
+    const barre = h("div",{style:"display:flex;gap:6px;flex-wrap:wrap"});
+    const lien = (lib, href) => href ? h("a",{class:"btn-sm",href,target:"_blank",rel:"noopener",style:"text-decoration:none"}, lib) : h("span",{class:"btn-sm",style:"opacity:.4;cursor:not-allowed"}, lib);
+    barre.appendChild(lien("💬 WhatsApp", num ? "https://wa.me/" + num + "?text=" + encodeURIComponent(texte) : null));
+    barre.appendChild(lien("✉️ SMS", num ? "sms:+" + num + "?&body=" + encodeURIComponent(texte) : null));
+    barre.appendChild(lien("📧 Email", mail ? "mailto:" + encodeURIComponent(mail) + "?subject=" + encodeURIComponent(m.sujet) + "&body=" + encodeURIComponent(texte) : null));
+    const cp = h("button",{class:"btn-sm"}, "📋 Copier");
+    cp.addEventListener("click", async () => { try { await navigator.clipboard.writeText(texte); cp.textContent = "✓ Copié"; } catch (e) { cp.textContent = "Copie impossible"; } });
+    barre.appendChild(cp); carte.appendChild(barre); box.appendChild(carte);
+  });
+  return box;
+}
+
+// Export complet du dossier d'un client (droit d'accès RGPD) : un seul fichier lisible.
+async function exporterDossierClient(c) {
+  const avertissements = [], db = firebase.firestore();
+  const lire = async (nom, f) => { try { return await f(); } catch (e) { avertissements.push(nom + " : " + (e && e.message ? e.message : "lecture impossible")); return null; } };
+  const contrats = await lire("contrats", async () => { const q = await db.collection("clients").doc(c.id).collection("contracts").get(); const l = []; q.forEach(d => l.push(Object.assign({ id: d.id }, d.data()))); return l; });
+  const outils = await lire("outils", async () => { const d = await db.collection("outils").doc(c.id + "_current").get(); return d.exists ? d.data() : null; });
+  const dossier = { exporteLe: new Date().toISOString(), format: "CoachingStudio — dossier client v1", client: c, rendezVous: rdvListeClient(c.id), seancesEnLive: ((state.sessions || {})[c.id] || []), contrats: contrats || [], outils: outils || null, avertissements };
+  const nom = String(c.name || "client").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() || "client";
+  const fichier = "dossier-" + nom + "-" + new Date().toISOString().slice(0, 10) + ".json";
+  const contenu = JSON.stringify(dossier, null, 2);
+  const url = URL.createObjectURL(new Blob([contenu], { type: "application/json;charset=utf-8" }));
+  const a = document.createElement("a"); a.href = url; a.download = fichier; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return { fichier, octets: contenu.length, avertissements };
+}
+
+function buildDonneesSection(c) {
+  const box = h("div",{style:"margin-top:22px"});
+  box.appendChild(h("div",{style:"color:#6B6355;font-size:13px;letter-spacing:.08em;margin-bottom:6px"}, "DONNÉES PERSONNELLES (RGPD)"));
+  box.appendChild(h("p",{style:"color:#6B6355;font-size:12.5px;margin:0 0 8px"}, "Le client peut te demander une copie de ses données. Ce bouton produit un fichier unique : fiche, rendez-vous, séances EN LIVE, contrats et outils. La suppression définitive n'est pas encore disponible dans cette version."));
+  const b = h("button",{class:"btn-g"}, "📦 Exporter le dossier de " + (c.name || "ce client"));
+  b.addEventListener("click", async () => {
+    b.disabled = true;
+    try { const r = await exporterDossierClient(c); alert("✅ Dossier exporté : " + r.fichier + " (" + Math.max(1, Math.round(r.octets / 1024)) + " Ko)" + (r.avertissements.length ? "\n\n⚠️ Parties non incluses :\n- " + r.avertissements.join("\n- ") : "")); }
+    catch (e) { alert("Export impossible : " + e.message); }
+    finally { b.disabled = false; }
+  });
+  box.appendChild(b);
+  return box;
 }
 
 function renderNav() {
@@ -4722,6 +4806,8 @@ function buildFiche(c) {
     wrap.appendChild(buildRythmeSection(c));
     wrap.appendChild(buildCheckinSection(c));
     wrap.appendChild(buildRdvSection(c));
+    wrap.appendChild(buildRelancesSection(c));
+    wrap.appendChild(buildDonneesSection(c));
     if (c.forfaitNom && c.forfaitTotal) {
       const pct = Math.min(100, Math.round((c.forfaitUtilisees||0) / c.forfaitTotal * 100));
       const forfaitBox = h("div",{style:"margin-top:18px;background:#FFFFFF;padding:14px 16px;border-radius:8px;border:1px solid #E4DAC0"});
