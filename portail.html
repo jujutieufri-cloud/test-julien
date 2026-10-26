@@ -532,6 +532,34 @@ function rdvPortailHtml(client) {
   return `<div class="card" id="rdvZone"><div style="font-weight:700">📅 Mes rendez-vous</div>${bloc("À venir", avenir, true)}${bloc("Passés", passes, false)}</div>`;
 }
 
+function checkinInterieur(client, envoye) {
+  const k = (client.checkins || []).filter(x => x && x.date);
+  const dernier = k[k.length - 1];
+  const info = dernier ? `Dernier check-in : le ${new Date(dernier.date).toLocaleDateString("fr-FR", { day: "numeric", month: "long" })} (énergie ${dernier.energie}/5, charge mentale ${dernier.charge}/5)` : "Pas encore de check-in.";
+  const bas = envoye && dernier && (dernier.energie <= 2 || dernier.charge >= 4) ? `<p style="margin:10px 0 0;font-size:13.5px">Merci de l'avoir dit. Si c'est lourd en ce moment, tu peux écrire à ton coach dans « Échanger avec mon coach » ou utiliser « Mon rythme » plus haut.</p>` : (envoye ? `<p style="margin:10px 0 0;font-size:13.5px">✅ Merci, c'est envoyé.</p>` : "");
+  return `<div style="font-weight:700">⚡ Mon énergie du jour</div>
+    <p class="muted" style="margin-top:2px">Deux curseurs, en quelques secondes. Ça aide ton coach à adapter la séance.</p>
+    <label style="font-size:13.5px">Mon énergie : <b id="ck_e_val">3</b>/5 <span class="muted">(1 = épuisé·e, 5 = en pleine forme)</span></label>
+    <input type="range" id="ck_e" min="1" max="5" value="3" style="width:100%" oninput="document.getElementById('ck_e_val').textContent=this.value">
+    <label style="font-size:13.5px;display:block;margin-top:8px">Ma charge mentale : <b id="ck_c_val">3</b>/5 <span class="muted">(1 = légère, 5 = très lourde)</span></label>
+    <input type="range" id="ck_c" min="1" max="5" value="3" style="width:100%" oninput="document.getElementById('ck_c_val').textContent=this.value">
+    <textarea id="ck_note" rows="2" maxlength="300" placeholder="Un mot si tu veux (facultatif)" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit;margin-top:8px"></textarea>
+    <button type="button" id="ck_btn" onclick="envoyerCheckin()" style="margin-top:8px;border:none;border-radius:10px;padding:10px 14px;background:var(--accent);color:#fff;font:inherit;font-weight:600;cursor:pointer">Envoyer mon check-in</button>
+    <div class="muted" id="ck_msg" style="font-size:12.5px;margin-top:6px">${esc(info)}</div>${bas}`;
+}
+function checkinHtml(client) { return `<div class="card" id="checkinZone">${checkinInterieur(client, false)}</div>`; }
+function envoyerCheckin() {
+  const btn = document.getElementById("ck_btn"); if (!btn || btn.disabled) return;
+  const energie = Math.min(5, Math.max(1, parseInt(document.getElementById("ck_e").value, 10) || 3));
+  const charge = Math.min(5, Math.max(1, parseInt(document.getElementById("ck_c").value, 10) || 3));
+  const note = (document.getElementById("ck_note").value || "").trim().slice(0, 300);
+  const entree = { date: new Date().toISOString(), energie, charge }; if (note) entree.note = note;
+  btn.disabled = true; btn.textContent = "Envoi…";
+  firebase.firestore().collection("clients").doc(PORTAL.clientId).update({ checkins: firebase.firestore.FieldValue.arrayUnion(entree) })
+    .then(() => { PORTAL.client.checkins = (PORTAL.client.checkins || []).concat([entree]); document.getElementById("checkinZone").innerHTML = checkinInterieur(PORTAL.client, true); })
+    .catch(e => { console.error("check-in:", e); btn.disabled = false; btn.textContent = "Envoyer mon check-in"; document.getElementById("ck_msg").textContent = "⚠️ Non envoyé, vérifie ta connexion et réessaie."; });
+}
+
 function renderContractButton(){
   const box = document.getElementById("contractZone");
   firebase.firestore().collection("clients").doc(PORTAL.clientId).collection("contracts")
@@ -578,6 +606,7 @@ function renderPortal(){
     <p class="muted" style="margin-bottom:16px">Ton espace personnel de coaching</p>
     ${next ? `<div class="reminder">🗓️ Ta prochaine séance : <b>${esc(next)}</b>${PORTAL.client.nextSessionHeure ? " à " + esc(PORTAL.client.nextSessionHeure) : ""}<br><a href="${agendaLien(PORTAL.client)}" target="_blank" rel="noopener" style="font-size:13px;color:var(--accent);font-weight:600;text-decoration:none">📅 Ajouter à mon agenda</a></div>` : ""}
     <div class="card" id="rythmeZone">${rythmesHtml(PORTAL.client)}</div>
+    ${checkinHtml(PORTAL.client)}
     ${planteHtml(PORTAL.client)}
     ${rdvPortailHtml(PORTAL.client)}
     <div id="contractZone"></div>

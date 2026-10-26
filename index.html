@@ -3562,6 +3562,7 @@ const TABS = [
   {id:"clairiere",    icon:"🧭", label:"La Clairière",             pole:"Suivi clients", cat:"Clients"},
   {id:"deroules",     icon:"📖", label:"Déroulés de séance",       pole:"Suivi clients", cat:"Préparer une séance"},
   {id:"bibliotheque", icon:"▣", label:"Bibliothèque coach",        pole:"Suivi clients", cat:"Préparer une séance"},
+  {id:"exercices",    icon:"📚", label:"Attribuer des exercices",   pole:"Suivi clients", cat:"Préparer une séance"},
   {id:"reconversion", icon:"🌱", label:"Reconversion / Burnout",   pole:"Suivi clients", cat:"Préparer une séance"},
   {id:"ressources",   icon:"◇", label:"Mes ressources",            pole:"Suivi clients", cat:"Préparer une séance"},
 
@@ -3666,7 +3667,7 @@ function renderAccueilTab() {
   m3.appendChild(ligne("💰", "Finances", "finances")); m3.appendChild(ligne("📊", "Statistiques", "statistiques")); m3.appendChild(ligne("✍️", "Édition des prestations et des tarifs", null));
   wrap.appendChild(m3);
   const m4 = carte("4. Préparation des séances", true);
-  [["▣", "Bibliothèque coach (fiches et techniques)", "bibliotheque"], ["📖", "Déroulés de séance", "deroules"], ["🛠️", "Outils Coaching (Ikigaï, Arbre de vie)", "outils"], ["📚", "Exercices prêts à envoyer : dans le Parcours de la fiche client", "clients"], ["◇", "Mes ressources", "ressources"], ["🌱", "Reconversion / Burnout", "reconversion"]].forEach(x => m4.appendChild(ligne(x[0], x[1], x[2])));
+  [["▣", "Bibliothèque coach (fiches et techniques)", "bibliotheque"], ["📖", "Déroulés de séance", "deroules"], ["🛠️", "Outils Coaching (Ikigaï, Arbre de vie)", "outils"], ["📚", "Attribuer des exercices à plusieurs clients (cases à cocher)", "exercices"], ["🕒", "Fil du temps de chaque client (dans la fiche)", "clients"], ["◇", "Mes ressources", "ressources"], ["🌱", "Reconversion / Burnout", "reconversion"]].forEach(x => m4.appendChild(ligne(x[0], x[1], x[2])));
   wrap.appendChild(m4);
   const m5 = carte("5. Déroulement de séance", true);
   [["🧠", "EN LIVE : séance guidée", "live"], ["📋", "INTAKE", "intake"], ["◻", "Journal de bord (notes)", "notes"]].forEach(x => m5.appendChild(ligne(x[0], x[1], x[2])));
@@ -3682,6 +3683,131 @@ function renderAccueilTab() {
   const cf = carte("Réglages");
   [["💬", "Message d'information du site", "reglages"], ["🏖️", "Congés & fermetures", "reglages"], ["⚙️", "Paramètres généraux (site internet & réglages)", "reglages"]].forEach(x => cf.appendChild(ligne(x[0], x[1], x[2])));
   wrap.appendChild(cf);
+  return wrap;
+}
+
+// ═════════ BROUILLON : fil du temps (vue 360°), check-in énergie, attribution à plusieurs clients ═════════
+function timelineEvenements(c) {
+  const ev = [], maintenant = Date.now();
+  const ajout = (quand, cat, icone, titre, detail, cible, sansHeure) => { if (quand && !isNaN(new Date(quand))) ev.push({ quand: String(quand), cat, icone, titre, detail: detail || "", cible: cible || "fiche", sansHeure: !!sansHeure }); };
+  rdvDuClient(c).forEach(r => { const q = r.date + "T" + (r.heure || "00:00"); ajout(q, "rdv", "🗓️", "Rendez-vous" + (new Date(q) > maintenant ? " (à venir)" : ""), r.motif, "fiche", !r.heure); });
+  ((state.sessions || {})[c.id] || []).forEach(x => ajout(x.date, "seance", "🧠", "Séance EN LIVE" + (x.optionName ? " : " + x.optionName : ""), x.notes ? String(x.notes).replace(/<[^>]*>/g, "").slice(0, 160) : "", "notes-c"));
+  (c.exercices || []).forEach(x => ajout(x.envoyeLe, "exercice", "📤", "Exercice envoyé : " + x.titre, x.done ? "Terminé par le client ✅" : "", "parcours"));
+  const rep = c.reponsesExercices || {};
+  Object.keys(rep).forEach(id => { if (rep[id] && rep[id]._maj) { const x = (c.exercices || []).find(e => e.id === id); ajout(rep[id]._maj, "exercice", "✍️", "Réponses reçues" + (x ? " : " + x.titre : ""), "", "parcours"); } });
+  (c.rythmeHistorique || []).forEach(r => { const i = rythmeInfo(r.etat); if (i) ajout(r.date, "etat", i.emoji, "Rythme : " + i.court + " — " + i.label, "", "fiche"); });
+  (c.checkins || []).forEach(k => ajout(k.date, "etat", "⚡", "Check-in : énergie " + k.energie + "/5 · charge mentale " + k.charge + "/5", k.note, "fiche"));
+  (c.echanges || []).forEach(m => ajout(m.createdAt, "message", m.author === "client" ? "💬" : "🗨️", m.author === "client" ? "Message du client" : "Message du coach", String(m.text || "").slice(0, 160), "parcours"));
+  return ev.sort((a, b) => new Date(b.quand) - new Date(a.quand));
+}
+
+function buildTimelineClient(c) {
+  const wrap = h("div",{});
+  const tous = timelineEvenements(c);
+  const filtres = [["tout", "Tout"], ["rdv", "Rendez-vous"], ["exercice", "Exercices"], ["message", "Messages"], ["etat", "Rythme & énergie"], ["seance", "Séances"]];
+  let actif = "tout", limite = 30;
+  wrap.appendChild(h("p",{style:"color:#6B6355;font-size:13px;margin:0 0 10px"}, "Tout l'historique de " + c.name + ", du plus récent au plus ancien. Touche un élément pour rouvrir l'écran concerné."));
+  const barre = h("div",{style:"display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"}), zone = h("div",{});
+  function dessiner() {
+    barre.innerHTML = "";
+    filtres.forEach(([id, lib]) => {
+      const n = id === "tout" ? tous.length : tous.filter(e => e.cat === id).length;
+      const b = h("button",{class:"btn-sm",style: id === actif ? "background:#9C7A2E;color:#fff" : ""}, lib + " (" + n + ")");
+      b.addEventListener("click", () => { actif = id; limite = 30; dessiner(); }); barre.appendChild(b);
+    });
+    zone.innerHTML = "";
+    const liste = tous.filter(e => actif === "tout" || e.cat === actif);
+    if (!liste.length) { zone.appendChild(h("p",{style:"color:#6B6355;font-size:13px"}, "Rien à afficher pour le moment.")); return; }
+    let jour = "";
+    liste.slice(0, limite).forEach(e => {
+      const d = new Date(e.quand), j = d.toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long", year:"numeric" });
+      if (j !== jour) { jour = j; zone.appendChild(h("div",{style:"font-size:12px;font-weight:700;letter-spacing:.06em;color:#9C7A2E;margin:14px 0 6px;text-transform:uppercase"}, j)); }
+      const ligne = h("button",{style:"display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;border:1px solid #E4DAC0;border-radius:10px;background:#FFFDF7;padding:8px 10px;margin-bottom:6px;font:inherit;cursor:pointer"});
+      ligne.appendChild(h("span",{style:"font-size:18px;width:24px;text-align:center"}, e.icone));
+      const t = h("span",{style:"flex:1"});
+      t.appendChild(h("div",{style:"font-size:13.5px;font-weight:600;color:#2E2A20"}, e.titre));
+      if (e.detail) t.appendChild(h("div",{style:"font-size:12.5px;color:#6B6355;margin-top:2px;white-space:pre-wrap"}, e.detail));
+      ligne.appendChild(t);
+      if (!e.sansHeure) ligne.appendChild(h("span",{style:"font-size:12px;color:#6B6355"}, d.toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" })));
+      ligne.addEventListener("click", () => setState({ tab: "clients", selClientId: c.id, subTab: e.cible }));
+      zone.appendChild(ligne);
+    });
+    if (liste.length > limite) { const plus = h("button",{class:"btn-g"}, "Voir plus (" + (liste.length - limite) + ")"); plus.addEventListener("click", () => { limite += 30; dessiner(); }); zone.appendChild(plus); }
+  }
+  dessiner(); wrap.appendChild(barre); wrap.appendChild(zone);
+  return wrap;
+}
+
+// Check-in énergie / charge mentale envoyé par le client depuis son espace (lecture seule pour le coach).
+function buildCheckinSection(c) {
+  const box = h("div",{style:"margin-top:22px"});
+  box.appendChild(h("div",{style:"color:#6B6355;font-size:13px;letter-spacing:.08em;margin-bottom:8px"}, "ÉNERGIE & CHARGE MENTALE"));
+  const k = (c.checkins || []).filter(x => x && x.date).sort((a, b) => new Date(a.date) - new Date(b.date));
+  if (!k.length) { box.appendChild(h("p",{style:"color:#6B6355;font-size:13px"}, "Le client n'a pas encore fait de check-in.")); return box; }
+  const dernier = k[k.length - 1], quand = new Date(dernier.date);
+  box.appendChild(h("div",{style:"font-size:14px;font-weight:600;color:#2E2A20"}, "⚡ Énergie " + dernier.energie + "/5 · 🧠 Charge mentale " + dernier.charge + "/5"));
+  box.appendChild(h("div",{style:"font-size:12px;color:#6B6355;margin-top:2px"}, "Le " + quand.toLocaleDateString("fr-FR", { day:"numeric", month:"short" }) + " à " + quand.toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" })));
+  if (dernier.note) box.appendChild(h("div",{style:"font-size:13px;color:#2E2A20;margin-top:4px;white-space:pre-wrap"}, "« " + dernier.note + " »"));
+  if (dernier.energie <= 2 || dernier.charge >= 4) box.appendChild(h("div",{style:"font-size:13px;color:#B26A00;margin-top:6px"}, "⚠️ Énergie basse ou charge élevée : pense à adapter la séance."));
+  const barres = n => "■".repeat(n) + "□".repeat(5 - n);
+  k.slice(-7).reverse().forEach(x => box.appendChild(h("div",{style:"font-size:12px;color:#6B6355;font-family:monospace;margin-top:3px"}, new Date(x.date).toLocaleDateString("fr-FR", { day:"2-digit", month:"2-digit" }) + "  énergie " + barres(x.energie) + "  charge " + barres(x.charge))));
+  return box;
+}
+
+// Attribution d'un exercice à plusieurs clients à la fois (cases à cocher).
+function ouvrirAttribution(cat, apres) {
+  const actifs = (state.clients || []).filter(c => c.status === "actif");
+  const fond = h("div",{style:"position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px"});
+  const boite = h("div",{style:"background:#FFFDF7;border-radius:16px;max-width:460px;width:100%;max-height:85vh;overflow:auto;padding:18px"});
+  boite.appendChild(h("div",{style:"font-weight:700;font-size:16px;color:#2E2A20"}, "Attribuer à…"));
+  boite.appendChild(h("div",{style:"font-size:13px;color:#6B6355;margin:4px 0 12px"}, cat.titre));
+  if (!actifs.length) boite.appendChild(h("p",{style:"font-size:13px;color:#6B6355"}, "Aucun client actif pour le moment."));
+  const coches = [];
+  actifs.forEach(c => {
+    const enCours = (c.exercices || []).some(e => e.catalogueId === cat.id && !e.done);
+    const lab = h("label",{style:"display:flex;align-items:center;gap:10px;padding:9px 4px;border-top:1px solid #E4DAC0;font-size:14px;" + (enCours ? "opacity:.55" : "cursor:pointer")});
+    const cb = h("input",{type:"checkbox"}); cb.disabled = enCours;
+    lab.appendChild(cb); lab.appendChild(h("span",{style:"flex:1"}, c.name));
+    if (enCours) lab.appendChild(h("span",{style:"font-size:11.5px;color:#6B6355"}, "déjà en cours"));
+    boite.appendChild(lab); coches.push({ c, cb });
+  });
+  const nb = () => coches.filter(x => x.cb.checked).length;
+  const envoyer = h("button",{class:"btn"}, "📤 Envoyer à 0 client(s)");
+  const maj = () => { envoyer.textContent = "📤 Envoyer à " + nb() + " client(s)"; envoyer.disabled = nb() === 0; };
+  coches.forEach(x => x.cb.addEventListener("change", maj));
+  const pied = h("div",{style:"display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"});
+  const tout = h("button",{class:"btn-sm"}, "Tout cocher");
+  tout.addEventListener("click", () => { const libres = coches.filter(x => !x.cb.disabled), v = !libres.every(x => x.cb.checked); libres.forEach(x => { x.cb.checked = v; }); maj(); });
+  const annuler = h("button",{class:"btn-g"}, "Annuler"); annuler.addEventListener("click", () => fond.remove());
+  envoyer.addEventListener("click", () => {
+    const sel = coches.filter(x => x.cb.checked).map(x => x.c);
+    sel.forEach(c => envoyerExercice(c, cat));
+    fond.remove(); alert("✅ Envoyé à " + sel.length + " client(s)."); if (apres) apres();
+  });
+  fond.addEventListener("click", ev => { if (ev.target === fond) fond.remove(); });
+  pied.appendChild(envoyer); pied.appendChild(tout); pied.appendChild(annuler); boite.appendChild(pied);
+  fond.appendChild(boite); document.body.appendChild(fond); maj();
+}
+
+function renderExercicesTab() {
+  const wrap = h("div",{style:"max-width:760px"});
+  wrap.appendChild(h("h1",{style:"font-size:30px;color:#2E2A20;font-weight:600;font-style:italic;margin:0"}, "Attribuer des exercices"));
+  wrap.appendChild(h("p",{style:"color:#6B6355;font-size:14px;margin:6px 0 16px"}, "Choisis un exercice, coche les clients concernés, envoie en un clic. Chaque client répond directement dans son espace."));
+  EXERCICES_CATALOGUE.forEach(cat => {
+    const row = h("div",{style:"border:1px solid #E4DAC0;border-radius:14px;padding:12px 14px;margin-bottom:10px;background:#FFFDF7"});
+    const top = h("div",{style:"display:flex;justify-content:space-between;align-items:flex-start;gap:10px"});
+    const txt = h("div",{style:"flex:1"});
+    txt.appendChild(h("div",{style:"font-weight:700;font-size:14.5px;color:#2E2A20"}, cat.titre));
+    txt.appendChild(h("div",{style:"font-size:12.5px;color:#6B6355;margin-top:2px"}, cat.resume + " · " + cat.duree));
+    top.appendChild(txt);
+    const b = h("button",{class:"btn-sm"}, "Attribuer à…"); b.addEventListener("click", () => ouvrirAttribution(cat));
+    top.appendChild(b); row.appendChild(top);
+    const det = h("details",{style:"margin-top:6px"});
+    det.appendChild(h("summary",{style:"cursor:pointer;font-size:12px;color:#9C7A2E"}, "Aperçu (" + cat.champs.length + " questions)"));
+    det.appendChild(h("div",{style:"font-size:12.5px;color:#5A5648;margin-top:6px;white-space:pre-wrap"}, cat.consigne));
+    cat.champs.forEach(ch => det.appendChild(h("div",{style:"font-size:12.5px;color:#2E2A20;margin-top:4px"}, "• " + ch.label)));
+    row.appendChild(det); wrap.appendChild(row);
+  });
   return wrap;
 }
 
@@ -3990,7 +4116,7 @@ function renderClientDetail() {
 
   // Subtabs
   const stabs = h("div",{class:"subtabs"});
-  [["fiche","◈ Fiche"],["protocole","🧭 Protocole"],["parcours","🧗 Parcours"],["paiements","€ Paiements"],["notes-c","◻ Notes"]].forEach(([id,lbl])=>{
+  [["fiche","◈ Fiche"],["temps","🕒 Fil du temps"],["protocole","🧭 Protocole"],["parcours","🧗 Parcours"],["paiements","€ Paiements"],["notes-c","◻ Notes"]].forEach(([id,lbl])=>{
     const b = h("button",{class:"subtab"+(state.subTab===id?" active":"")},lbl);
     b.addEventListener("click",()=>{ state.subTab=id; render(); });
     stabs.appendChild(b);
@@ -4000,6 +4126,7 @@ function renderClientDetail() {
   // Content
   const content = h("div",{class:"fade"});
   if (state.subTab==="fiche")     content.appendChild(buildFiche(c));
+  if (state.subTab==="temps")     content.appendChild(buildTimelineClient(c));
   if (state.subTab==="protocole") content.appendChild(buildProtocole(c));
   if (state.subTab==="parcours")  content.appendChild(buildParcours(c));
   if (state.subTab==="paiements") content.appendChild(buildPaiements(c));
@@ -4593,6 +4720,7 @@ function buildFiche(c) {
     ));
     wrap.appendChild(g);
     wrap.appendChild(buildRythmeSection(c));
+    wrap.appendChild(buildCheckinSection(c));
     wrap.appendChild(buildRdvSection(c));
     if (c.forfaitNom && c.forfaitTotal) {
       const pct = Math.min(100, Math.round((c.forfaitUtilisees||0) / c.forfaitTotal * 100));
@@ -5665,6 +5793,7 @@ function renderNow() {
   else if (state.tab==="agenda") content = renderAgendaTab();
   else if (state.tab==="finances") content = renderFinancesTab();
   else if (state.tab==="accueil") content = renderAccueilTab();
+  else if (state.tab==="exercices") content = renderExercicesTab();
   else if (state.tab==="statistiques") content = renderStatistiquesTab();
   else if (state.tab==="clairiere") content = renderClairiereTab();
   else if (state.tab==="reconversion") content = renderReconversionTab();
