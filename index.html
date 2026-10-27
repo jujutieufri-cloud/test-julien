@@ -1439,7 +1439,7 @@ const ClientsManager = {
 //  ÉTAT GLOBAL
 // ══════════════════════════════════════════
 let state = {
-  tab: "accueil",
+  tab: "accueil2",
   clients: JSON.parse(localStorage.getItem("cs4-clients") || "null") || SAMPLE,
   ressources: JSON.parse(localStorage.getItem("cs4-ressources") || "[]"),
   notes: localStorage.getItem("cs4-notes") || "",
@@ -2303,7 +2303,7 @@ const RdvRequests = {
         this.items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         this.autoConfirmerClientsExistants();
         this.nettoyerAnciennesDemandes();
-        if (state.tab === "rdv" || state.tab === "agenda" || state.tab === "accueil") render();
+        if (state.tab === "rdv" || state.tab === "agenda" || state.tab === "accueil" || state.tab === "accueil2") render();
       }, e => console.error("listen rdvRequests:", e));
   },
   autoConfirmerClientsExistants() {
@@ -3552,6 +3552,7 @@ function field(labelText, inputElement) {
 //  NAVIGATION
 // ══════════════════════════════════════════
 const TABS = [
+  {id:"accueil2",      icon:"🏠", label:"Accueil v2 (brouillon)", cat:null, pole:null},
   {id:"accueil",       icon:"🧭", label:"Accueil (brouillon)", cat:null, pole:null},
   {id:"dashboard",    icon:"⬡", label:"Tableau de bord", cat:null, pole:null},
 
@@ -3893,6 +3894,158 @@ function buildDonneesSection(c) {
   });
   box.appendChild(b);
   return box;
+}
+
+// ═════════ BROUILLON : nouvelle page d'accueil « v2 » (barre verte, raccourcis +, cartes de bord, clients actifs) ═════════
+const A2_CSS = `
+.a2{background:#F9F9F8;color:#2E2A20;font-size:14px;border-radius:16px;padding:10px}
+.a2-bar{background:#4A6B32;color:#fff;display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:14px;flex-wrap:wrap}
+.a2-brand{font-weight:700;font-size:16px;white-space:nowrap}
+.a2-search{flex:1;min-width:190px;position:relative}
+.a2-search input{width:100%;box-sizing:border-box;border:none;border-radius:8px;padding:9px 12px;font:inherit;color:#2E2A20}
+.a2-res{position:absolute;left:0;right:0;top:calc(100% + 4px);background:#fff;border:1px solid #D9D9D2;border-radius:8px;z-index:30;max-height:260px;overflow:auto;color:#2E2A20;box-shadow:0 6px 18px rgba(0,0,0,.12)}
+.a2-user{display:flex;align-items:center;gap:8px;font-size:13px}
+.a2-moi{width:30px;height:30px;border-radius:50%;background:#fff;color:#4A6B32;display:flex;align-items:center;justify-content:center;font-weight:700}
+.a2-quick{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
+.a2-tile{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #E3E3DC;border-radius:14px;padding:10px 12px}
+.a2-tile .a2-go{flex:1;display:flex;align-items:center;gap:10px;border:none;background:none;font:inherit;color:inherit;cursor:pointer;text-align:left;padding:0}
+.a2-plus{border:2px solid #4A6B32;color:#4A6B32;border-radius:50%;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;background:#fff;font-weight:700;font-size:17px;cursor:pointer;padding:0;line-height:1}
+.a2-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}
+.a2-card{background:#fff;border:1px solid #E3E3DC;border-radius:14px;padding:14px 16px}
+.a2-card h3{font-size:12px;letter-spacing:.08em;color:#6B6B5E;margin:0 0 10px;font-weight:700}
+.a2-big{font-size:32px;font-weight:700;color:#4A6B32;line-height:1.1}
+.a2-muted{color:#6B6B5E;font-size:12.5px}
+.a2-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;background:none;padding:8px 2px;border-top:1px solid #EEEEE8;font:inherit;color:inherit;cursor:pointer}
+.a2-bg{background:#E9E9E2;border-radius:6px;height:8px;overflow:hidden;flex:1}
+.a2-fg{background:#4A6B32;height:100%}
+.a2-mois{display:flex;align-items:flex-end;gap:8px;height:70px;margin-top:10px}
+.a2-mois div{flex:1;text-align:center;font-size:11px;color:#6B6B5E}
+.a2-mois i{display:block;background:#8FB070;border-radius:4px 4px 0 0;margin-bottom:3px}
+.a2-clients{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.a2-cl{display:flex;gap:12px;align-items:center;background:#fff;border:1px solid #E3E3DC;border-radius:14px;padding:12px;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.a2-chip{display:inline-block;font-size:11.5px;border-radius:999px;padding:2px 8px;background:#EEF3E8;color:#4A6B32;margin:3px 4px 0 0}
+`;
+
+function accueil2Donnees() {
+  const now = new Date(), p = x => String(x).padStart(2, "0");
+  const ymd = d => d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+  const auj = ymd(now), maintenant = auj + "T" + p(now.getHours()) + ":" + p(now.getMinutes());
+  const rdvs = (state.appointments || []).filter(a => a.date), cle = a => a.date + "T" + (a.heure || "00:00");
+  const clients = state.clients || [], actifs = clients.filter(c => c.status === "actif");
+  const lundi = new Date(now.getFullYear(), now.getMonth(), now.getDate()); lundi.setDate(lundi.getDate() - ((lundi.getDay() + 6) % 7));
+  const dim = new Date(lundi); dim.setDate(lundi.getDate() + 6);
+  const mois = [];
+  for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1), pref = d.getFullYear() + "-" + p(d.getMonth() + 1); mois.push({ pref, label: d.toLocaleDateString("fr-FR", { month: "short" }), n: rdvs.filter(a => a.date.startsWith(pref)).length }); }
+  let afaire = 0, faits = 0, reponses7j = 0; const il7 = Date.now() - 7 * 86400000;
+  actifs.forEach(c => { (c.exercices || []).forEach(e => { if (e.done) faits++; else afaire++; }); Object.values(c.reponsesExercices || {}).forEach(r => { if (r && r._maj && new Date(r._maj).getTime() >= il7) reponses7j++; }); });
+  const forfaits = actifs.filter(c => Number(c.forfaitTotal) > 0).map(c => { const total = Number(c.forfaitTotal); return { c, total, utilisees: Math.min(total, Number(c.forfaitUtilisees) || 0) }; }).sort((a, b) => (a.total - a.utilisees) - (b.total - b.utilisees)).slice(0, 6);
+  const urgents = clients.filter(c => c.rythme && (c.rythme.etat === "sos" || c.rythme.etat === "blocage")).sort((a, b) => (a.rythme.etat === "sos" ? 0 : 1) - (b.rythme.etat === "sos" ? 0 : 1));
+  const fatigue = clients.filter(c => { const k = (c.checkins || []).filter(x => x && x.date).sort((a, b) => new Date(b.date) - new Date(a.date))[0]; return k && new Date(k.date).getTime() >= il7 && (k.energie <= 2 || k.charge >= 4); });
+  return {
+    auj, actifs, mois, afaire, faits, reponses7j, forfaits, urgents, fatigue,
+    aujourdhui: rdvs.filter(a => a.date === auj).sort((a, b) => (a.heure || "") < (b.heure || "") ? -1 : 1),
+    semaine: rdvs.filter(a => a.date >= ymd(lundi) && a.date <= ymd(dim)).length,
+    prochains: rdvs.filter(a => cle(a) >= maintenant).sort((a, b) => cle(a) < cle(b) ? -1 : 1).slice(0, 4),
+    nouvelles: ((typeof RdvRequests !== "undefined" && RdvRequests && RdvRequests.items) || []).filter(r => r.status === "nouveau").length
+  };
+}
+
+// (+) : ouvre l'écran puis appuie sur son bouton d'ajout (les formulaires s'ouvrent depuis leur propre écran).
+function accueil2Ajouter(tab, libelle) {
+  setState({ tab, selClientId: null });
+  setTimeout(() => { const b = [...document.querySelectorAll("button")].find(x => x.textContent.trim() === libelle); if (b) b.click(); }, 60);
+}
+
+function renderAccueil2Tab() {
+  try { if (CoachLink.user) RdvRequests.listen(); } catch (e) {}
+  if (!document.getElementById("a2-css")) { const st = document.createElement("style"); st.id = "a2-css"; st.textContent = A2_CSS; document.head.appendChild(st); }
+  const D = accueil2Donnees(), aller = (tab, extra) => setState(Object.assign({ tab, selClientId: null }, extra || {}));
+  const ouvrirFiche = c => setState({ tab: "clients", selClientId: c.id, subTab: "fiche" });
+  const wrap = h("div",{class:"a2"});
+  const row = (texte, fn, droite) => { const b = h("button",{class:"a2-row"}); b.appendChild(h("span",{style:"flex:1"}, texte)); if (droite) b.appendChild(h("span",{class:"a2-muted"}, droite)); b.addEventListener("click", fn); return b; };
+  const carte = (titre) => { const c = h("div",{class:"a2-card"}); c.appendChild(h("h3",{}, titre)); return c; };
+  const norm = t => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+  // Barre verte : marque, recherche de clients, compte connecté
+  const barre = h("div",{class:"a2-bar"});
+  barre.appendChild(h("span",{class:"a2-brand"}, "🌿 CoachingStudio"));
+  const rech = h("div",{class:"a2-search"}), champ = h("input",{type:"search",placeholder:"Rechercher un client…"}), res = h("div",{class:"a2-res",style:"display:none"});
+  champ.addEventListener("input", () => {
+    const q = norm(champ.value.trim()); res.innerHTML = "";
+    if (!q) { res.style.display = "none"; return; }
+    const trouves = (state.clients || []).filter(c => norm(c.name).includes(q)).slice(0, 6);
+    if (!trouves.length) res.appendChild(h("div",{style:"padding:10px 12px;font-size:13px;color:#6B6B5E"}, "Aucun client trouvé."));
+    trouves.forEach(c => res.appendChild(row(c.name + (c.status && c.status !== "actif" ? " (" + c.status + ")" : ""), () => ouvrirFiche(c))));
+    res.style.display = "block";
+  });
+  rech.appendChild(champ); rech.appendChild(res); barre.appendChild(rech);
+  const email = (CoachLink.user && CoachLink.user.email) || "";
+  const moi = h("div",{class:"a2-user"}); moi.appendChild(h("span",{class:"a2-moi"}, (email[0] || "?").toUpperCase())); moi.appendChild(h("span",{}, email || "Non connecté")); barre.appendChild(moi);
+  wrap.appendChild(barre);
+
+  // Raccourcis avec boutons (+)
+  const rac = h("div",{class:"a2-quick"});
+  [["👥", "Clients", "clients", () => accueil2Ajouter("clients", "+ Nouveau client")], ["📅", "Agenda & RDV", "agenda", () => accueil2Ajouter("agenda", "+ Nouveau rendez-vous")], ["📚", "Exercices", "exercices", () => aller("exercices")],
+   ["▣", "Bibliothèque", "bibliotheque", null], ["💰", "Finances", "finances", null], ["📊", "Statistiques", "statistiques", null], ["⚙️", "Réglages", "reglages", null]].forEach(([ico, lib, tab, plus]) => {
+    const t = h("div",{class:"a2-tile"}), go = h("button",{class:"a2-go"});
+    go.appendChild(h("span",{style:"font-size:22px"}, ico)); go.appendChild(h("span",{style:"font-weight:600"}, lib)); go.addEventListener("click", () => aller(tab)); t.appendChild(go);
+    if (plus) { const b = h("button",{class:"a2-plus",title:"Ajouter","aria-label":"Ajouter : " + lib}, "+"); b.addEventListener("click", plus); t.appendChild(b); }
+    rac.appendChild(t);
+  });
+  wrap.appendChild(rac);
+
+  const grille = h("div",{class:"a2-grid"});
+  // Aujourd'hui
+  const cj = carte("AUJOURD'HUI"); cj.appendChild(h("div",{class:"a2-big"}, String(D.aujourdhui.length))); cj.appendChild(h("div",{class:"a2-muted"}, D.aujourdhui.length > 1 ? "séances prévues" : "séance prévue"));
+  if (!D.aujourdhui.length) cj.appendChild(h("div",{class:"a2-muted",style:"margin-top:8px"}, "Rien de prévu aujourd'hui."));
+  D.aujourdhui.forEach(a => cj.appendChild(row((a.heure ? a.heure + " · " : "") + (a.clientName || "Client"), () => aller("agenda"))));
+  grille.appendChild(cj);
+  // Séances sur 6 mois
+  const cm = carte("SÉANCES"); cm.appendChild(h("div",{class:"a2-big"}, String(D.mois[5].n))); cm.appendChild(h("div",{class:"a2-muted"}, "ce mois · " + D.semaine + " cette semaine"));
+  const max = Math.max(1, ...D.mois.map(m => m.n)), bars = h("div",{class:"a2-mois"});
+  D.mois.forEach(m => { const col = h("div",{}); const i = h("i",{style:"height:" + Math.max(3, Math.round(m.n / max * 48)) + "px"}); i.title = m.n + " séance(s)"; col.appendChild(i); col.appendChild(document.createTextNode(m.label)); bars.appendChild(col); });
+  cm.appendChild(bars); grille.appendChild(cm);
+  // Forfaits
+  const cf = carte("FORFAITS EN COURS");
+  if (!D.forfaits.length) cf.appendChild(h("div",{class:"a2-muted"}, "Aucun forfait renseigné sur les clients actifs."));
+  D.forfaits.forEach(f => { const r = row("", () => ouvrirFiche(f.c)); r.innerHTML = ""; r.appendChild(h("span",{style:"width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"}, f.c.name)); const bg = h("span",{class:"a2-bg"}); bg.appendChild(h("span",{class:"a2-fg",style:"display:block;width:" + Math.round(f.utilisees / f.total * 100) + "%;" + (f.total - f.utilisees <= 1 ? "background:#C9822B" : "")})); r.appendChild(bg); r.appendChild(h("span",{class:"a2-muted"}, f.utilisees + "/" + f.total)); cf.appendChild(r); });
+  grille.appendChild(cf);
+  // Exercices
+  const ce = carte("EXERCICES DES CLIENTS ACTIFS"), tot = D.afaire + D.faits;
+  ce.appendChild(h("div",{class:"a2-big"}, String(D.afaire))); ce.appendChild(h("div",{class:"a2-muted"}, "à faire · " + D.faits + " terminé(s) · " + D.reponses7j + " réponse(s) reçue(s) cette semaine"));
+  const bg = h("div",{class:"a2-bg",style:"margin:10px 0;flex:none"}); bg.appendChild(h("div",{class:"a2-fg",style:"width:" + (tot ? Math.round(D.faits / tot * 100) : 0) + "%"})); ce.appendChild(bg);
+  ce.appendChild(row("📤 Attribuer des exercices à plusieurs clients", () => aller("exercices"))); grille.appendChild(ce);
+  // À surveiller
+  const cs = carte("À SURVEILLER"); let rien = true;
+  if (D.nouvelles) { rien = false; cs.appendChild(row("📅 " + D.nouvelles + " nouvelle(s) demande(s) de rendez-vous", () => aller("rdv"))); }
+  const etiq = c => c.status && c.status !== "actif" ? " (" + c.status + ")" : "";
+  D.urgents.forEach(c => { rien = false; const i = rythmeInfo(c.rythme.etat); cs.appendChild(row((i ? i.emoji : "⚠️") + " " + c.name + etiq(c), () => ouvrirFiche(c), i ? i.court : "")); });
+  D.fatigue.forEach(c => { rien = false; cs.appendChild(row("⚡ " + c.name + etiq(c) + " : énergie basse ou charge élevée", () => ouvrirFiche(c))); });
+  if (rien) cs.appendChild(h("div",{class:"a2-muted"}, "✅ Rien à signaler."));
+  grille.appendChild(cs);
+  // Prochains rendez-vous
+  const cp = carte("PROCHAINS RENDEZ-VOUS");
+  if (!D.prochains.length) cp.appendChild(h("div",{class:"a2-muted"}, "Aucun rendez-vous à venir."));
+  D.prochains.forEach(a => cp.appendChild(row(rdvFrDate(a.date) + (a.heure ? " · " + a.heure : ""), () => aller("agenda"), a.clientName || "Client")));
+  grille.appendChild(cp);
+  wrap.appendChild(grille);
+
+  // Clients actifs (cartes avec avatar)
+  wrap.appendChild(h("h3",{style:"font-size:12px;letter-spacing:.08em;color:#6B6B5E;margin:22px 0 10px;font-weight:700"}, "CLIENTS ACTIFS (" + D.actifs.length + ")"));
+  const gc = h("div",{class:"a2-clients"});
+  if (!D.actifs.length) gc.appendChild(h("div",{class:"a2-muted"}, "Aucun client actif pour le moment."));
+  D.actifs.slice(0, 8).forEach(c => {
+    const b = h("button",{class:"a2-cl"}); b.appendChild(avatar(c.name, c.profile, 42));
+    const t = h("div",{style:"flex:1;min-width:0"}); t.appendChild(h("div",{style:"font-weight:700"}, c.name));
+    t.appendChild(h("div",{class:"a2-muted"}, c.nextSession ? "Prochaine séance : " + rdvFrDateLong(c.nextSession, c.nextSessionHeure) : "Pas de rendez-vous prévu"));
+    const ri = c.rythme && rythmeInfo(c.rythme.etat), nex = (c.exercices || []).filter(e => !e.done).length;
+    if (ri) t.appendChild(h("span",{class:"a2-chip"}, ri.emoji + " " + ri.court)); if (nex) t.appendChild(h("span",{class:"a2-chip"}, "📝 " + nex + " exercice(s)"));
+    b.appendChild(t); b.addEventListener("click", () => ouvrirFiche(c)); gc.appendChild(b);
+  });
+  wrap.appendChild(gc);
+  if (D.actifs.length > 8) { const tous = h("button",{class:"btn-g",style:"margin-top:12px"}, "Voir tous les clients (" + D.actifs.length + ")"); tous.addEventListener("click", () => aller("clients")); wrap.appendChild(tous); }
+  wrap.appendChild(h("p",{class:"a2-muted",style:"margin:18px 0 0"}, "🧪 Brouillon de page d'accueil, inspiré de CoachAccountable. Les chiffres viennent de tes vraies données. L'ancienne version reste dans « Accueil (brouillon) »."));
+  return wrap;
 }
 
 function renderNav() {
@@ -5878,6 +6031,7 @@ function renderNow() {
   else if (state.tab==="live") content = renderLiveTab();
   else if (state.tab==="agenda") content = renderAgendaTab();
   else if (state.tab==="finances") content = renderFinancesTab();
+  else if (state.tab==="accueil2") content = renderAccueil2Tab();
   else if (state.tab==="accueil") content = renderAccueilTab();
   else if (state.tab==="exercices") content = renderExercicesTab();
   else if (state.tab==="statistiques") content = renderStatistiquesTab();
