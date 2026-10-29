@@ -3885,7 +3885,9 @@ async function exporterDossierClient(c) {
 function buildDonneesSection(c) {
   const box = h("div",{style:"margin-top:22px"});
   box.appendChild(h("div",{style:"color:#6B6355;font-size:13px;letter-spacing:.08em;margin-bottom:6px"}, "DONNÉES PERSONNELLES (RGPD)"));
-  box.appendChild(h("p",{style:"color:#6B6355;font-size:12.5px;margin:0 0 8px"}, "Le client peut te demander une copie de ses données. Ce bouton produit un fichier unique : fiche, rendez-vous, séances EN LIVE, contrats et outils. La suppression définitive n'est pas encore disponible dans cette version."));
+  box.appendChild(h("p",{style:"color:#6B6355;font-size:12.5px;margin:0 0 8px"}, "Le client peut te demander une copie de ses données. Ce bouton produit un fichier unique : fiche, rendez-vous, séances EN LIVE, contrats et outils. La suppression est définitive : elle se fait dans une fenêtre dédiée, après export et plusieurs confirmations."));
+  const sup = h("button",{class:"btn-g",style:"margin-left:8px;color:#B0413E"}, "🗑️ Supprimer définitivement…");
+  sup.addEventListener("click", () => ouvrirSuppressionDossier(c, () => setState({ tab: "clients", selClientId: null })));
   const b = h("button",{class:"btn-g"}, "📦 Exporter le dossier de " + (c.name || "ce client"));
   b.addEventListener("click", async () => {
     b.disabled = true;
@@ -3893,7 +3895,7 @@ function buildDonneesSection(c) {
     catch (e) { alert("Export impossible : " + e.message); }
     finally { b.disabled = false; }
   });
-  box.appendChild(b);
+  box.appendChild(b); box.appendChild(sup);
   return box;
 }
 
@@ -4097,6 +4099,119 @@ async function chargerReponsesQuestionnaire(c, boite) {
     });
     if (rien) card.appendChild(h("div",{style:"color:#6B6355"}, "Réponse vide."));
     boite.appendChild(card);
+  });
+}
+
+// ═════════ BROUILLON : protocole de suppression sécurisée d'un dossier client (RGPD) ═════════
+const norm2 = t => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+
+// Ce qui serait supprimé, compté AVANT d'agir.
+async function inventaireSuppression(c) {
+  const db = firebase.firestore(), avertissements = [];
+  const lire = async (nom, f) => { try { return await f(); } catch (e) { avertissements.push(nom + " : lecture impossible (" + (e && e.message ? e.message : "erreur") + ")"); return []; } };
+  const requete = async (coll, champ, val) => { const q = await db.collection(coll).where(champ, "==", val).get(); return q.docs.map(d => ({ ref: d.ref, id: d.id })); };
+  const unique = l => { const v = new Set(); return l.filter(x => { const k = x.ref.path || x.id; if (v.has(k)) return false; v.add(k); return true; }); };
+  const sessions = await lire("séances", () => requete("sessions", "clientId", c.id));
+  const outils = await lire("outils", () => requete("outils", "clientId", c.id));
+  const questionnaires = unique([].concat(await lire("questionnaires (identifiant)", () => requete("questionnaires", "clientId", c.id)), c.email ? await lire("questionnaires (email)", () => requete("questionnaires", "email", c.email)) : []));
+  const demandes = c.email ? await lire("demandes de rendez-vous", () => requete("rdvRequests", "email", c.email)) : [];
+  const contrats = await lire("contrats", async () => { const q = await db.collection("clients").doc(c.id).collection("contracts").get(); return q.docs.map(d => ({ ref: d.ref, id: d.id })); });
+  const rdvs = rdvListeClient(c.id);
+  return { sessions, outils, questionnaires, demandes, contrats, rdvs, avertissements };
+}
+
+// Supprime dans cet ordre : agenda Google, séances, outils, questionnaires, demandes, contrats, puis la fiche EN DERNIER.
+async function supprimerDossierClient(c, inv, progression) {
+  const db = firebase.firestore(), echecs = [], faits = [];
+  const etape = t => { if (progression) progression(t); };
+  const supprimerLot = async (nom, liste) => {
+    etape(nom + "…"); if (!liste.length) return;
+    try { for (let i = 0; i < liste.length; i += 400) { const b = db.batch(); liste.slice(i, i + 400).forEach(x => b.delete(x.ref)); await b.commit(); } faits.push(nom + " (" + liste.length + ")"); }
+    catch (e) { echecs.push({ partie: nom, raison: e && e.message ? e.message : "erreur" }); }
+  };
+  // 1) évènements Google Agenda (non bloquant : on signale ce qui reste)
+  if (inv.rdvs.length && typeof gcalUrl === "function" && gcalUrl()) {
+    etape("Agenda Google…"); let ko = 0;
+    for (const r of inv.rdvs) { try { await gcalAppel({ action: "delete", rdv: { id: r.id } }); } catch (e) { ko++; } }
+    if (ko) echecs.push({ partie: "évènements Google Agenda", raison: ko + " à supprimer à la main dans ton agenda", nonBloquant: true }); else faits.push("évènements Google Agenda (" + inv.rdvs.length + ")");
+  }
+  await supprimerLot("Séances EN LIVE", inv.sessions);
+  await supprimerLot("Outils (Ikigaï, Arbre de vie)", inv.outils);
+  await supprimerLot("Réponses aux questionnaires", inv.questionnaires);
+  await supprimerLot("Demandes de rendez-vous", inv.demandes);
+  await supprimerLot("Contrats", inv.contrats);
+  const bloquants = echecs.filter(e => !e.nonBloquant);
+  if (bloquants.length) return { ok: false, faits, echecs, ficheSupprimee: false };
+  etape("Fiche du client…");
+  try { await db.collection("clients").doc(c.id).delete(); faits.push("fiche du client"); }
+  catch (e) { echecs.push({ partie: "fiche du client", raison: e && e.message ? e.message : "erreur" }); return { ok: false, faits, echecs, ficheSupprimee: false }; }
+  purgerCopiesLocales(c.id);
+  return { ok: true, faits, echecs, ficheSupprimee: true };
+}
+
+// Retire le client de toutes les copies gardées dans ce navigateur (y compris la sauvegarde de sécurité).
+function purgerCopiesLocales(clientId) {
+  try {
+    state.clients = (state.clients || []).filter(x => x.id !== clientId);
+    state.appointments = (state.appointments || []).filter(a => a.clientId !== clientId);
+    if (state.sessions) delete state.sessions[clientId];
+    Object.keys(localStorage).filter(k => k.indexOf("cs4-") === 0).forEach(k => {
+      let v; try { v = JSON.parse(localStorage.getItem(k)); } catch (e) { return; }
+      if (Array.isArray(v)) { const n = v.filter(x => !(x && (x.id === clientId || x.clientId === clientId))); if (n.length !== v.length) localStorage.setItem(k, JSON.stringify(n)); }
+      else if (v && typeof v === "object" && v[clientId] !== undefined) { delete v[clientId]; localStorage.setItem(k, JSON.stringify(v)); }
+    });
+  } catch (e) { console.error("purge locale:", e); }
+}
+
+function ouvrirSuppressionDossier(c, apres) {
+  const fond = h("div",{style:"position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:14px"});
+  const boite = h("div",{style:"background:#FFFDF7;border-radius:16px;max-width:480px;width:100%;max-height:88vh;overflow:auto;padding:18px"});
+  boite.appendChild(h("div",{style:"font-weight:700;font-size:16px;color:#B0413E"}, "Supprimer définitivement le dossier de " + c.name));
+  boite.appendChild(h("p",{style:"font-size:13px;color:#5A5648;margin:6px 0 10px"}, "Cette action est irréversible. Prends ton temps : rien ne sera supprimé avant les confirmations ci-dessous."));
+  const resume = h("div",{style:"font-size:13px;color:#2E2A20;border:1px solid #E4DAC0;border-radius:10px;padding:10px 12px;margin-bottom:10px"}, "Analyse du dossier…"); boite.appendChild(resume);
+  let inv = null, enCours = false, fini = false;
+  const etape = h("div",{style:"font-size:12.5px;color:#6B6355;min-height:18px;margin:8px 0"});
+  const exp = h("button",{class:"btn-g"}, "1. 📦 Exporter d'abord une copie du dossier");
+  exp.addEventListener("click", async () => { exp.disabled = true; try { const r = await exporterDossierClient(c); exp.textContent = "✓ Copie exportée : " + r.fichier; } catch (e) { exp.textContent = "Export impossible : " + e.message; exp.disabled = false; } });
+  const lab = h("label",{style:"display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:10px 0;cursor:pointer"});
+  const cb = h("input",{type:"checkbox"}); lab.appendChild(cb); lab.appendChild(h("span",{}, "2. J'ai conservé ce dont j'ai légalement besoin (copie du dossier, facturation) et je comprends que la suppression est définitive."));
+  boite.appendChild(exp); boite.appendChild(lab);
+  boite.appendChild(h("div",{style:"font-size:13px;margin-top:6px"}, "3. Pour confirmer, tape le nom complet du client : « " + c.name + " »"));
+  const champ = h("input",{type:"text",autocomplete:"off",style:"width:100%;box-sizing:border-box;border:1px solid #E4DAC0;border-radius:8px;padding:9px;font:inherit;font-size:16px;margin-top:6px"}); boite.appendChild(champ);
+  boite.appendChild(etape);
+  const go = h("button",{class:"btn",style:"background:#B0413E"}, "🗑️ Supprimer définitivement");
+  const annuler = h("button",{class:"btn-g"}, "Annuler"); annuler.addEventListener("click", () => fond.remove());
+  const maj = () => { go.disabled = !(inv && cb.checked && norm2(champ.value) === norm2(c.name) && !enCours && !fini); };
+  cb.addEventListener("change", maj); champ.addEventListener("input", maj);
+  go.addEventListener("click", async () => {
+    if (go.disabled || enCours) return; enCours = true; maj(); annuler.disabled = true;
+    const r = await supprimerDossierClient(c, inv, t => { etape.textContent = t; });
+    enCours = false; annuler.disabled = false;
+    resume.innerHTML = ""; etape.textContent = "";
+    if (r.ok) {
+      fini = true; resume.appendChild(h("div",{style:"font-weight:700;color:#2F7D3B"}, "✅ Dossier supprimé."));
+      r.faits.forEach(f => resume.appendChild(h("div",{}, "• " + f)));
+      r.echecs.forEach(e => resume.appendChild(h("div",{style:"color:#B26A00"}, "⚠️ " + e.partie + " : " + e.raison)));
+      resume.appendChild(h("div",{style:"margin-top:8px;color:#6B6355"}, "Ne peuvent pas être effacés automatiquement : le lien du portail du client (désormais inactif, il ne mène plus à aucune donnée) et les créneaux réservés, qui sont anonymes."));
+      go.remove(); annuler.textContent = "Fermer"; if (apres) apres();
+    } else {
+      resume.appendChild(h("div",{style:"font-weight:700;color:#B0413E"}, "⚠️ Suppression incomplète : la fiche du client est conservée pour que tu puisses réessayer."));
+      r.faits.forEach(f => resume.appendChild(h("div",{}, "✓ " + f)));
+      r.echecs.forEach(e => resume.appendChild(h("div",{style:"color:#B0413E"}, "✗ " + e.partie + " : " + e.raison)));
+      go.textContent = "Réessayer"; inv = null; resume.appendChild(h("div",{style:"margin-top:6px;color:#6B6355"}, "Nouvelle analyse…"));
+      inventaireSuppression(c).then(n => { inv = n; maj(); });
+    }
+  });
+  const pied = h("div",{style:"display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"}); pied.appendChild(go); pied.appendChild(annuler); boite.appendChild(pied);
+  fond.appendChild(boite); fond.addEventListener("click", ev => { if (ev.target === fond && !enCours) fond.remove(); });
+  document.body.appendChild(fond); go.disabled = true;
+  inventaireSuppression(c).then(n => {
+    inv = n; resume.innerHTML = "";
+    resume.appendChild(h("div",{style:"font-weight:600;margin-bottom:4px"}, "Sera supprimé :"));
+    [["Fiche du client (coordonnées, notes, parcours, exercices et réponses, messages, check-ins)", 1], ["Rendez-vous", n.rdvs.length], ["Séances EN LIVE", n.sessions.length], ["Contrats", n.contrats.length], ["Outils (Ikigaï, Arbre de vie)", n.outils.length], ["Réponses aux questionnaires", n.questionnaires.length], ["Demandes de rendez-vous reçues du site", n.demandes.length]].forEach(([l, k]) => resume.appendChild(h("div",{style:"color:#5A5648"}, "• " + l + " : " + k)));
+    resume.appendChild(h("div",{style:"margin-top:6px;color:#5A5648"}, "• Évènements Google Agenda liés (si ton agenda est relié) et copies gardées sur cet appareil"));
+    n.avertissements.forEach(a => resume.appendChild(h("div",{style:"color:#B26A00;margin-top:4px"}, "⚠️ " + a)));
+    maj();
   });
 }
 
