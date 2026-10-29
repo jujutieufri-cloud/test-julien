@@ -3606,7 +3606,7 @@ function renderAccueilTab() {
   const pastille = (t, c) => h("span",{style:"display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:999px;margin-left:8px;vertical-align:middle;color:#fff;background:" + c}, t);
   const section = titre => h("div",{style:"font-size:12px;font-weight:700;letter-spacing:.14em;color:" + OR + ";margin:30px 0 12px;padding-bottom:6px;border-bottom:2px solid " + BORD}, titre);
   const carte = (titre, badge) => { const c = h("div",{style:"border:1px solid " + BORD + ";border-radius:16px;padding:14px 16px;background:" + FOND + ";margin-bottom:12px"});
-    const t = h("div",{style:"font-weight:700;font-size:15px;color:" + TXT + ";margin-bottom:8px"}, titre); if (badge) t.appendChild(pastille("NOUVEAU", OR)); c.appendChild(t); return c; };
+    const t = h("div",{style:"font-weight:700;font-size:15px;color:" + TXT + ";margin-bottom:8px"}, titre); if (badge) t.appendChild(pastille("NOUVEAU", "#9C7A2E")); c.appendChild(t); return c; };
   function ligne(emoji, libelle, cible) {
     const aVenir = cible === null;
     const b = h("button",{style:"display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;background:none;padding:9px 4px;border-top:1px solid " + BORD + ";font:inherit;font-size:14px;color:" + (aVenir ? MUET : TXT) + ";opacity:" + (aVenir ? ".65" : "1") + ";cursor:" + (aVenir ? "default" : "pointer")});
@@ -3698,6 +3698,7 @@ function timelineEvenements(c) {
   Object.keys(rep).forEach(id => { if (rep[id] && rep[id]._maj) { const x = (c.exercices || []).find(e => e.id === id); ajout(rep[id]._maj, "exercice", "✍️", "Réponses reçues" + (x ? " : " + x.titre : ""), "", "parcours"); } });
   (c.rythmeHistorique || []).forEach(r => { const i = rythmeInfo(r.etat); if (i) ajout(r.date, "etat", i.emoji, "Rythme : " + i.court + " — " + i.label, "", "fiche"); });
   (c.checkins || []).forEach(k => ajout(k.date, "etat", "⚡", "Check-in : énergie " + k.energie + "/5 · charge mentale " + k.charge + "/5", k.note, "fiche"));
+  if (c.questionnaireAccueil) ajout(c.questionnaireAccueil.modifieLe || c.questionnaireAccueil.envoyeLe, "message", "📋", "Questionnaire d'accueil " + (c.questionnaireAccueil.modifieLe ? "modifié" : "reçu"), "", "fiche");
   (c.echanges || []).forEach(m => ajout(m.createdAt, "message", m.author === "client" ? "💬" : "🗨️", m.author === "client" ? "Message du client" : "Message du coach", String(m.text || "").slice(0, 160), "parcours"));
   return ev.sort((a, b) => new Date(b.quand) - new Date(a.quand));
 }
@@ -3941,8 +3942,9 @@ function accueil2Donnees() {
   const forfaits = actifs.filter(c => Number(c.forfaitTotal) > 0).map(c => { const total = Number(c.forfaitTotal); return { c, total, utilisees: Math.min(total, Number(c.forfaitUtilisees) || 0) }; }).sort((a, b) => (a.total - a.utilisees) - (b.total - b.utilisees)).slice(0, 6);
   const urgents = clients.filter(c => c.rythme && (c.rythme.etat === "sos" || c.rythme.etat === "blocage")).sort((a, b) => (a.rythme.etat === "sos" ? 0 : 1) - (b.rythme.etat === "sos" ? 0 : 1));
   const fatigue = clients.filter(c => { const k = (c.checkins || []).filter(x => x && x.date).sort((a, b) => new Date(b.date) - new Date(a.date))[0]; return k && new Date(k.date).getTime() >= il7 && (k.energie <= 2 || k.charge >= 4); });
+  const questionnaires = actifs.filter(c => c.questionnaireAccueil && c.questionnaireAccueil.envoyeLe && new Date(c.questionnaireAccueil.modifieLe || c.questionnaireAccueil.envoyeLe).getTime() >= il7);
   return {
-    auj, actifs, mois, afaire, faits, reponses7j, forfaits, urgents, fatigue,
+    auj, actifs, mois, afaire, faits, reponses7j, forfaits, urgents, fatigue, questionnaires,
     aujourdhui: rdvs.filter(a => a.date === auj).sort((a, b) => (a.heure || "") < (b.heure || "") ? -1 : 1),
     semaine: rdvs.filter(a => a.date >= ymd(lundi) && a.date <= ymd(dim)).length,
     prochains: rdvs.filter(a => cle(a) >= maintenant).sort((a, b) => cle(a) < cle(b) ? -1 : 1).slice(0, 4),
@@ -4021,6 +4023,7 @@ function renderAccueil2Tab() {
   const etiq = c => c.status && c.status !== "actif" ? " (" + c.status + ")" : "";
   D.urgents.forEach(c => { rien = false; const i = rythmeInfo(c.rythme.etat); cs.appendChild(row((i ? i.emoji : "⚠️") + " " + c.name + etiq(c), () => ouvrirFiche(c), i ? i.court : "")); });
   D.fatigue.forEach(c => { rien = false; cs.appendChild(row("⚡ " + c.name + etiq(c) + " : énergie basse ou charge élevée", () => ouvrirFiche(c))); });
+  D.questionnaires.forEach(c => { rien = false; cs.appendChild(row("📋 Questionnaire d'accueil reçu : " + c.name, () => ouvrirFiche(c))); });
   if (rien) cs.appendChild(h("div",{class:"a2-muted"}, "✅ Rien à signaler."));
   grille.appendChild(cs);
   // Prochains rendez-vous
@@ -4046,6 +4049,55 @@ function renderAccueil2Tab() {
   if (D.actifs.length > 8) { const tous = h("button",{class:"btn-g",style:"margin-top:12px"}, "Voir tous les clients (" + D.actifs.length + ")"); tous.addEventListener("click", () => aller("clients")); wrap.appendChild(tous); }
   wrap.appendChild(h("p",{class:"a2-muted",style:"margin:18px 0 0"}, "🧪 Brouillon de page d'accueil, inspiré de CoachAccountable. Les chiffres viennent de tes vraies données. L'ancienne version reste dans « Accueil (brouillon) »."));
   return wrap;
+}
+
+// ═════════ BROUILLON : réponses au questionnaire d'accueil (espace client + formulaire public) ═════════
+const QA_LABELS = [["Ce qui l'amène à consulter", "q1"], ["Ce qui est important pour lui/elle", "q2"], ["Ce qu'il/elle attend des séances", "q3"], ["À savoir avant le 1er RDV", "q4"], ["Style d'accompagnement préféré", "q5"]];
+
+const QA_CACHE = {};
+async function questionnairesPublics(c) {
+  const cle = c.id + "|" + (c.email || ""), maintenant = Date.now(), vu = QA_CACHE[cle];
+  if (vu && maintenant - vu.t < 45000) return vu.p;
+  const db = firebase.firestore(), requetes = [db.collection("questionnaires").where("clientId", "==", c.id).get()];
+  if (c.email) requetes.push(db.collection("questionnaires").where("email", "==", c.email).get());
+  const p = Promise.allSettled(requetes).then(res => {
+    const cartes = [], vus = new Set(); let echecs = 0;
+    res.forEach(x => { if (x.status !== "fulfilled") { echecs++; return; } x.value.docs.forEach(d => { if (vus.has(d.id)) return; vus.add(d.id); const r = d.data(); cartes.push({ source: "formulaire public", quand: r.createdAt || r.dateCreated, r }); }); });
+    return { cartes, tout_echoue: echecs === res.length };
+  });
+  QA_CACHE[cle] = { t: maintenant, p };
+  p.then(r => { if (r.tout_echoue) delete QA_CACHE[cle]; });   // un échec n'est jamais mis en cache
+  return p;
+}
+// Réunit les réponses reçues via l'espace client ET via le formulaire public (par identifiant de client puis par email), sans doublon.
+async function reponsesQuestionnaire(c) {
+  const cartes = [], qa = c.questionnaireAccueil;
+  if (qa) cartes.push({ source: "espace client", quand: qa.modifieLe || qa.envoyeLe, r: qa });
+  const pub = await questionnairesPublics(c);
+  pub.cartes.forEach(k => cartes.push(k));
+  cartes.sort((a, b) => new Date(b.quand || 0) - new Date(a.quand || 0));
+  return { cartes, erreur: pub.tout_echoue && !qa };
+}
+
+async function chargerReponsesQuestionnaire(c, boite) {
+  let r;
+  try { r = await reponsesQuestionnaire(c); } catch (e) { console.error("questionnaires:", e); r = { cartes: [], erreur: true }; }
+  boite.innerHTML = "";
+  if (r.erreur) { boite.appendChild(h("p",{style:"color:#5A5648;font-size:12.5px"}, "Impossible de charger les réponses pour le moment.")); return; }
+  if (!r.cartes.length) { boite.appendChild(h("p",{style:"color:#5A5648;font-size:12.5px"}, "Aucune réponse au questionnaire pour l'instant.")); return; }
+  boite.appendChild(h("div",{style:"font-weight:700;color:#2E2A20;font-size:13.5px;margin-bottom:10px"}, "📋 Réponses au questionnaire"));
+  r.cartes.forEach(k => {
+    const card = h("div",{class:"card",style:"padding:14px 16px;margin-bottom:10px;font-size:13px"});
+    const d = new Date(k.quand);
+    card.appendChild(h("div",{style:"font-size:11.5px;color:#6B6355;margin-bottom:8px"}, "Reçu " + (isNaN(d) ? "" : "le " + d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) + " ") + "· via " + k.source));
+    let rien = true;
+    QA_LABELS.forEach(([label, cle]) => {
+      if (!k.r[cle]) return; rien = false;
+      card.appendChild(h("div",{style:"margin-bottom:8px"}, h("div",{style:"color:#9C7A2E;font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em"}, label), h("div",{style:"color:#2E2A20;margin-top:2px;white-space:pre-wrap"}, String(k.r[cle]))));
+    });
+    if (rien) card.appendChild(h("div",{style:"color:#6B6355"}, "Réponse vide."));
+    boite.appendChild(card);
+  });
 }
 
 function renderNav() {
@@ -4836,7 +4888,7 @@ function showPortalLink(c, wrap) {
     // Interrupteurs : Ikigaï et Arbre de vie n'apparaissent chez le client que si tu les actives ici.
     const sec = h("div",{style:"margin-top:12px;padding-top:10px;border-top:1px dashed #E4DAC0"});
     sec.appendChild(h("div",{style:"font-size:12px;color:#6B6355;margin-bottom:6px"}, "Outils visibles dans l'espace de " + c.name + " (masqués tant que tu ne les actives pas) :"));
-    [["ikigai", "🎯 Ikigaï"], ["arbre", "🌳 Arbre de vie"]].forEach(([k, lib]) => {
+    [["ikigai", "🎯 Ikigaï"], ["arbre", "🌳 Arbre de vie"], ["accueil", "📋 Questionnaire d'accueil"]].forEach(([k, lib]) => {
       const lab = h("label",{style:"display:flex;align-items:center;gap:8px;font-size:13.5px;margin:4px 0;cursor:pointer"});
       const cb = h("input",{type:"checkbox"});
       cb.checked = !!(c.portailOutils && c.portailOutils[k]);
@@ -4913,38 +4965,7 @@ function buildFiche(c) {
     const repBox = h("div",{id:"questReponses-"+c.id,style:"margin-bottom:18px"});
     repBox.appendChild(h("p",{style:"color:#5A5648;font-size:12.5px"},"Chargement des réponses…"));
     wrap.appendChild(repBox);
-    if (c.email || c.tel) {
-      const db = firebase.firestore();
-      let q = db.collection("questionnaires");
-      (c.email ? q.where("email","==",c.email).get() : Promise.resolve({docs:[]}))
-        .then(snap => {
-          repBox.innerHTML = "";
-          if (!snap.docs.length) { repBox.appendChild(h("p",{style:"color:#5A5648;font-size:12.5px"},"Aucune réponse au questionnaire pour l'instant.")); return; }
-          repBox.appendChild(h("div",{style:"font-weight:700;color:#2E2A20;font-size:13.5px;margin-bottom:10px"},"📋 Réponses au questionnaire"));
-          snap.docs.forEach(docu => {
-            const r = docu.data();
-            const card = h("div",{class:"card",style:"padding:14px 16px;margin-bottom:10px;font-size:13px"});
-            const qa = [
-              ["Ce qui l'amène à consulter", r.q1],
-              ["Ce qui est important pour lui/elle", r.q2],
-              ["Ce qu'il/elle attend des séances", r.q3],
-              ["À savoir avant le 1er RDV", r.q4],
-              ["Style d'accompagnement préféré", r.q5],
-            ];
-            qa.forEach(([label,val]) => {
-              if (!val) return;
-              card.appendChild(h("div",{style:"margin-bottom:8px"},
-                h("div",{style:"color:#9C7A2E;font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em"},label),
-                h("div",{style:"color:#2E2A20;margin-top:2px"},val)
-              ));
-            });
-            repBox.appendChild(card);
-          });
-        })
-        .catch(e => { console.error("lecture questionnaires:",e); repBox.innerHTML=""; repBox.appendChild(h("p",{style:"color:#5A5648;font-size:12.5px"},"Impossible de charger les réponses pour l'instant.")); });
-    } else {
-      repBox.innerHTML = "";
-    }
+    chargerReponsesQuestionnaire(c, repBox);
     const g = h("div",{class:"grid2"});
     if (c.objective) g.appendChild(h("div",{},
       h("div",{style:"color:#6B6355;font-size:13px;letter-spacing:.08em;margin-bottom:5px"},"OBJECTIF"),

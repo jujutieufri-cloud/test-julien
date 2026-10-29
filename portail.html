@@ -8,7 +8,7 @@
   :root{
     box-sizing:border-box;
     --bg:#F7F3E8; --card:#FFFDF7; --line:#E4DAC0; --text:#3A3226; --muted:#6B6355;
-    --accent:#9C7A2E; --accentSoft:#FBF5E4;
+    --accent: #9C7A2E; --accentSoft:#FBF5E4;
     padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
   }
   *{box-sizing:border-box}
@@ -154,7 +154,7 @@ const OUTILS_DEF = {
   }
 };
 
-function esc(s){ return String(s===undefined||s===null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function esc(s){ return String(s===undefined||s===null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
 function fmt1(v){ return (Math.round(v*10)/10).toString().replace(".",","); }
 
 const PORTAL = { clientId:null, client:null, sid:null, outils:{ikigai:{q:{},note:{},scores:{}},arbre:{q:{},note:{},scores:{}}}, tab:"ikigai" };
@@ -336,7 +336,7 @@ function exerciceStructureHtml(ex, idx, rep){
     <div style="margin:12px 0">
       <label for="rep_${idx}_${esc(c.id)}" style="font-weight:600;font-size:13.5px">${esc(c.label)}</label>
       ${c.aide ? `<div class="muted" style="font-size:12.5px;margin:2px 0 4px">${esc(c.aide)}</div>` : ""}
-      <textarea id="rep_${idx}_${esc(c.id)}" rows="3" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit;font-size:14px" data-champ="${esc(c.id)}" oninput="saisieReponse(${idx}, this.dataset.champ, this.value)">${esc(rep[c.id] || "")}</textarea>
+      <textarea id="rep_${idx}_${esc(c.id)}" rows="3" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit;font-size:16px" data-champ="${esc(c.id)}" oninput="saisieReponse(${idx}, this.dataset.champ, this.value)">${esc(rep[c.id] || "")}</textarea>
     </div>`).join("");
   return `
     <details style="border-bottom:1px solid var(--line);padding:10px 0">
@@ -560,6 +560,50 @@ function envoyerCheckin() {
     .catch(e => { console.error("check-in:", e); btn.disabled = false; btn.textContent = "Envoyer mon check-in"; document.getElementById("ck_msg").textContent = "⚠️ Non envoyé, vérifie ta connexion et réessaie."; });
 }
 
+const QUESTIONS_ACCUEIL = [
+  { id: "q1", label: "Qu'est-ce qui vous amène à consulter aujourd'hui ?" },
+  { id: "q2", label: "Qu'est-ce qui est important pour vous dans cet accompagnement ?" },
+  { id: "q3", label: "Qu'attendez-vous concrètement de nos échanges ?" },
+  { id: "q4", label: "Y a-t-il quelque chose que vous aimeriez que je sache avant notre premier rendez-vous ?" },
+  { id: "q5", label: "Comment préférez-vous être accompagné·e ?", options: ["Direct et concret", "Doux et progressif", "Structuré, avec des outils précis", "Je préfère qu'on en discute ensemble"] }
+];
+function accueilVisible(client) { return !!(client && client.portailOutils && client.portailOutils.accueil === true); }
+function questionnaireInterieur(client, modif) {
+  const r = client.questionnaireAccueil;
+  if (r && !modif) {
+    const quand = new Date(r.modifieLe || r.envoyeLe);
+    const lignes = QUESTIONS_ACCUEIL.filter(x => r[x.id]).map(x => `<div style="margin:10px 0"><div style="font-weight:600;font-size:13px">${esc(x.label)}</div><div style="white-space:pre-wrap;font-size:14px;margin-top:2px">${esc(r[x.id])}</div></div>`).join("");
+    return `<div style="font-weight:700">📋 Mon questionnaire d'accueil</div>
+      <p class="muted" style="margin:2px 0 6px">✅ Envoyé${isNaN(quand) ? "" : " le " + quand.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}. Merci, cela m'aide à préparer notre premier rendez-vous.</p>${lignes}
+      <button type="button" onclick="modifierQuestionnaire()" style="margin-top:6px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 12px;font:inherit;cursor:pointer">Modifier mes réponses</button>`;
+  }
+  const champs = QUESTIONS_ACCUEIL.map(x => {
+    const val = (r && r[x.id]) || "";
+    if (x.options) return `<div style="margin:12px 0"><label for="qa_${x.id}" style="font-weight:600;font-size:13.5px">${esc(x.label)}</label><select id="qa_${x.id}" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:9px;font:inherit;font-size:16px;margin-top:4px"><option value="">— Pas de préférence particulière —</option>${x.options.map(o => `<option${o === val ? " selected" : ""}>${esc(o)}</option>`).join("")}</select></div>`;
+    return `<div style="margin:12px 0"><label for="qa_${x.id}" style="font-weight:600;font-size:13.5px">${esc(x.label)}</label><textarea id="qa_${x.id}" rows="3" maxlength="2000" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit;font-size:16px;margin-top:4px">${esc(val)}</textarea></div>`;
+  }).join("");
+  return `<div style="font-weight:700">📋 Mon questionnaire d'accueil</div>
+    <p class="muted" style="margin:2px 0 4px">Quelques questions pour préparer notre premier rendez-vous. Il n'y a pas de bonne ou de mauvaise réponse, et tu peux laisser vide ce que tu ne souhaites pas partager.</p>${champs}
+    <button type="button" id="qa_btn" onclick="envoyerQuestionnaire()" style="border:none;border-radius:10px;padding:10px 14px;background:var(--accent);color:#fff;font:inherit;font-weight:600;cursor:pointer">Envoyer mes réponses</button>
+    <div class="muted" id="qa_msg" style="font-size:12.5px;margin-top:6px;min-height:16px"></div>`;
+}
+function questionnaireHtml(client) { return accueilVisible(client) ? `<div class="card" id="questZone">${questionnaireInterieur(client, false)}</div>` : ""; }
+function modifierQuestionnaire() { document.getElementById("questZone").innerHTML = questionnaireInterieur(PORTAL.client, true); }
+function envoyerQuestionnaire() {
+  const btn = document.getElementById("qa_btn"), msg = document.getElementById("qa_msg");
+  if (!btn || btn.disabled) return;
+  const rep = {};
+  QUESTIONS_ACCUEIL.forEach(x => { const el = document.getElementById("qa_" + x.id); rep[x.id] = ((el && el.value) || "").trim().slice(0, 2000); });
+  if (!Object.values(rep).some(v => v)) { msg.textContent = "Écris au moins une réponse avant d'envoyer."; return; }
+  const avant = PORTAL.client.questionnaireAccueil, maintenant = new Date().toISOString();
+  const data = Object.assign({}, rep, { envoyeLe: (avant && avant.envoyeLe) || maintenant });
+  if (avant) data.modifieLe = maintenant;
+  btn.disabled = true; btn.textContent = "Envoi…";
+  firebase.firestore().collection("clients").doc(PORTAL.clientId).update({ questionnaireAccueil: data })
+    .then(() => { PORTAL.client.questionnaireAccueil = data; document.getElementById("questZone").innerHTML = questionnaireInterieur(PORTAL.client, false); })
+    .catch(e => { console.error("questionnaire:", e); btn.disabled = false; btn.textContent = "Envoyer mes réponses"; msg.textContent = "⚠️ Non envoyé, vérifie ta connexion et réessaie. Tes réponses sont toujours là."; });
+}
+
 function renderContractButton(){
   const box = document.getElementById("contractZone");
   firebase.firestore().collection("clients").doc(PORTAL.clientId).collection("contracts")
@@ -605,6 +649,7 @@ function renderPortal(){
     <h1>👋 Bonjour ${esc(nom)}</h1>
     <p class="muted" style="margin-bottom:16px">Ton espace personnel de coaching</p>
     ${next ? `<div class="reminder">🗓️ Ta prochaine séance : <b>${esc(next)}</b>${PORTAL.client.nextSessionHeure ? " à " + esc(PORTAL.client.nextSessionHeure) : ""}<br><a href="${agendaLien(PORTAL.client)}" target="_blank" rel="noopener" style="font-size:13px;color:var(--accent);font-weight:600;text-decoration:none">📅 Ajouter à mon agenda</a></div>` : ""}
+    ${questionnaireHtml(PORTAL.client)}
     <div class="card" id="rythmeZone">${rythmesHtml(PORTAL.client)}</div>
     ${checkinHtml(PORTAL.client)}
     ${planteHtml(PORTAL.client)}
