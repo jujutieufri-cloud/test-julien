@@ -1215,14 +1215,14 @@ const EXERCICES_CATALOGUE = [
 ];
 
 // Envoie un exercice du catalogue dans le parcours du client (il apparaît tout de suite dans son espace).
-function envoyerExercice(c, cat) {
+function envoyerExercice(c, cat, sauver) {
   if (!c.exercices) c.exercices = [];
   c.exercices.push({
     id: "ex_" + Date.now() + "_" + cat.id, catalogueId: cat.id, titre: cat.titre, consigne: cat.consigne,
     champs: cat.champs.map(ch => ({ id: ch.id, label: ch.label, aide: ch.aide || "" })),
     done: false, envoyeLe: new Date().toISOString()
   });
-  ClientsManager.saveClient(c.id, { exercices: c.exercices });
+  if (sauver !== false) ClientsManager.saveClient(c.id, { exercices: c.exercices });
 }
 
 // Réponses du client à un exercice structuré (lecture seule pour le coach).
@@ -1245,7 +1245,17 @@ function buildCatalogueExercices(c, apres) {
   const box = h("div",{style:"margin-bottom:20px"});
   function dessiner() {
     box.innerHTML = "";
-    EXERCICES_CATALOGUE.forEach(cat => {
+    const pk = packPourEtape(c);
+    if (pk) {
+      const sg = h("div",{style:"border:2px solid #9C7A2E55;border-radius:12px;padding:10px 12px;margin-bottom:10px;background:#FFF9EA"});
+      sg.appendChild(h("div",{style:"font-weight:700;font-size:13.5px;color:#2E2A20"}, "🧭 Suggestion pour l'étape en cours : « " + pk.etape + " »"));
+      sg.appendChild(h("div",{style:"font-size:12.5px;color:#5A5648;margin:4px 0 8px"}, pk.exercices.map(x => x.titre).join("  ·  ")));
+      const reste = exercicesAEnvoyer(c, pk.exercices).length;
+      const bp = h("button",{class: reste ? "btn-sm" : "btn-g"}, reste ? "📤 Envoyer le pack (" + reste + " exercice" + (reste > 1 ? "s" : "") + ")" : "✓ Pack déjà envoyé");
+      bp.disabled = !reste; bp.addEventListener("click", () => { envoyerPack(c, pk.exercices); dessiner(); if (apres) apres(); });
+      sg.appendChild(bp); box.appendChild(sg);
+    }
+    catalogueComplet().forEach(cat => {
       const envoyes = (c.exercices || []).filter(e => e.catalogueId === cat.id);
       const enCours = envoyes.find(e => !e.done);
       const row = h("div",{style:"border:1px solid #E4DAC0;border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#FFFDF7"});
@@ -3563,7 +3573,7 @@ const TABS = [
   {id:"clairiere",    icon:"🧭", label:"La Clairière",             pole:"Suivi clients", cat:"Clients"},
   {id:"deroules",     icon:"📖", label:"Déroulés de séance",       pole:"Suivi clients", cat:"Préparer une séance"},
   {id:"bibliotheque", icon:"▣", label:"Bibliothèque coach",        pole:"Suivi clients", cat:"Préparer une séance"},
-  {id:"exercices",    icon:"📚", label:"Attribuer des exercices",   pole:"Suivi clients", cat:"Préparer une séance"},
+  {id:"exercices",    icon:"📚", label:"Exercices",   pole:"Suivi clients", cat:"Préparer une séance"},
   {id:"reconversion", icon:"🌱", label:"Reconversion / Burnout",   pole:"Suivi clients", cat:"Préparer une séance"},
   {id:"ressources",   icon:"◇", label:"Mes ressources",            pole:"Suivi clients", cat:"Préparer une séance"},
 
@@ -3758,6 +3768,7 @@ function buildCheckinSection(c) {
 
 // Attribution d'un exercice à plusieurs clients à la fois (cases à cocher).
 function ouvrirAttribution(cat, apres) {
+  const liste = cat.pack || [cat];
   const actifs = (state.clients || []).filter(c => c.status === "actif");
   const fond = h("div",{style:"position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px"});
   const boite = h("div",{style:"background:#FFFDF7;border-radius:16px;max-width:460px;width:100%;max-height:85vh;overflow:auto;padding:18px"});
@@ -3766,7 +3777,7 @@ function ouvrirAttribution(cat, apres) {
   if (!actifs.length) boite.appendChild(h("p",{style:"font-size:13px;color:#6B6355"}, "Aucun client actif pour le moment."));
   const coches = [];
   actifs.forEach(c => {
-    const enCours = (c.exercices || []).some(e => e.catalogueId === cat.id && !e.done);
+    const enCours = exercicesAEnvoyer(c, liste).length === 0;
     const lab = h("label",{style:"display:flex;align-items:center;gap:10px;padding:9px 4px;border-top:1px solid #E4DAC0;font-size:14px;" + (enCours ? "opacity:.55" : "cursor:pointer")});
     const cb = h("input",{type:"checkbox"}); cb.disabled = enCours;
     lab.appendChild(cb); lab.appendChild(h("span",{style:"flex:1"}, c.name));
@@ -3783,7 +3794,7 @@ function ouvrirAttribution(cat, apres) {
   const annuler = h("button",{class:"btn-g"}, "Annuler"); annuler.addEventListener("click", () => fond.remove());
   envoyer.addEventListener("click", () => {
     const sel = coches.filter(x => x.cb.checked).map(x => x.c);
-    sel.forEach(c => envoyerExercice(c, cat));
+    sel.forEach(c => envoyerPack(c, liste));
     fond.remove(); alert("✅ Envoyé à " + sel.length + " client(s)."); if (apres) apres();
   });
   fond.addEventListener("click", ev => { if (ev.target === fond) fond.remove(); });
@@ -3791,24 +3802,126 @@ function ouvrirAttribution(cat, apres) {
   fond.appendChild(boite); document.body.appendChild(fond); maj();
 }
 
+// Exercices créés par le coach : stockés dans la base (settings/exercices) et ajoutés au catalogue livré.
+const ExercicesPerso = {
+  items: [], _on: false,
+  listen() {
+    if (this._on) return; this._on = true;
+    try { firebase.firestore().collection("settings").doc("exercices").onSnapshot(sn => { this.items = (sn.exists && sn.data().items) || []; if (state.tab === "exercices") render(); }, e => { this._on = false; console.error("exercices perso:", e); }); } catch (e) { this._on = false; }
+  },
+  async sauver(items) { await firebase.firestore().collection("settings").doc("exercices").set({ items, updatedAt: new Date().toISOString() }); this.items = items; }
+};
+const catalogueComplet = () => EXERCICES_CATALOGUE.concat((ExercicesPerso.items || []).map(x => Object.assign({ perso: true, resume: "", duree: "à ton rythme", source: "Exercice créé par ton coach" }, x)));
+
+// Suivi : où en est chaque client sur chaque exercice (à faire, en cours si des réponses existent, terminé).
+function suiviExercices() {
+  const lignes = [], ordre = { encours: 0, afaire: 1, termine: 2 };
+  (state.clients || []).filter(c => c.status === "actif").forEach(c => (c.exercices || []).forEach(e => {
+    const rep = (c.reponsesExercices && c.reponsesExercices[e.id]) || {}, champs = e.champs || [];
+    const remplis = champs.filter(ch => String(rep[ch.id] || "").trim()).length;
+    lignes.push({ c, e, etat: e.done ? "termine" : (remplis > 0 ? "encours" : "afaire"), remplis, total: champs.length, quand: rep._maj || e.envoyeLe || "" });
+  }));
+  return lignes.sort((a, b) => ordre[a.etat] - ordre[b.etat] || new Date(b.quand || 0) - new Date(a.quand || 0));
+}
+
+function buildSuiviExercices() {
+  const box = h("div",{style:"margin-bottom:22px"}), tous = suiviExercices();
+  const filtres = [["tout", "Tous"], ["encours", "En cours"], ["afaire", "À faire"], ["termine", "Terminés"]];
+  let actif = "tout"; const barre = h("div",{style:"display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"}), zone = h("div",{});
+  function dessiner() {
+    barre.innerHTML = ""; zone.innerHTML = "";
+    filtres.forEach(([id, lib]) => { const n = id === "tout" ? tous.length : tous.filter(x => x.etat === id).length; const b = h("button",{class:"btn-sm",style: id === actif ? "background:#9C7A2E;color:#fff" : ""}, lib + " (" + n + ")"); b.addEventListener("click", () => { actif = id; dessiner(); }); barre.appendChild(b); });
+    const liste = tous.filter(x => actif === "tout" || x.etat === actif);
+    if (!liste.length) { zone.appendChild(h("p",{style:"color:#6B6355;font-size:13px"}, tous.length ? "Rien dans cette catégorie." : "Aucun exercice envoyé pour le moment. Choisis-en un ci-dessous : chaque client y répond directement dans son espace.")); return; }
+    liste.slice(0, 40).forEach(x => {
+      const ico = x.etat === "termine" ? "✅" : x.etat === "encours" ? "✍️" : "⏳", d = new Date(x.quand);
+      const row = h("button",{style:"display:flex;gap:10px;align-items:center;width:100%;text-align:left;border:1px solid #E4DAC0;border-radius:10px;background:#FFFDF7;padding:8px 10px;margin-bottom:6px;font:inherit;cursor:pointer"});
+      row.appendChild(h("span",{style:"font-size:18px"}, ico));
+      const t = h("span",{style:"flex:1;min-width:0"}); t.appendChild(h("div",{style:"font-weight:600;font-size:13.5px;color:#2E2A20"}, x.c.name + " · " + x.e.titre));
+      t.appendChild(h("div",{style:"font-size:12px;color:#6B6355"}, (x.total ? x.remplis + "/" + x.total + " question(s) répondue(s)" : (x.etat === "termine" ? "terminé" : "pas encore commencé")) + (isNaN(d) ? "" : " · " + d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })))); row.appendChild(t);
+      row.addEventListener("click", () => setState({ tab: "clients", selClientId: x.c.id, subTab: "parcours" })); zone.appendChild(row);
+    });
+  }
+  dessiner(); box.appendChild(barre); box.appendChild(zone); return box;
+}
+
+// Création / modification d'un exercice par le coach.
+function ouvrirCreationExercice(existant, apres) {
+  const fond = h("div",{style:"position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:14px"});
+  const boite = h("div",{style:"background:#FFFDF7;border-radius:16px;max-width:520px;width:100%;max-height:90vh;overflow:auto;padding:18px"});
+  const champ = (lib, el) => { const w = h("div",{style:"margin:10px 0"}); w.appendChild(h("label",{style:"display:block;font-weight:600;font-size:13px;color:#2E2A20;margin-bottom:4px"}, lib)); w.appendChild(el); return w; };
+  const st = "width:100%;box-sizing:border-box;border:1px solid #E4DAC0;border-radius:8px;padding:9px;font-family:inherit;font-size:16px;background:#fff";
+  const titre = h("input",{type:"text",maxlength:"120",placeholder:"Ex. : Ma journée idéale",style:st}), duree = h("input",{type:"text",maxlength:"40",placeholder:"Ex. : 15 min",style:st}), resume = h("input",{type:"text",maxlength:"200",placeholder:"Une phrase pour t'y retrouver",style:st});
+  const consigne = h("textarea",{rows:"3",maxlength:"2000",placeholder:"Quelques mots chaleureux pour introduire l'exercice et rassurer : il n'y a pas de bonne ou de mauvaise réponse.",style:st});
+  const lignes = h("div",{}), msg = h("div",{style:"font-size:12.5px;color:#B0413E;min-height:18px;margin-top:6px"});
+  boite.appendChild(h("div",{style:"font-weight:700;font-size:16px;color:#2E2A20"}, existant ? "Modifier l'exercice" : "Créer un exercice"));
+  boite.appendChild(h("p",{style:"font-size:12.5px;color:#5A5648;margin:4px 0 6px"}, "Écris comme si tu parlais à la personne : des questions simples, bienveillantes, sans jugement. Elle y répondra dans son espace."));
+  boite.appendChild(champ("Titre", titre)); boite.appendChild(champ("Durée indicative", duree)); boite.appendChild(champ("Résumé (pour toi)", resume)); boite.appendChild(champ("Consigne affichée au client", consigne));
+  boite.appendChild(h("div",{style:"font-weight:600;font-size:13px;margin-top:12px"}, "Questions")); boite.appendChild(lignes);
+  const ajouterLigne = (l, a) => {
+    const r = h("div",{style:"border:1px solid #E4DAC0;border-radius:10px;padding:8px;margin:8px 0;background:#fff"});
+    const q = h("input",{type:"text",maxlength:"200",placeholder:"La question",style:st}), ai = h("input",{type:"text",maxlength:"300",placeholder:"Une aide pour répondre (facultatif)",style:st + ";margin-top:6px"});
+    q.value = l || ""; ai.value = a || "";
+    const x = h("button",{class:"btn-sm",style:"margin-top:6px"}, "Retirer cette question"); x.addEventListener("click", () => r.remove());
+    r.appendChild(q); r.appendChild(ai); r.appendChild(x); lignes.appendChild(r);
+  };
+  const plus = h("button",{class:"btn-sm"}, "+ Ajouter une question"); plus.addEventListener("click", () => { if (lignes.children.length < 20) ajouterLigne("", ""); });
+  boite.appendChild(plus);
+  if (existant) { titre.value = existant.titre || ""; duree.value = existant.duree || ""; resume.value = existant.resume || ""; consigne.value = existant.consigne || ""; (existant.champs || []).forEach(c => ajouterLigne(c.label, c.aide)); } else ajouterLigne("", "");
+  boite.appendChild(msg);
+  const pied = h("div",{style:"display:flex;gap:8px;margin-top:10px"});
+  const enreg = h("button",{class:"btn"}, existant ? "Enregistrer" : "Créer l'exercice"), annuler = h("button",{class:"btn-g"}, "Annuler");
+  annuler.addEventListener("click", () => fond.remove());
+  enreg.addEventListener("click", async () => {
+    const champs = [...lignes.children].map(r => { const i = r.querySelectorAll("input"); return { label: i[0].value.trim(), aide: i[1].value.trim() }; }).filter(c => c.label);
+    if (titre.value.trim().length < 3) { msg.textContent = "Donne un titre à ton exercice (3 lettres au minimum)."; return; }
+    if (!champs.length) { msg.textContent = "Ajoute au moins une question."; return; }
+    enreg.disabled = true; msg.textContent = "";
+    const item = { id: existant ? existant.id : "perso_" + Date.now(), titre: titre.value.trim().slice(0, 120), duree: duree.value.trim().slice(0, 40) || "à ton rythme", resume: resume.value.trim().slice(0, 200), consigne: consigne.value.trim().slice(0, 2000), source: "Exercice créé par ton coach", champs: champs.slice(0, 20).map((c, i) => ({ id: "q" + (i + 1), label: c.label.slice(0, 200), aide: c.aide.slice(0, 300) })) };
+    const liste = existant ? ExercicesPerso.items.map(x => x.id === existant.id ? item : x) : ExercicesPerso.items.concat([item]);
+    try { await ExercicesPerso.sauver(liste); fond.remove(); if (apres) apres(item); }
+    catch (e) { enreg.disabled = false; msg.textContent = "L'enregistrement a échoué, tes réponses sont toujours là : réessaie dans un instant."; }
+  });
+  pied.appendChild(enreg); pied.appendChild(annuler); boite.appendChild(pied);
+  fond.appendChild(boite); fond.addEventListener("click", ev => { if (ev.target === fond) fond.remove(); }); document.body.appendChild(fond);
+}
+
 function renderExercicesTab() {
+  try { ExercicesPerso.listen(); } catch (e) {}
   const wrap = h("div",{style:"max-width:760px"});
-  wrap.appendChild(h("h1",{style:"font-size:30px;color:#2E2A20;font-weight:600;font-style:italic;margin:0"}, "Attribuer des exercices"));
-  wrap.appendChild(h("p",{style:"color:#6B6355;font-size:14px;margin:6px 0 16px"}, "Choisis un exercice, coche les clients concernés, envoie en un clic. Chaque client répond directement dans son espace."));
-  EXERCICES_CATALOGUE.forEach(cat => {
+  wrap.appendChild(h("h1",{style:"font-size:30px;color:#2E2A20;font-weight:600;font-style:italic;margin:0"}, "Exercices"));
+  wrap.appendChild(h("p",{style:"color:#6B6355;font-size:14px;margin:6px 0 16px"}, "Suis l'avancée de chacun, attribue en un clic à un ou plusieurs clients, et crée tes propres exercices. Chaque client répond directement dans son espace."));
+  const titre = (t, mt) => h("h3",{style:"font-size:12px;letter-spacing:.08em;color:#6B6355;margin:" + (mt || 6) + "px 0 8px;font-weight:700"}, t);
+  wrap.appendChild(titre("SUIVI DES EXERCICES")); wrap.appendChild(buildSuiviExercices());
+  wrap.appendChild(titre("PACKS SELON L'ÉTAPE DU PARCOURS", 18));
+  PACKS_PARCOURS.forEach(pp => {
+    const pk = packDeLEtape(pp.etape); if (!pk) return;
+    const r = h("div",{style:"display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid #E4DAC0;border-radius:12px;padding:10px 12px;margin-bottom:8px;background:#FFFDF7"});
+    const tx = h("div",{style:"flex:1"}); tx.appendChild(h("div",{style:"font-weight:700;font-size:13.5px;color:#2E2A20"}, "Étape « " + pk.etape + " » · " + pk.exercices.length + " exercices"));
+    tx.appendChild(h("div",{style:"font-size:12px;color:#6B6355;margin-top:2px"}, pk.exercices.map(x => x.titre).join("  ·  "))); r.appendChild(tx);
+    const b = h("button",{class:"btn-sm"}, "Attribuer à…"); b.addEventListener("click", () => ouvrirAttribution({ titre: "Pack « " + pk.etape + " » (" + pk.exercices.length + " exercices)", pack: pk.exercices })); r.appendChild(b); wrap.appendChild(r);
+  });
+  const entete = h("div",{style:"display:flex;justify-content:space-between;align-items:center;margin:18px 0 8px"});
+  entete.appendChild(h("h3",{style:"font-size:12px;letter-spacing:.08em;color:#6B6355;margin:0;font-weight:700"}, "CATALOGUE"));
+  const creer = h("button",{class:"btn-sm"}, "➕ Créer un exercice"); creer.addEventListener("click", () => ouvrirCreationExercice(null, () => render())); entete.appendChild(creer); wrap.appendChild(entete);
+  catalogueComplet().forEach(cat => {
     const row = h("div",{style:"border:1px solid #E4DAC0;border-radius:14px;padding:12px 14px;margin-bottom:10px;background:#FFFDF7"});
-    const top = h("div",{style:"display:flex;justify-content:space-between;align-items:flex-start;gap:10px"});
-    const txt = h("div",{style:"flex:1"});
-    txt.appendChild(h("div",{style:"font-weight:700;font-size:14.5px;color:#2E2A20"}, cat.titre));
-    txt.appendChild(h("div",{style:"font-size:12.5px;color:#6B6355;margin-top:2px"}, cat.resume + " · " + cat.duree));
-    top.appendChild(txt);
-    const b = h("button",{class:"btn-sm"}, "Attribuer à…"); b.addEventListener("click", () => ouvrirAttribution(cat));
-    top.appendChild(b); row.appendChild(top);
+    const top = h("div",{style:"display:flex;justify-content:space-between;align-items:flex-start;gap:10px"}), txt = h("div",{style:"flex:1"});
+    txt.appendChild(h("div",{style:"font-weight:700;font-size:14.5px;color:#2E2A20"}, cat.titre + (cat.perso ? "  ·  créé par toi" : "")));
+    txt.appendChild(h("div",{style:"font-size:12.5px;color:#6B6355;margin-top:2px"}, [cat.resume, cat.duree].filter(Boolean).join(" · "))); top.appendChild(txt);
+    const b = h("button",{class:"btn-sm"}, "Attribuer à…"); b.addEventListener("click", () => ouvrirAttribution(cat)); top.appendChild(b); row.appendChild(top);
     const det = h("details",{style:"margin-top:6px"});
     det.appendChild(h("summary",{style:"cursor:pointer;font-size:12px;color:#9C7A2E"}, "Aperçu (" + cat.champs.length + " questions)"));
-    det.appendChild(h("div",{style:"font-size:12.5px;color:#5A5648;margin-top:6px;white-space:pre-wrap"}, cat.consigne));
-    cat.champs.forEach(ch => det.appendChild(h("div",{style:"font-size:12.5px;color:#2E2A20;margin-top:4px"}, "• " + ch.label)));
-    row.appendChild(det); wrap.appendChild(row);
+    if (cat.consigne) det.appendChild(h("div",{style:"font-size:12.5px;color:#5A5648;margin-top:6px;white-space:pre-wrap"}, cat.consigne));
+    cat.champs.forEach(ch => det.appendChild(h("div",{style:"font-size:12.5px;color:#2E2A20;margin-top:4px"}, "• " + ch.label))); row.appendChild(det);
+    if (cat.perso) {
+      const act = h("div",{style:"display:flex;gap:6px;margin-top:8px"});
+      const m = h("button",{class:"btn-sm"}, "✏️ Modifier"); m.addEventListener("click", () => ouvrirCreationExercice(cat, () => render()));
+      const x = h("button",{class:"btn-sm",style:"color:#B0413E"}, "🗑️ Supprimer");
+      x.addEventListener("click", async () => { if (!confirm("Supprimer « " + cat.titre + " » du catalogue ?\n\nLes exemplaires déjà envoyés aux clients restent dans leur espace.")) return; try { await ExercicesPerso.sauver(ExercicesPerso.items.filter(i => i.id !== cat.id)); render(); } catch (e) { alert("La suppression a échoué, réessaie dans un instant."); } });
+      act.appendChild(m); act.appendChild(x); row.appendChild(act);
+    }
+    wrap.appendChild(row);
   });
   return wrap;
 }
@@ -4177,7 +4290,7 @@ function ouvrirSuppressionDossier(c, apres) {
   const cb = h("input",{type:"checkbox"}); lab.appendChild(cb); lab.appendChild(h("span",{}, "2. J'ai conservé ce dont j'ai légalement besoin (copie du dossier, facturation) et je comprends que la suppression est définitive."));
   boite.appendChild(exp); boite.appendChild(lab);
   boite.appendChild(h("div",{style:"font-size:13px;margin-top:6px"}, "3. Pour confirmer, tape le nom complet du client : « " + c.name + " »"));
-  const champ = h("input",{type:"text",autocomplete:"off",style:"width:100%;box-sizing:border-box;border:1px solid #E4DAC0;border-radius:8px;padding:9px;font:inherit;font-size:16px;margin-top:6px"}); boite.appendChild(champ);
+  const champ = h("input",{type:"text",autocomplete:"off",style:"width:100%;box-sizing:border-box;border:1px solid #E4DAC0;border-radius:8px;padding:9px;font-family:inherit;font-size:16px;margin-top:6px"}); boite.appendChild(champ);
   boite.appendChild(etape);
   const go = h("button",{class:"btn",style:"background:#B0413E"}, "🗑️ Supprimer définitivement");
   const annuler = h("button",{class:"btn-g"}, "Annuler"); annuler.addEventListener("click", () => fond.remove());
@@ -4213,6 +4326,98 @@ function ouvrirSuppressionDossier(c, apres) {
     n.avertissements.forEach(a => resume.appendChild(h("div",{style:"color:#B26A00;margin-top:4px"}, "⚠️ " + a)));
     maj();
   });
+}
+
+// ═════════ BROUILLON : attribution selon l'étape du parcours + partage des fiches d'exercice ═════════
+// Clés = étapes du parcours (accents et majuscules ignorés). Si tu renommes tes étapes, aucune suggestion n'est inventée.
+const PACKS_PARCOURS = [
+  { etape: "Cadrage", ids: ["speedboat", "swot"] },
+  { etape: "Exploration", ids: ["poles", "positions", "hudson"] },
+  { etape: "Plan d'action", ids: ["waltdisney", "ecologie"] },
+  { etape: "Mise en œuvre", ids: ["quatorze", "courbe"] },
+  { etape: "Bilan", ids: ["swot", "speedboat"] }
+];
+function packDeLEtape(etape) {
+  const p = PACKS_PARCOURS.find(x => norm2(x.etape) === norm2(etape)); if (!p) return null;
+  const exercices = p.ids.map(id => EXERCICES_CATALOGUE.find(x => x.id === id)).filter(Boolean);
+  return exercices.length ? { etape: p.etape, exercices } : null;
+}
+function packPourEtape(c) {
+  const e = ((c.parcours && c.parcours.phases) || []).find(p => !p.done);
+  return e ? packDeLEtape(e.label) : null;
+}
+const exercicesAEnvoyer = (c, liste) => liste.filter(x => !(c.exercices || []).some(e => e.catalogueId === x.id && !e.done));
+function envoyerPack(c, liste) {
+  const a = exercicesAEnvoyer(c, liste);
+  a.forEach(x => envoyerExercice(c, x, false));
+  if (a.length) ClientsManager.saveClient(c.id, { exercices: c.exercices });   // une seule sauvegarde pour tout le pack
+  return a.length;
+}
+
+// ═════════ BROUILLON : liste des personnes coachées pour le tableau de bord ═════════
+const ETATS_COACHE = { "actif": ["En cours", "#4a9e6a"], "pause": ["En pause", "#4A90C8"], "terminé": ["Terminé", "#6B6355"] };
+
+// Tout ce que le tableau de bord affiche pour une personne coachée, calculé depuis sa fiche et l'agenda.
+function donneesCoache(c) {
+  const maintenant = Date.now();
+  const passes = (state.appointments || []).filter(a => a.clientId === c.id && a.date && new Date(a.date + "T" + (a.heure || "23:59") + ":00").getTime() <= maintenant).length;
+  const enLive = ((state.sessions || {})[c.id] || []).length;
+  const ph = (c.parcours && c.parcours.phases) || [];
+  let etape = null;
+  if (ph.length) { const i = ph.findIndex(x => !x.done); etape = i === -1 ? { index: ph.length, total: ph.length, label: "Parcours terminé", fini: true } : { index: i + 1, total: ph.length, label: ph[i].label, fini: false }; }
+  const k = (c.checkins || []).filter(x => x && x.date).sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+  const total = Number(c.forfaitTotal) > 0 ? Number(c.forfaitTotal) : 0, util = Math.max(0, Number(c.forfaitUtilisees) || 0);
+  return {
+    etat: ETATS_COACHE[c.status] ? c.status : null,
+    seances: Math.max(passes, enLive),
+    etape,
+    energie: k ? { energie: k.energie, charge: k.charge, quand: k.date, bas: k.energie <= 2 || k.charge >= 4 } : null,
+    forfait: total ? { nom: c.forfaitNom || "", total, utilisees: Math.min(total, util), restantes: Math.max(0, total - util) } : null,
+    urgence: c.rythme && c.rythme.etat === "sos" ? 0 : c.rythme && c.rythme.etat === "blocage" ? 1 : 2
+  };
+}
+
+function buildListeCoaches() {
+  const box = h("div",{style:"margin-bottom:30px"});
+  const filtres = [["actuels", "Actuels"], ["actif", "En cours"], ["pause", "En pause"], ["terminé", "Terminés"]];
+  const tous = (state.clients || []).map(c => ({ c, d: donneesCoache(c) }));
+  const dans = (x, f) => f === "actuels" ? (x.c.status === "actif" || x.c.status === "pause") : x.c.status === f;
+  let actif = "actuels";
+  box.appendChild(h("h2",{style:"font-size:22px;color:#2E2A20;font-weight:600;font-style:italic;margin:0"}, "👥 Mes coachés"));
+  box.appendChild(h("p",{style:"color:#5A5648;font-size:13.5px;margin:4px 0 12px"}, "Un coup d'œil sur chaque personne accompagnée : où elle en est, comment elle va, et ce qu'il reste de son forfait."));
+  const barre = h("div",{style:"display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"}), zone = h("div",{});
+  const jours = q => { const n = Math.floor((Date.now() - new Date(q).getTime()) / 86400000); return n <= 0 ? "aujourd'hui" : n === 1 ? "hier" : "il y a " + n + " j"; };
+  function dessiner() {
+    barre.innerHTML = ""; zone.innerHTML = "";
+    filtres.forEach(([id, lib]) => { const n = tous.filter(x => dans(x, id)).length; const b = h("button",{class:"btn-sm",style: id === actif ? "background:#9C7A2E;color:#fff" : ""}, lib + " (" + n + ")"); b.addEventListener("click", () => { actif = id; dessiner(); }); barre.appendChild(b); });
+    const liste = tous.filter(x => dans(x, actif)).sort((a, b) => a.d.urgence - b.d.urgence || (b.d.energie && b.d.energie.bas ? 1 : 0) - (a.d.energie && a.d.energie.bas ? 1 : 0) || String(a.c.name).localeCompare(String(b.c.name), "fr"));
+    if (!liste.length) { zone.appendChild(h("p",{style:"color:#6B6355;font-size:13px"}, tous.length ? "Personne dans cette catégorie pour le moment." : "Aucune personne accompagnée pour le moment. Ajoute ton premier client depuis l'onglet « Clients » 🌱")); return; }
+    liste.forEach(({ c, d }) => {
+      const carte = h("button",{style:"display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;border:1px solid #E4DAC0;border-radius:14px;background:#FFFDF7;padding:12px 14px;margin-bottom:10px;font:inherit;cursor:pointer"});
+      carte.appendChild(avatar(c.name, c.profile, 42));
+      const col = h("div",{style:"flex:1;min-width:0"});
+      const tete = h("div",{style:"display:flex;flex-wrap:wrap;align-items:center;gap:6px"});
+      tete.appendChild(h("span",{style:"font-weight:700;font-size:15px;color:#2E2A20"}, c.name));
+      const [lib, coul] = ETATS_COACHE[c.status] || ["Statut à préciser", "#6B6355"];
+      tete.appendChild(h("span",{style:"font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 9px;color:" + coul + ";background:" + coul + "18;border:1px solid " + coul + "33"}, lib));
+      const ri = c.rythme && rythmeInfo(c.rythme.etat); if (ri && (c.rythme.etat === "sos" || c.rythme.etat === "blocage")) tete.appendChild(h("span",{style:"font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 9px;color:#fff;background:" + ri.color}, ri.emoji + " " + ri.court));
+      col.appendChild(tete);
+      // Avancée dans le parcours : une barre en segments + « Étape 2/5 · Exploration »
+      const av = h("div",{style:"display:flex;align-items:center;gap:8px;margin-top:8px"});
+      if (d.etape) {
+        const seg = h("span",{style:"display:flex;gap:3px"}); for (let i = 1; i <= d.etape.total; i++) seg.appendChild(h("span",{style:"width:18px;height:7px;border-radius:4px;background:" + (d.etape.fini || i < d.etape.index ? "#9C7A2E" : i === d.etape.index ? "#E5CF99" : "#E9E3D2")}));
+        av.appendChild(seg); av.appendChild(h("span",{style:"font-size:12.5px;color:#2E2A20"}, d.etape.fini ? "✅ Parcours terminé" : "Étape " + d.etape.index + "/" + d.etape.total + " · " + d.etape.label));
+      } else av.appendChild(h("span",{style:"font-size:12.5px;color:#6B6355"}, "Parcours pas encore défini"));
+      col.appendChild(av);
+      col.appendChild(h("div",{style:"font-size:12.5px;margin-top:5px;color:" + (d.energie && d.energie.bas ? "#B26A00" : "#5A5648")}, d.energie ? "⚡ Énergie " + d.energie.energie + "/5 · 🧠 Charge mentale " + d.energie.charge + "/5 · " + jours(d.energie.quand) + (d.energie.bas ? "  — à surveiller" : "") : "⚡ Pas encore de check-in"));
+      const bas = h("div",{style:"font-size:12.5px;margin-top:5px;color:#5A5648"});
+      bas.appendChild(document.createTextNode("📅 " + (d.seances === 0 ? "Aucune séance prise" : d.seances + (d.seances > 1 ? " séances prises" : " séance prise"))));
+      if (d.forfait) { const f = d.forfait, fin = f.restantes <= 1; bas.appendChild(h("span",{style:"margin-left:10px;color:" + (fin ? "#B26A00" : "#5A5648") + ";font-weight:" + (fin ? "700" : "400")}, "🎟️ " + (f.nom ? "« " + f.nom + " » : " : "Forfait : ") + (f.restantes === 0 ? "épuisé, à renouveler" : f.restantes + (f.restantes > 1 ? " restantes" : " restante") + " sur " + f.total))); }
+      col.appendChild(bas); carte.appendChild(col);
+      carte.addEventListener("click", () => setState({ tab: "clients", selClientId: c.id, subTab: "fiche" })); zone.appendChild(carte);
+    });
+  }
+  dessiner(); box.appendChild(barre); box.appendChild(zone); return box;
 }
 
 function renderNav() {
@@ -4355,6 +4560,7 @@ function renderDashboard() {
     statsRow, midRow, actions
   );
   wrap.insertBefore(buildAlertesRythmes(), wrap.children[1] || null);
+  wrap.insertBefore(buildListeCoaches(), wrap.children[3] || null);
   wrap.appendChild(buildDiagnosticCard());
   return wrap;
 }
@@ -5003,10 +5209,10 @@ function showPortalLink(c, wrap) {
     // Interrupteurs : Ikigaï et Arbre de vie n'apparaissent chez le client que si tu les actives ici.
     const sec = h("div",{style:"margin-top:12px;padding-top:10px;border-top:1px dashed #E4DAC0"});
     sec.appendChild(h("div",{style:"font-size:12px;color:#6B6355;margin-bottom:6px"}, "Outils visibles dans l'espace de " + c.name + " (masqués tant que tu ne les actives pas) :"));
-    [["ikigai", "🎯 Ikigaï"], ["arbre", "🌳 Arbre de vie"], ["accueil", "📋 Questionnaire d'accueil"]].forEach(([k, lib]) => {
+    [["ikigai", "🎯 Ikigaï"], ["arbre", "🌳 Arbre de vie"], ["accueil", "📋 Questionnaire d'accueil (visible par défaut)"]].forEach(([k, lib]) => {
       const lab = h("label",{style:"display:flex;align-items:center;gap:8px;font-size:13.5px;margin:4px 0;cursor:pointer"});
       const cb = h("input",{type:"checkbox"});
-      cb.checked = !!(c.portailOutils && c.portailOutils[k]);
+      cb.checked = k === "accueil" ? !(c.portailOutils && c.portailOutils.accueil === false) : !!(c.portailOutils && c.portailOutils[k]);
       cb.addEventListener("change", () => {
         c.portailOutils = Object.assign({}, c.portailOutils, { [k]: cb.checked });
         ClientsManager.saveClient(c.id, { portailOutils: c.portailOutils });
@@ -5045,9 +5251,13 @@ function buildFiche(c) {
       wrap.appendChild(contactBox);
     }
 
+    // --- Rendez-vous : section complète (À venir / Passés), tout en haut de la fiche ---
+    wrap.appendChild(buildRdvSection(c));
+
     // --- Envoi du questionnaire d'accueil ---
     const qBox = h("div",{style:"margin-bottom:18px;padding:14px 16px;background:#FFFFFF;border-radius:10px;border:1px solid #E4DAC0"});
-    qBox.appendChild(h("div",{style:"font-weight:700;color:#2E2A20;font-size:13.5px;margin-bottom:10px"},"📨 Questionnaire d'accueil"));
+    qBox.appendChild(h("div",{style:"font-weight:700;color:#2E2A20;font-size:13.5px;margin-bottom:6px"},"📨 Envoyer le questionnaire d'accueil"));
+    qBox.appendChild(h("p",{style:"color:#5A5648;font-size:12.5px;margin:0 0 10px"},"Il est aussi disponible directement dans l'espace du client (bouton « 🔗 Portail »). Ses réponses s'affichent ci-dessus dès qu'elles arrivent."));
     const lienQuest = "https://julien-coaching.vercel.app/questionnaire-accueil.html?client="+encodeURIComponent(c.id)+"&nom="+encodeURIComponent(c.name||"")+"&email="+encodeURIComponent(c.email||"");
     const msgQuest = "Bonjour "+(c.name||"")+", avant notre premier échange, je vous propose de répondre à ce petit questionnaire (5 min) : "+lienQuest;
     const btnRow = h("div",{style:"display:flex;gap:8px;flex-wrap:wrap"});
@@ -5074,27 +5284,20 @@ function buildFiche(c) {
     btnRow.appendChild(bCopy);
     if (!c.email && !c.tel) qBox.appendChild(h("p",{style:"color:#5A5648;font-size:12.5px"},"Ajoute un email ou téléphone pour pouvoir l'envoyer."));
     qBox.appendChild(btnRow);
-    wrap.appendChild(qBox);
-
-    // --- Réponses reçues ---
+    // --- Réponses reçues : au cœur de la fiche, visibles avant le lien d'envoi ---
     const repBox = h("div",{id:"questReponses-"+c.id,style:"margin-bottom:18px"});
     repBox.appendChild(h("p",{style:"color:#5A5648;font-size:12.5px"},"Chargement des réponses…"));
     wrap.appendChild(repBox);
     chargerReponsesQuestionnaire(c, repBox);
+    wrap.appendChild(qBox);
     const g = h("div",{class:"grid2"});
     if (c.objective) g.appendChild(h("div",{},
       h("div",{style:"color:#6B6355;font-size:13px;letter-spacing:.08em;margin-bottom:5px"},"OBJECTIF"),
       h("div",{style:"color:#2E2A20;font-size:14px;line-height:1.6"},c.objective)
     ));
-    if (c.nextSession) g.appendChild(h("div",{},
-      h("div",{style:"color:#6B6355;font-size:13px;letter-spacing:.08em;margin-bottom:5px"},"PROCHAINE SÉANCE"),
-      h("div",{style:"color:#9C7A2E;font-size:14px;font-weight:600"}, rdvFrDateLong(c.nextSession, c.nextSessionHeure)),
-      buildNextSessionAgendaLinks(c)
-    ));
     wrap.appendChild(g);
     wrap.appendChild(buildRythmeSection(c));
     wrap.appendChild(buildCheckinSection(c));
-    wrap.appendChild(buildRdvSection(c));
     wrap.appendChild(buildRelancesSection(c));
     wrap.appendChild(buildDonneesSection(c));
     if (c.forfaitNom && c.forfaitTotal) {
