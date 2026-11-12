@@ -59,6 +59,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script>
 const firebaseConfig = {
   apiKey: "AIzaSyDMV0s1MPRzjswK_WFKO7VrV3rxl0p4xdM",
@@ -332,7 +333,12 @@ function exerciceSimpleHtml(ex, idx){
 // Exercice avec questions : le client répond directement, l'enregistrement est automatique.
 function exerciceStructureHtml(ex, idx, rep){
   const remplis = ex.champs.filter(c => String(rep[c.id] || "").trim()).length;
-  const champs = ex.champs.map(c => `
+  const champs = ex.champs.map(c => c.type === "choix" ? `
+    <fieldset style="margin:12px 0;border:0;padding:0;min-width:0">
+      <legend style="font-weight:600;font-size:13.5px;padding:0">${esc(c.label)}</legend>
+      ${c.aide ? `<div class="muted" style="font-size:12.5px;margin:2px 0 4px">${esc(c.aide)}</div>` : ""}
+      ${(c.options || []).map(o => `<label style="display:flex;align-items:flex-start;gap:10px;padding:9px 10px;margin:5px 0;border:1px solid var(--line);border-radius:10px;font-size:14px;line-height:1.4;cursor:pointer;background:#fff"><input type="radio" name="rep_${idx}_${esc(c.id)}" value="${esc(o.id)}" ${rep[c.id] === o.id ? "checked" : ""} data-champ="${esc(c.id)}" onchange="saisieReponse(${idx}, this.dataset.champ, this.value)" style="margin-top:2px;width:18px;height:18px;flex:none"><span>${esc(o.texte)}</span></label>`).join("")}
+    </fieldset>` : `
     <div style="margin:12px 0">
       <label for="rep_${idx}_${esc(c.id)}" style="font-weight:600;font-size:13.5px">${esc(c.label)}</label>
       ${c.aide ? `<div class="muted" style="font-size:12.5px;margin:2px 0 4px">${esc(c.aide)}</div>` : ""}
@@ -604,7 +610,159 @@ function envoyerQuestionnaire() {
     .catch(e => { console.error("questionnaire:", e); btn.disabled = false; btn.textContent = "Envoyer mes réponses"; msg.textContent = "⚠️ Non envoyé, vérifie ta connexion et réessaie. Tes réponses sont toujours là."; });
 }
 
-function renderContractButton(){
+// ═════════ CONTRAT v2 : texte officiel, statuts, signature du client ═════════
+const escC = t => String(t == null ? "" : t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+const dateLongue = iso => { const d = new Date(String(iso) + "T00:00:00"); return isNaN(d) ? "" : d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }); };
+
+// Texte officiel (Articles 1 à 6) : les champs entre crochets rouges sont ceux qu'il reste à renseigner.
+function contratHtml(p, sig) {
+  p = p || {}; sig = sig || {};
+  const rouge = x => '<span style="color:#B0413E">[' + x + ']</span>';
+  const val = (x, nom) => String(x || "").trim() ? "<b>" + escC(String(x).trim()) + "</b>" : rouge(nom);
+  const montant = Number(p.montant) > 0 ? String(p.montant).replace(".", ",") : "";
+  const dd = dateLongue(p.debut), df = dateLongue(p.fin), dj = p.faitLe ? dateLongue(p.faitLe) : "";
+  const H = t => '<div style="font-weight:700;font-size:10pt;color:#9C7A2E;margin:9px 0 3px;border-bottom:1px solid #E4DAC0;padding-bottom:2px">' + t + '</div>';
+  const L = (a, b) => '<div style="margin:2px 0 2px 8px"><b>' + a + '</b> ' + b + '</div>';
+  const pied = n => '<div style="margin-top:12px;padding-top:4px;border-top:1px solid #E4DAC0;font-size:8pt;color:#6B6355;display:flex;justify-content:space-between"><span>Julien TIEUFRI — Contrat de Prestation de Coaching</span><span>Page ' + n + ' sur 2</span></div>';
+  const precision = String(p.precision || "").trim() ? " " + escC(String(p.precision).trim()) : "";
+  const img = (src, nom) => src ? '<img alt="Signature ' + nom + '" src="' + escC(src) + '" style="max-height:58px;max-width:100%;display:block;margin:4px 0">' : '<div style="height:58px"></div>';
+  const audit = sig.signeLe ? '<div style="margin-top:8px;font-size:8pt;color:#6B6355">Signé électroniquement par le client le ' + escC(new Date(sig.signeLe).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" })) + " — adresse IP : " + escC(sig.ip || "non disponible") + (sig.empreinte ? " — empreinte : " + escC(String(sig.empreinte).slice(0, 12)) : "") + ".</div>" : "";
+  const page1 = '<div class="contrat-page1">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #9C7A2E;padding-bottom:6px"><div style="font-size:15pt;font-weight:700;color:#2E2A20">CONTRAT DE COACHING PROFESSIONNEL</div><div style="font-size:9pt;font-weight:700;color:#9C7A2E">CONVENTION CADRE</div></div>'
+    + '<div style="font-style:italic;color:#5A5648;margin:3px 0 10px">Convention d\'accompagnement individuel et d\'autonomisation</div>'
+    + '<div style="display:flex;gap:14px"><div style="flex:1;border:1px solid #E4DAC0;border-radius:6px;padding:7px 9px"><div style="font-weight:700;color:#9C7A2E;font-size:9pt">LE COACH</div>Julien TIEUFRI — Julien Coaching<br>7 bis route de Beaulieu, 60300 Baron<br>Email : julien.coaching60@gmail.com</div>'
+    + '<div style="flex:1;border:1px solid #E4DAC0;border-radius:6px;padding:7px 9px"><div style="font-weight:700;color:#9C7A2E;font-size:9pt">LE CLIENT (COACHÉ)</div>Nom &amp; Prénom : ' + val(p.nom, "Nom et Prénom du client") + '<br>Adresse : ' + val(p.adresse, "Adresse complète") + '<br>Email : ' + val(p.email, "Email du client") + ' | Tél : ' + val(p.tel, "Téléphone") + '</div></div>'
+    + H("PRÉAMBULE &amp; OBJET DE LA CONVENTION")
+    + "<div>Le coaching professionnel est un accompagnement personnalisé favorisant la prise de conscience, l'autonomie et la mise en mouvement du Client afin qu'il atteigne ses propres objectifs en mobilisant ses ressources et en dépassant ses blocages.</div>"
+    + '<div style="margin:6px 0;padding:6px 9px;background:#FBF7EC;border-left:3px solid #9C7A2E"><b>Objectif principal de l\'accompagnement :</b> ' + val(p.objectif, "Détailler ici les objectifs et résultats visés par le client lors du cadrage") + "</div>"
+    + H("ARTICLE 1 — DÉROULEMENT &amp; MODALITÉS PRATIQUES")
+    + L("Période d'accompagnement :", "Du " + val(dd, "Date de début") + " au " + val(df, "Date de fin") + " .")
+    + L("Nombre et rythme des séances :", "L'accompagnement comprend " + val(p.nbSeances, "Nombre") + " séances d'une durée de 1h00 à 1h30 chacune, à raison d'au moins deux séances par mois." + precision)
+    + L("Format :", "Les séances se déroulent en présentiel ou à distance (visioconférence).")
+    + L("Ajustement du cadre :", "Les modalités pratiques peuvent être adaptées ponctuellement d'un commun accord.")
+    + H("ARTICLE 2 — ESPACE NUMÉRIQUE, SUIVI &amp; SOUTIEN TÉLÉPHONIQUE")
+    + L("Espace Client Digital :", "Le Client dispose d'un accès personnel à la plateforme Coaching Studio (julien-coaching.vercel.app) permettant la messagerie directe inter-séances, la consultation de l'historique et le suivi des objectifs. Le Coach assure le support fonctionnel de cet outil.")
+    + L("Soutien Téléphonique Inter-Séances :", "Un accompagnement téléphonique d'urgence ou d'écoute est ouvert du lundi au vendredi, de 8h00 à 20h00 (jours ouvrables). Ce service est suspendu durant les vacances scolaires (Zone B). En cas d'indisponibilité immédiate du Coach, un message peut être laissé pour un rappel dans les plus brefs délais.")
+    + H("ARTICLE 3 — MODALITÉS FINANCIÈRES &amp; ENGAGEMENT INTÉGRAL DU FORFAIT")
+    + L("Montant du forfait :", "Le tarif total de l'accompagnement est fixé à " + val(montant, "Montant") + " € TTC, payable selon les modalités convenues lors de la signature.")
+    + L("Règlement des séances à distance :", "Le paiement doit être effectif avant la tenue de la séance.")
+    + L("Exigibilité du forfait &amp; Amélioration de l'état :", "Tout forfait souscrit et commencé est intégralement dû au Coach. Si le Client choisit de suspendre ou d'interrompre le suivi au motif qu'il se sent mieux, qu'il constate la résolution de ses problématiques ou l'atteinte précoce de ses objectifs (« la personne va mieux » traduisant le succès du travail d'autonomisation), la totalité des honoraires du forfait demeure acquise au Coach sans possibilité de remboursement ou de proratisation.")
+    + H("ARTICLE 4 — ENGAGEMENTS &amp; DÉONTOLOGIE DU COACH")
+    + "<div>Le Coach exerce dans le respect du code de déontologie de la profession. Il s'astreint au secret professionnel le plus strict concernant les entretiens et les échanges numériques ou téléphoniques. Il met en œuvre tous les moyens nécessaires au développement du Client (obligation de moyens) sans abus d'influence.</div>"
+    + pied(1) + "</div>";
+  const page2 = '<div class="contrat-page2" style="page-break-before:always">'
+    + H("ARTICLE 5 — DEVOIRS DU CLIENT &amp; ANNULATION")
+    + "<div>Le Client reste pleinement responsable des choix, décisions et actions issus du coaching. En cas d'empêchement pour une séance, le Client s'engage à prévenir le Coach au moins 48 heures à l'avance. Passé ce délai, ou en cas de retard supérieur à 15 minutes, la séance est considérée comme due et effectuée.</div>"
+    + H("ARTICLE 6 — RÉSILIATION DU CONTRAT")
+    + "<div>Chaque partie peut interrompre la présente convention sous réserve d'un préavis écrit de 7 jours, étant rappelé que l'interruption à l'initiative du Client ne le dispense pas du règlement intégral du forfait souscrit (Article 3).</div>"
+    + '<div style="margin-top:16px"><b>Fait à Baron, le ' + val(dj, "Date du jour") + " , en deux exemplaires originaux.</b></div>"
+    + '<div style="font-style:italic;color:#5A5648;margin:2px 0 8px">(Faire précéder la signature de la mention manuscrite « Lu et approuvé »)</div>'
+    + '<div style="display:flex;gap:18px"><div style="flex:1;border:1px solid #E4DAC0;border-radius:6px;padding:8px 10px;min-height:110px"><div style="font-weight:700;color:#9C7A2E;font-size:9pt">Pour le Client :</div><div style="font-style:italic;min-height:16px">' + escC(sig.mention || "") + "</div>" + img(sig.client, "du client") + "<div>" + escC(p.nom || "") + "</div></div>"
+    + '<div style="flex:1;border:1px solid #E4DAC0;border-radius:6px;padding:8px 10px;min-height:110px"><div style="font-weight:700;color:#9C7A2E;font-size:9pt">Pour le Coach :</div><div style="min-height:16px"></div>' + img(sig.coach, "du coach") + "<div>Julien TIEUFRI</div></div></div>"
+    + audit + pied(2) + "</div>";
+  return '<div class="contrat" style="font-family:Georgia,\'Times New Roman\',serif;color:#2E2A20;font-size:9.6pt;line-height:1.42">' + page1 + page2 + "</div>";
+}
+
+// Empreinte SHA-256 des éléments du contrat (détecte toute modification après signature).
+async function contratEmpreinte(p, mention) {
+  try {
+    const t = JSON.stringify([p.nom, p.adresse, p.email, p.tel, p.objectif, p.debut, p.fin, String(p.nbSeances), String(p.montant), p.precision || "", p.faitLe || "", mention || ""]);
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  } catch (e) { return null; }
+}
+
+// Zone de signature manuscrite (doigt, stylet ou souris).
+function creerPadSignature(canvas) {
+  const ctx = canvas.getContext && canvas.getContext("2d"); let dessin = false, trace = false;
+  const r0 = canvas.getBoundingClientRect(), ratio = window.devicePixelRatio || 1;
+  if (r0.width && ctx) { canvas.width = Math.round(r0.width * ratio); canvas.height = Math.round((r0.height || 140) * ratio); ctx.scale(ratio, ratio); }
+  if (ctx) { ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#1a1a1a"; }
+  canvas.style.touchAction = "none";
+  const pos = e => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  canvas.addEventListener("pointerdown", e => { if (!ctx) return; dessin = true; const q = pos(e); ctx.beginPath(); ctx.moveTo(q.x, q.y); try { canvas.setPointerCapture(e.pointerId); } catch (x) {} e.preventDefault(); });
+  canvas.addEventListener("pointermove", e => { if (!dessin || !ctx) return; const q = pos(e); ctx.lineTo(q.x, q.y); ctx.stroke(); trace = true; e.preventDefault(); });
+  const fin = () => { dessin = false; };
+  canvas.addEventListener("pointerup", fin); canvas.addEventListener("pointercancel", fin); canvas.addEventListener("pointerleave", fin);
+  return { vide: () => !trace, dataUrl: () => trace ? canvas.toDataURL("image/png") : null, effacer: () => { trace = false; if (ctx) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.restore(); } } };
+}
+
+// PDF de 2 pages (la page 2 commence à l'Article 5).
+function telechargerContratPDF(p, sig, nomFichier) {
+  if (typeof html2pdf === "undefined") { alert("Le PDF n'est pas disponible pour le moment (bibliothèque non chargée). Réessaie dans un instant."); return Promise.resolve(false); }
+  const el = document.createElement("div"); el.style.cssText = "position:fixed;left:-10000px;top:0;width:190mm;background:#fff;padding:0"; el.innerHTML = contratHtml(p, sig); document.body.appendChild(el);
+  return html2pdf().set({ margin: [8, 10, 8, 10], filename: nomFichier, image: { type: "jpeg", quality: 0.95 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css"] } }).from(el).save().then(() => { el.remove(); return true; }).catch(e => { el.remove(); throw e; });
+}
+
+// Contrat v2 : relecture et signature du client.
+async function chargerContratV2() {
+  const zone = document.getElementById("contractZone"); if (!zone) return false;
+  let q; try { q = await firebase.firestore().collection("clients").doc(PORTAL.clientId).collection("contracts").orderBy("createdAt", "desc").limit(5).get(); } catch (e) { console.error("contrat:", e); return false; }
+  const l = []; q.forEach(d => l.push({ id: d.id, data: d.data() }));
+  const dernier = l[0]; if (!dernier || dernier.data.version !== 2) return false;
+  PORTAL.contrat = dernier; const d = dernier.data;
+  if (d.status === "signed") zone.innerHTML = contratSigneHtml(d); else if (d.status === "pending_signature") zone.innerHTML = contratASignerHtml(d); else { zone.innerHTML = ""; return true; }
+  if (d.status === "pending_signature") initContratSignature();
+  return true;
+}
+const contratSigObj = d => ({ coach: d.coachSignature, client: d.clientSignature, mention: d.mention, signeLe: d.signedAt, ip: d.signerIp, empreinte: d.contentHash });
+function contratSigneHtml(d) {
+  const quand = new Date(d.signedAt);
+  return `<div class="card" id="contratV2Zone"><div style="font-weight:700">📄 Mon contrat de coaching</div>
+    <p style="margin:6px 0;color:#2F7D3B;font-weight:600">✅ Signé le ${escC(quand.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }))}. Merci pour ta confiance 🌿</p>
+    <button type="button" onclick="telechargerContratClient()" style="border:none;border-radius:10px;padding:10px 14px;background:var(--accent);color:#fff;font-family:inherit;font-size:16px;font-weight:600;cursor:pointer">📥 Télécharger mon contrat (PDF)</button>
+    <details style="margin-top:10px"><summary style="cursor:pointer">Relire le contrat</summary><div style="max-height:50vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:8px;background:#fff">${contratHtml(d.params, contratSigObj(d))}</div></details></div>`;
+}
+function contratASignerHtml(d) {
+  return `<div class="card" id="contratV2Zone"><div style="font-weight:700">📄 Mon contrat à signer</div>
+    <p class="muted" style="margin:4px 0 8px">Prends ton temps pour le relire. Tu signes ici, directement avec ton doigt. Rien n'est envoyé avant que tu valides.</p>
+    <div style="max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff">${contratHtml(d.params, { coach: d.coachSignature })}</div>
+    <div style="margin-top:12px"><label for="ct_mention" style="font-weight:600;font-size:14px">Écris la mention « Lu et approuvé »</label>
+      <input id="ct_mention" type="text" autocomplete="off" placeholder="Lu et approuvé" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:9px;font-family:inherit;font-size:16px;margin-top:4px" oninput="majContratSignature()"></div>
+    <div style="margin-top:10px;font-weight:600;font-size:14px">Ta signature</div>
+    <canvas id="ct_canvas" style="width:100%;height:150px;border:1px dashed var(--accent);border-radius:8px;background:#fff;display:block"></canvas>
+    <button type="button" onclick="effacerContratSignature()" style="margin-top:6px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 12px;font-family:inherit;font-size:16px;cursor:pointer">Effacer</button>
+    <p class="muted" style="font-size:12.5px;margin:10px 0 6px">En signant, la date et l'heure de ta signature ainsi que l'adresse IP de ta connexion sont enregistrées, pour prouver que c'est bien toi qui as signé.</p>
+    <button type="button" id="ct_btn" disabled onclick="signerContratV2()" style="border:none;border-radius:10px;padding:11px 16px;background:var(--accent);color:#fff;font-family:inherit;font-size:16px;font-weight:600;cursor:pointer;opacity:.5">✍️ Signer le contrat</button>
+    <div class="muted" id="ct_msg" style="font-size:12.5px;margin-top:6px;min-height:16px"></div></div>`;
+}
+// Les anciens contrats sont réaffichés depuis du HTML enregistré : on en retire tout ce qui pourrait s'exécuter.
+function assainirHtml(html) {
+  const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
+  doc.querySelectorAll("script,iframe,object,embed,link,meta,base,form").forEach(n => n.remove());
+  doc.querySelectorAll("*").forEach(n => Array.from(n.attributes).forEach(a => { const nom = a.name.toLowerCase(), v = String(a.value).trim().toLowerCase(); if (nom.indexOf("on") === 0 || ((nom === "href" || nom === "src" || nom === "xlink:href" || nom === "action" || nom === "formaction") && (v.indexOf("javascript:") === 0 || (v.indexOf("data:") === 0 && v.indexOf("data:image/") !== 0)))) n.removeAttribute(a.name); }));
+  return doc.body.innerHTML;
+}
+let _ctPad = null;
+function initContratSignature() { const cv = document.getElementById("ct_canvas"); if (!cv) return; _ctPad = creerPadSignature(cv); ["pointerup", "pointerleave"].forEach(ev => cv.addEventListener(ev, majContratSignature)); }
+const mentionOk = t => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z ]/g, "").replace(/\s+/g, " ").trim().toLowerCase() === "lu et approuve";
+function majContratSignature() { const b = document.getElementById("ct_btn"); if (!b) return; const ok = _ctPad && !_ctPad.vide() && mentionOk(document.getElementById("ct_mention").value); b.disabled = !ok; b.style.opacity = ok ? "1" : ".5"; }
+function effacerContratSignature() { if (_ctPad) _ctPad.effacer(); majContratSignature(); }
+async function adresseIp() { try { const c = new AbortController(), t = setTimeout(() => c.abort(), 4000); const r = await fetch("https://api.ipify.org?format=json", { signal: c.signal }); clearTimeout(t); const j = await r.json(); return j && j.ip ? String(j.ip) : null; } catch (e) { return null; } }
+async function signerContratV2() {
+  const btn = document.getElementById("ct_btn"), msg = document.getElementById("ct_msg"); if (!btn || btn.disabled || !PORTAL.contrat) return;
+  const mention = document.getElementById("ct_mention").value.trim(), signature = _ctPad && _ctPad.dataUrl();
+  if (!signature || !mentionOk(mention)) { msg.textContent = "Écris « Lu et approuvé » et signe avant de valider."; return; }
+  if (signature.length > 400000) { msg.textContent = "Ta signature est trop détaillée pour être enregistrée : efface-la et signe plus simplement."; return; }
+  btn.disabled = true; btn.textContent = "Signature en cours…";
+  try {
+    const ref = firebase.firestore().collection("clients").doc(PORTAL.clientId).collection("contracts").doc(PORTAL.contrat.id);
+    const frais = await ref.get();
+    if (!frais.exists || frais.data().status !== "pending_signature") { msg.textContent = "Ce contrat vient d'être modifié par ton coach. Recharge la page pour voir la dernière version."; btn.textContent = "✍️ Signer le contrat"; return; }
+    const d = frais.data(), maintenant = new Date().toISOString(), ip = await adresseIp(), empreinte = await contratEmpreinte(d.params, "Lu et approuvé");
+    const sig = { coach: d.coachSignature, client: signature, mention: "Lu et approuvé", signeLe: maintenant, ip, empreinte };
+    const charge = { status: "signed", clientSignature: signature, mention: "Lu et approuvé", signedAt: maintenant, signedAtServer: firebase.firestore.FieldValue.serverTimestamp(), signerIp: ip, ipStatus: ip ? "ok" : "indisponible", signerUserAgent: String(navigator.userAgent || "").slice(0, 300), contentHash: empreinte, htmlContent: contratHtml(d.params, sig) };
+    const db = firebase.firestore();
+    if (typeof db.runTransaction === "function") { await db.runTransaction(async tx => { const s = await tx.get(ref); if (!s.exists || s.data().status !== "pending_signature" || JSON.stringify(s.data().params) !== JSON.stringify(d.params)) throw new Error("MODIFIE"); tx.update(ref, charge); }); } else { await ref.update(charge); }
+    try { await firebase.firestore().collection("clients").doc(PORTAL.clientId).update({ contractStatus: "signed" }); } catch (e) { console.error("statut client:", e); }
+    PORTAL.contrat = { id: PORTAL.contrat.id, data: Object.assign({}, d, { status: "signed", clientSignature: signature, mention: "Lu et approuvé", signedAt: maintenant, signerIp: ip, contentHash: empreinte }) };
+    document.getElementById("contractZone").innerHTML = contratSigneHtml(PORTAL.contrat.data);
+  } catch (e) { if (e && e.message === "MODIFIE") { msg.textContent = "Ce contrat vient d'être modifié par ton coach. Recharge la page pour voir la dernière version."; btn.textContent = "✍️ Signer le contrat"; btn.disabled = false; return; } console.error("signature:", e); btn.disabled = false; btn.textContent = "✍️ Signer le contrat"; msg.textContent = "⚠️ La signature n'a pas pu être enregistrée. Ton dessin est conservé : réessaie dans un instant."; }
+}
+function telechargerContratClient() { const d = PORTAL.contrat && PORTAL.contrat.data; if (d) telechargerContratPDF(d.params, contratSigObj(d), "mon-contrat-de-coaching.pdf").catch(() => alert("Le PDF n'a pas pu être créé. Réessaie dans un instant.")); }
+
+function renderContractButton(){ chargerContratV2().then(v2 => { if (!v2) renderContractButtonLegacy(); }).catch(() => renderContractButtonLegacy()); }
+function renderContractButtonLegacy(){
   const box = document.getElementById("contractZone");
   firebase.firestore().collection("clients").doc(PORTAL.clientId).collection("contracts")
     .orderBy("createdAt","desc").limit(1).get().then(qs=>{
@@ -617,7 +775,7 @@ function renderContractButton(){
       </div>`;
       document.getElementById("btnShowContract").addEventListener("click", function(){
         const z = document.getElementById("contractHtml");
-        if (z.style.display==="none"){ z.style.display="block"; z.innerHTML = doc.htmlContent || ""; this.textContent="Masquer"; }
+        if (z.style.display==="none"){ z.style.display="block"; z.innerHTML = assainirHtml(doc.htmlContent); this.textContent="Masquer"; }
         else { z.style.display="none"; this.textContent="Afficher"; }
       });
     }).catch(()=>{ box.innerHTML=""; });
@@ -649,11 +807,11 @@ function renderPortal(){
     <h1>👋 Bonjour ${esc(nom)}</h1>
     <p class="muted" style="margin-bottom:16px">Ton espace personnel de coaching</p>
     ${rdvPortailHtml(PORTAL.client)}
+    <div id="contractZone"></div>
     ${questionnaireHtml(PORTAL.client)}
     <div class="card" id="rythmeZone">${rythmesHtml(PORTAL.client)}</div>
     ${checkinHtml(PORTAL.client)}
     ${planteHtml(PORTAL.client)}
-    <div id="contractZone"></div>
     ${(PORTAL.client.parcours && (PORTAL.client.parcours.phases||[]).length) ? `<div class="card">${parcoursHtml(PORTAL.client.parcours)}</div>` : ""}
     ${exercicesHtml(PORTAL.client)}
     ${outilsCardHtml(PORTAL.client)}
