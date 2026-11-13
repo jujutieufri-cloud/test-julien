@@ -1586,34 +1586,34 @@ const EXERCICES_CATALOGUE = [
  "titre": "👓 Mes croyances, premier contact",
  "duree": "20–25 min",
  "resume": "Repérer ce que tu crois spontanément et voir comment cela colore tes décisions.",
- "consigne": "Une croyance est une idée que tu tiens pour vraie. Il ne s'agit pas d'avoir raison : juste d'observer comment tu vois les choses.",
+ "consigne": "Une croyance est une idée que tu tiens pour vraie. Pour chaque domaine, note 5 idées auxquelles tu crois, puis 3 arguments qui te les font tenir pour vraies. Il ne s'agit pas d'avoir raison : juste d'observer comment tu vois les choses.",
  "source": "Adapté des fiches de cours MHD Formation (CC BY 4.0), mhd-formation.com",
  "theme": "Croyances & besoins",
  "champs": [
   {
    "id": "moi",
    "label": "🙋 À propos de moi",
-   "aide": "Note 3 idées auxquelles tu crois, avec un argument convaincant pour chacune."
+   "aide": "5 idées auxquelles tu crois, puis 3 arguments qui te les font tenir pour vraies."
   },
   {
    "id": "amitie",
    "label": "🤗 À propos de l'amitié",
-   "aide": "3 idées, 3 arguments."
+   "aide": "5 idées auxquelles tu crois, puis 3 arguments qui te les font tenir pour vraies."
   },
   {
    "id": "reussite",
    "label": "🏆 À propos de la réussite",
-   "aide": "3 idées, 3 arguments."
+   "aide": "5 idées auxquelles tu crois, puis 3 arguments qui te les font tenir pour vraies."
   },
   {
    "id": "couple",
    "label": "💞 À propos de la vie de couple",
-   "aide": "3 idées, 3 arguments."
+   "aide": "5 idées auxquelles tu crois, puis 3 arguments qui te les font tenir pour vraies."
   },
   {
    "id": "enfants",
    "label": "🧒 À propos de l'éducation des enfants",
-   "aide": "3 idées, 3 arguments."
+   "aide": "5 idées auxquelles tu crois, puis 3 arguments qui te les font tenir pour vraies."
   },
   {
    "id": "nourrit",
@@ -3504,7 +3504,7 @@ const EXERCICES_CATALOGUE = [
  "titre": "🧠 Test : mes positions de vie au quotidien",
  "duree": "10–15 min",
  "resume": "8 situations pour observer ta façon habituelle de réagir.",
- "consigne": "Pour chaque situation, choisis la réponse qui te ressemble le plus dans ta vie de tous les jours, pas celle que tu voudrais donner. Ces positions décrivent des habitudes, pas ce que tu vaux. Les résultats seront relus avec toi par ton coach.",
+ "consigne": "Pour chaque situation, répartis 10 points entre les 4 réponses selon ce qui te ressemble le plus dans ta vie de tous les jours (par exemple 5 + 3 + 2 + 0). Tu peux donner tous les points à une seule réponse ou les partager. Le total doit faire 10 pour chaque situation. Ces positions décrivent des habitudes, pas ce que tu vaux. Les résultats seront relus avec toi par ton coach.",
  "source": "Adapté du questionnaire « positions de vie » des fiches de cours MHD Formation (CC BY 4.0), mhd-formation.com",
  "theme": "Analyse transactionnelle",
  "mode": "coache",
@@ -3513,8 +3513,8 @@ const EXERCICES_CATALOGUE = [
   {
    "id": "t1",
    "label": "Lorsque je suis responsable",
-   "aide": "Choisis la réponse qui te ressemble le plus.",
-   "type": "choix",
+   "aide": "Répartis 10 points entre les 4 réponses (le total doit faire 10).",
+   "type": "points",
    "options": [
     {
      "id": "a",
@@ -3532,13 +3532,14 @@ const EXERCICES_CATALOGUE = [
      "id": "d",
      "texte": "J'informe, je propose des occasions de développement, nous analysons ensemble les problèmes et les opportunités"
     }
-   ]
+   ],
+   "total": 10
   },
   {
    "id": "t2",
    "label": "Approche des problèmes",
-   "aide": "Choisis la réponse qui te ressemble le plus.",
-   "type": "choix",
+   "aide": "Répartis 10 points entre les 4 réponses (le total doit faire 10).",
+   "type": "points",
    "options": [
     {
      "id": "a",
@@ -3556,13 +3557,14 @@ const EXERCICES_CATALOGUE = [
      "id": "d",
      "texte": "Je fais en sorte que chacun soit satisfait"
     }
-   ]
+   ],
+   "total": 10
   },
   {
    "id": "t3",
    "label": "Face aux règles",
-   "aide": "Choisis la réponse qui te ressemble le plus.",
-   "type": "choix",
+   "aide": "Répartis 10 points entre les 4 réponses (le total doit faire 10).",
+   "type": "points",
    "options": [
     {
      "id": "a",
@@ -3580,13 +3582,14 @@ const EXERCICES_CATALOGUE = [
      "id": "d",
      "texte": "Je pense qu'on doit s'efforcer de les suivre"
     }
-   ]
+   ],
+   "total": 10
   },
   {
    "id": "t4",
    "label": "Vision des conflits",
-   "aide": "Choisis la réponse qui te ressemble le plus.",
-   "type": "choix",
+   "aide": "Répartis 10 points entre les 4 réponses (le total doit faire 10).",
+   "type": "points",
    "options": [
     {
      "id": "a",
@@ -3604,13 +3607,14 @@ const EXERCICES_CATALOGUE = [
      "id": "d",
      "texte": "Ce n'est pas mon affaire"
     }
-   ]
+   ],
+   "total": 10
   },
   {
    "id": "t5",
    "label": "Réaction à la colère",
-   "aide": "Choisis la réponse qui te ressemble le plus.",
-   "type": "choix",
+   "aide": "Répartis 10 points entre les 4 réponses (le total doit faire 10).",
+   "type": "points",
    "options": [
     {
      "id": "a",
@@ -3628,13 +3632,14 @@ const EXERCICES_CATALOGUE = [
      "id": "d",
      "texte": "J'en veux à ceux qui se permettent ça, je rumine ma rancœur"
     }
-   ]
+   ],
+   "total": 10
   },
   {
    "id": "t6",
    "label": "Attitude envers le supérieur hiérarchique",
-   "aide": "Choisis la réponse qui te ressemble le plus.",
-   "type": "choix",
+   "aide": "Répartis 10 points entre les 4 réponses (le total doit faire 10).",
+   "type": "points",
    "options": [
     {
      "id": "a",
@@ -3652,13 +3657,14 @@ const EXERCICES_CATALOGUE = [
      "id": "d",
      "texte": "On discute, on échange, on négocie"
     }
-   ]
+   ],
+   "total": 10
   },
   {
    "id": "t7",
    "label": "Humour",
-   "aide": "Choisis la réponse qui te ressemble le plus.",
-   "type": "choix",
+   "aide": "Répartis 10 points entre les 4 réponses (le total doit faire 10).",
+   "type": "points",
    "options": [
     {
      "id": "a",
@@ -3676,13 +3682,14 @@ const EXERCICES_CATALOGUE = [
      "id": "d",
      "texte": "Mon humour est caustique et mordant"
     }
-   ]
+   ],
+   "total": 10
   },
   {
    "id": "t8",
    "label": "Face à l'autre",
-   "aide": "Choisis la réponse qui te ressemble le plus.",
-   "type": "choix",
+   "aide": "Répartis 10 points entre les 4 réponses (le total doit faire 10).",
+   "type": "points",
    "options": [
     {
      "id": "a",
@@ -3700,7 +3707,8 @@ const EXERCICES_CATALOGUE = [
      "id": "d",
      "texte": "Aller là ou ailleurs …"
     }
-   ]
+   ],
+   "total": 10
   }
  ]
 }
@@ -3711,7 +3719,7 @@ function envoyerExercice(c, cat, sauver) {
   if (!c.exercices) c.exercices = [];
   c.exercices.push({
     id: "ex_" + Date.now() + "_" + cat.id, catalogueId: cat.id, titre: cat.titre, consigne: cat.consigne,
-    champs: cat.champs.map(ch => { const o = { id: ch.id, label: ch.label, aide: ch.aide || "" }; if (ch.type === "choix") { o.type = "choix"; o.options = (ch.options || []).map(x => ({ id: x.id, texte: x.texte })); } return o; }),
+    champs: cat.champs.map(ch => { const o = { id: ch.id, label: ch.label, aide: ch.aide || "" }; if (ch.type === "choix" || ch.type === "points") { o.type = ch.type; if (ch.total) o.total = ch.total; o.options = (ch.options || []).map(x => ({ id: x.id, texte: x.texte })); } return o; }),
     done: false, envoyeLe: new Date().toISOString()
   });
   if (sauver !== false) ClientsManager.saveClient(c.id, { exercices: c.exercices });
@@ -3727,11 +3735,13 @@ function buildReponsesExercice(c, ex) {
   det.appendChild(h("summary",{style:"cursor:pointer;font-size:12.5px;color:#9C7A2E;font-weight:600"}, "Réponses du client : " + remplis + "/" + ex.champs.length + maj));
   ex.champs.forEach(ch => {
     det.appendChild(h("div",{style:"font-size:12px;color:#6B6355;margin-top:8px"}, ch.label));
-    const val = String(rep[ch.id] || "").trim(), opt = (ch.options || []).find(o => o.id === val);
-    det.appendChild(h("div",{style:"font-size:13px;color:#2E2A20;white-space:pre-wrap"}, (opt ? opt.texte : val) || "—"));
+    const val = String(rep[ch.id] || "").trim(); let texte;
+    if (ch.type === "points") { const p = pointsDe(val, (ch.options || []).length), tot = ch.total || 10; texte = p ? (ch.options || []).map((o, k) => p[k] ? o.texte + " — " + p[k] + " pt" + (p[k] > 1 ? "s" : "") : "").filter(Boolean).join("\n") + (p.reduce((a, b) => a + b, 0) !== tot ? "\n⚠️ Total " + p.reduce((a, b) => a + b, 0) + " / " + tot : "") : ""; }
+    else { const opt = (ch.options || []).find(o => o.id === val); texte = opt ? opt.texte : val; }
+    det.appendChild(h("div",{style:"font-size:13px;color:#2E2A20;white-space:pre-wrap"}, texte || "—"));
   });
   const catRes = catalogueComplet().find(x => x.id === ex.catalogueId);
-  if (catRes && catRes.resultats) det.appendChild(buildResultatsCoach(catRes, rep));
+  if (catRes && catRes.resultats) det.appendChild(buildResultatsCoach(catRes, rep, c, ex));
   return det;
 }
 
@@ -6419,7 +6429,7 @@ function renderExercicesTab() {
     txt.appendChild(h("div",{style:"font-weight:700;font-size:14.5px;color:#2E2A20"}, cat.titre + (cat.perso ? "  ·  créé par toi" : "")));
     txt.appendChild(h("div",{style:"font-size:12.5px;color:#6B6355;margin-top:2px"}, [cat.resume, cat.duree].filter(Boolean).join(" · "))); top.appendChild(txt);
     const b = h("button",{class:"btn-sm"}, seance ? "Ouvrir le guide" : "Attribuer à…"); b.addEventListener("click", () => seance ? ouvrirGuideSeance(cat) : ouvrirAttribution(cat)); top.appendChild(b); row.appendChild(top);
-    if (cat.resultats) row.appendChild(h("div",{style:"font-size:11.5px;color:#9C7A2E;font-weight:700;margin-top:4px"}, "🔒 Résultats réservés au coach"));
+    if (cat.resultats) row.appendChild(h("div",{style:"font-size:11.5px;color:#9C7A2E;font-weight:700;margin-top:4px"}, "🔒 Résultats pour toi d'abord · partageables ensuite avec le coaché"));
     const det = h("details",{style:"margin-top:6px"});
     det.appendChild(h("summary",{style:"cursor:pointer;font-size:12px;color:#9C7A2E"}, "Aperçu (" + cat.champs.length + " questions)"));
     if (cat.consigne) det.appendChild(h("div",{style:"font-size:12.5px;color:#5A5648;margin-top:6px;white-space:pre-wrap"}, cat.consigne));
@@ -7144,6 +7154,18 @@ const POSITIONS_VIE = { "++": "Je suis OK · tu es OK", "+-": "Je suis OK · tu 
 const MODE_SEANCE = new Set(["objectif4", "resolution5s", "motivationspir", "rpbdc", "point_etape", "sept_p", "decoder_emotion", "modele_potentiel", "miracle_niveaux", "matrice_identite", "poles", "positions", "waltdisney"]);
 const modeDe = cat => cat.perso ? (cat.mode === "seance" ? "seance" : "coache") : (cat.mode === "seance" || MODE_SEANCE.has(cat.id) ? "seance" : "coache");
 
+const PLAYBOOK_DRIVERS = {"parfait": {"nom": "Sois Parfait(e)", "objectif": "Préserver la qualité sans faire de la perfection une condition de sa valeur.", "force": "Rigueur / Expertise", "piege": "Paralysie (tâche repoussée)", "antidote": "Réduire à une V1 et fixer un point d'arrêt.", "q": {"++": {"f": "Cherche un travail de qualité tout en reconnaissant les limites et compétences de chacun.", "v": "Sous pression, les vérifications se multiplient et la souplesse diminue."}, "+-": {"f": "S'appuie sur ses exigences pour sécuriser le résultat, doute des méthodes des autres.", "v": "Corrections nombreuses, délégation limitée, confusion entre préférence personnelle et exigence."}, "-+": {"f": "Cherche à être irréprochable pour se sentir à la hauteur (un détail prend trop de place).", "v": "Doute persistant, difficulté à terminer, recherche de validation."}, "--": {"f": "Veut un résultat sans défaut mais doute de l'obtenir ou d'être aidé.", "v": "Tâche repoussée, travail abandonné, insatisfaction profonde."}}, "ressources": ["Soin et précision", "Expertise et rigueur", "Repérage des détails", "Capacité à clarifier des exigences"], "axes": ["Séparez les critères obligatoires des détails ajustables.", "Réduisez l'objectif à une première version (V1) limitée.", "Définissez ensemble les critères et le moment où le travail est considéré comme « terminé »."], "paroles": {"-+": "Votre souci de bien faire est précieux… Est-ce que cela vous correspond ? Nous pourrions chercher un niveau de qualité réaliste, sans que votre valeur soit en jeu.", "+-": "Regardons ensemble ce qui doit réellement être non négociable et ce qui peut être fait autrement.", "--": "Quelle petite version serait possible aujourd'hui, et de quel appui auriez-vous besoin ?"}}, "plaisir": {"nom": "Fais Plaisir", "objectif": "Prendre soin du lien en laissant une place aux besoins et aux choix de chacun.", "force": "Empathie / Écoute", "piege": "Épuisement relationnel et retrait.", "antidote": "Prendre un délai avant d'accepter.", "q": {"++": {"f": "Attentif aux autres tout en exprimant ses propres besoins et limites. L'aide est un choix.", "v": "Le souci d'harmonie peut encore faire retarder un désaccord."}, "+-": {"f": "Veut aider tout en estimant savoir mieux que l'autre ce qui lui conviendrait.", "v": "Conseils non demandés, insistance, attentes de reconnaissance implicites."}, "-+": {"f": "Cherche la satisfaction de l'autre en mettant ses propres besoins au second plan (dire « oui » pour ne pas décevoir).", "v": "Engagements trop nombreux, difficulté à refuser, fatigue."}, "--": {"f": "Continue à s'adapter sans se sentir reconnu ni soutenu.", "v": "Fatigue relationnelle, déception, retrait. Donner plus ne répare pas le manque de réciprocité."}}, "ressources": ["Écoute et empathie", "Attention aux relations", "Générosité", "Coopération"], "axes": ["Prenez un délai avant de répondre et vérifiez votre disponibilité.", "Nommez un désaccord assez tôt.", "Exprimez clairement si vous attendez quelque chose en retour."], "paroles": {"-+": "Vos besoins ont-ils pu avoir autant de place que ceux de l'autre ? Nous pourrions chercher une limite qui vous protège.", "+-": "Préférez-vous que je vous écoute ou que je vous propose une idée ?", "--": "Vous semblez avoir beaucoup donné sans trouver le soutien espéré… Quelle relation ou limite pourrait vous redonner un peu d'espace ?"}}, "fort": {"nom": "Sois Fort(e)", "objectif": "Conserver son autonomie tout en rendant le soutien et le partage de la charge possibles.", "force": "Endurance / Constance", "piege": "Effondrement silencieux et isolement.", "antidote": "Confier une tâche limitée sans risque.", "q": {"++": {"f": "Compte sur ses ressources tout en reconnaissant celles des autres.", "v": "L'aisance à gérer conduit les autres à confier trop de tâches."}, "+-": {"f": "Confiance en sa capacité, doute des autres. Reprend les tâches pour être sûr.", "v": "Délégation réduite, difficulté à entendre la fatigue d'autrui."}, "-+": {"f": "Fait face seul, demander de l'aide semble déranger.", "v": "Charge accumulée en silence, demande de relais tardive."}, "--": {"f": "Ne se sent plus capable de tout porter, mais doute de l'aide disponible.", "v": "Isolement, fatigue minimisée, renoncement à solliciter un relais."}}, "ressources": ["Autonomie", "Capacité à tenir le cap", "Assumer une responsabilité", "Constance"], "axes": ["Confiez une tâche à faible risque.", "Faites un point régulier sur la charge.", "Nommez les signes qui doivent déclencher un ajustement."], "paroles": {"-+": "Est-ce que demander un appui vous aurait donné l'impression de déranger ? Nous pouvons chercher une demande précise.", "+-": "Identifier ce qui peut être partagé sans compromettre les exigences nécessaires.", "--": "Vous semblez porter une difficulté importante… Qu'est-ce qui pourrait être allégé maintenant ?"}}, "effort": {"nom": "Fais des efforts", "objectif": "Orienter l'engagement vers un résultat utile, sans faire de la difficulté une mesure de valeur.", "force": "Implication / Persévérance", "piege": "Efforts vains et découragement.", "antidote": "Choisir une étape courte aux résultats visibles.", "q": {"++": {"f": "S'engage avec persévérance en gardant le résultat et les limites en vue.", "v": "Un projet stimulant peut conduire à trop investir dans une méthode devenue inutile."}, "+-": {"f": "Prend son propre niveau d'effort comme référence, doute de l'engagement des autres.", "v": "Charge inutilement élevée, comparaisons sur la quantité d'effort."}, "-+": {"f": "Cherche à prouver sa valeur par la quantité d'efforts (une solution simple semble moins méritante).", "v": "Effort prolongé, repos difficile, résultat au second plan."}, "--": {"f": "Fournit des efforts en doutant qu'ils changent la situation.", "v": "Efforts répétés sans résultat, découragement, récupération insuffisante."}}, "ressources": ["Implication", "Persévérance", "Envie de contribuer", "Capacité d'apprentissage"], "axes": ["Définissez un résultat observable et un point d'arrêt.", "Cherchez une méthode plus simple.", "Convenez de contraintes partagées plutôt que d'une même manière de peiner."], "paroles": {"-+": "Avez-vous l'impression de devoir en faire davantage pour que votre contribution compte ? Choisissons un point où vous autoriser à conclure.", "+-": "Comment pourriez-vous garder votre engagement tout en reconnaissant une contribution obtenue par une autre méthode ?", "--": "Quel appui ou quelle pause rendrait la suite un peu moins lourde ?"}}, "depeche": {"nom": "Dépêche-toi", "objectif": "Garder sa réactivité en distinguant urgence réelle, priorité et pression excessive.", "force": "Décision rapide", "piege": "Dispersion totale (rien n'est fini).", "antidote": "Identifier la seule urgence réelle et différer le reste.", "q": {"++": {"f": "Agit rapidement en discutant les priorités et responsabilités.", "v": "L'habitude d'être efficace conduit à accepter des délais toujours plus courts."}, "+-": {"f": "Considère son rythme comme la référence, interprète les autres comme trop lents.", "v": "Écoute réduite, interruption des autres, tensions."}, "-+": {"f": "Accélère pour répondre aux attentes et éviter de paraître lent.", "v": "Priorités effacées, accords précipités, dispersion, course permanente."}, "--": {"f": "Ressent une forte urgence tout en doutant de rattraper la situation.", "v": "Tâches commencées puis laissées, fonctionnement désorganisé, sentiment d'impasse."}}, "ressources": ["Réactivité", "Disponibilité", "Capacité à décider rapidement", "Coordination"], "axes": ["Demandez l'échéance exacte et précisez l'urgence réelle.", "Laissez l'autre terminer son explication.", "Refusez de faire de l'urgence répétée un mode permanent."], "paroles": {"-+": "Les délais et priorités ont-ils été clairement discutés ? Nous pouvons préparer une réponse qui montre votre implication sans vous engager sur un rythme impossible.", "+-": "Cherchons ce qui doit vraiment aller vite et ce qui demande un temps de vérification ou d'écoute.", "--": "Quelle action est réellement indispensable, et quel soutien permettrait de rendre le reste moins pressant ?"}}};
+const QUADRANTS_PLAYBOOK = {"++": ["Chacun garde sa place", "Confiance mutuelle et acceptation des limites."], "+-": ["Je laisse moins de place à l'autre", "Manque de confiance en l'autre, besoin de contrôle."], "-+": ["Je me sens moins légitime", "Manque de confiance en soi, sur-adaptation à l'autre."], "--": ["La confiance manque des deux côtés", "Impasse, doute généralisé, épuisement."]};
+const TAGS_POS = { "++": "+/+", "+-": "+/−", "-+": "−/+", "--": "−/−" };
+const PLAYBOOK_CONCLUSION = "Un driver n'est pas une pathologie : c'est une ressource. L'objectif de l'accompagnement n'est pas d'éliminer le perfectionnisme, l'empathie, la résilience, l'effort ou la réactivité, mais de les ancrer dans la position +/+ : là où la confiance mutuelle permet à ces forces de s'exprimer sans épuiser soi-même ni aliéner l'autre.";
+
+// Répartition de points « a,b,c,d » : valide seulement si chaque valeur est un entier de 0 à 10.
+function pointsDe(v, n) {
+  if (typeof v !== "string" || !v.trim()) return null;
+  const p = v.split(",").map(x => parseInt(x, 10));
+  return p.length === n && p.every(x => Number.isInteger(x) && x >= 0 && x <= 10) ? p : null;
+}
+
 function calculerResultatsCoach(type, rep) {
   rep = rep || {};
   if (type === "drivers") {
@@ -7152,19 +7174,111 @@ function calculerResultatsCoach(type, rep) {
     return { type, lignes, repondues: lignes.reduce((a, l) => a + l.repondues, 0), total: 35 };
   }
   if (type === "positions") {
+    // 10 points à répartir entre les 4 réponses de chaque situation ; une situation n'est comptée que si le total fait 10.
     const comptes = { "++": 0, "+-": 0, "-+": 0, "--": 0 }, detail = [];
-    GRILLES_COACH.positions.mapping.forEach((m, i) => { const v = rep["t" + (i + 1)], pos = Object.keys(m).find(p => m[p] === v) || null; if (pos) comptes[pos]++; detail.push({ theme: i + 1, choix: v || null, position: pos }); });
-    return { type, comptes, detail, repondues: detail.filter(d => d.position).length, total: 8 };
+    GRILLES_COACH.positions.mapping.forEach((m, i) => {
+      const pts = pointsDe(rep["t" + (i + 1)], 4), somme = pts ? pts.reduce((a, b) => a + b, 0) : 0, valide = !!pts && somme === 10, repartition = {};
+      Object.keys(m).forEach(p => { repartition[p] = pts ? pts["abcd".indexOf(m[p])] : 0; });
+      if (valide) Object.keys(repartition).forEach(p => { comptes[p] += repartition[p]; });
+      detail.push({ theme: i + 1, points: pts, somme, valide, repartition: valide ? repartition : null });
+    });
+    const n = detail.filter(d => d.valide).length;
+    return { type, comptes, detail, repondues: n, total: 8, max: 10 * n };
   }
   return null;
 }
 
-function buildResultatsCoach(cat, rep) {
+// Ce que le coaché reçoit quand tu partages : uniquement les chiffres calculés, jamais le barème ni la lecture croisée.
+function payloadPartage(cat, r, message) {
+  const texteRepartition = rp => Object.keys(rp).filter(p => rp[p] > 0).sort((a, b) => rp[b] - rp[a]).map(p => POSITIONS_VIE[p] + " : " + rp[p] + " pt" + (rp[p] > 1 ? "s" : "")).join(" · ");
+  const barres = r.type === "drivers"
+    ? r.lignes.slice().sort((a, b) => b.somme - a.somme).map(l => ({ nom: l.nom, valeur: l.somme, max: l.max }))
+    : ["++", "+-", "-+", "--"].map(p => ({ nom: POSITIONS_VIE[p], valeur: r.comptes[p], max: r.max }));
+  const detail = r.type === "positions" ? r.detail.filter(d => d.valide).map(d => ({ theme: (cat.champs[d.theme - 1] || {}).label || "", position: texteRepartition(d.repartition) })) : [];
+  return { type: r.type, titre: cat.titre, partageLe: new Date().toISOString(), message: message || "", barres, detail, repondues: r.repondues, sur: r.total, signature: JSON.stringify([barres, detail]) };
+}
+
+function panneauPartage(cat, r, c, ex) {
+  const zone = h("div",{style:"margin-top:12px;border-top:1px dashed #9C7A2E66;padding-top:10px"}), prenom = String(c.name || "").trim().split(/\s+/)[0] || "la personne";
+  const bouton = (lib, cls, fn) => { const b = h("button",{class: cls}, lib); b.addEventListener("click", fn); return b; };
+  const enregistrer = valeur => { c.resultatsPartages = Object.assign({}, c.resultatsPartages, { [ex.id]: valeur }); ClientsManager.saveClient(c.id, { resultatsPartages: c.resultatsPartages }); };
+  function dessiner() {
+    zone.innerHTML = ""; const p = (c.resultatsPartages || {})[ex.id];
+    if (p) {
+      const d = new Date(p.partageLe);
+      zone.appendChild(h("div",{style:"font-size:13px;font-weight:700;color:#2F7D3B"}, "✅ Partagé avec " + prenom + (isNaN(d) ? "" : " le " + d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }))));
+      if (p.message) zone.appendChild(h("div",{style:"font-size:12.5px;color:#5A5648;margin-top:4px;white-space:pre-wrap"}, "Ton mot : " + p.message));
+      const actuel = payloadPartage(cat, r, p.message);
+      if (actuel.signature !== p.signature) {
+        zone.appendChild(h("div",{style:"font-size:12.5px;color:#B26A00;margin-top:6px"}, "⚠️ Les réponses ont changé depuis le partage : " + prenom + " voit encore l'ancienne version."));
+        zone.appendChild(bouton("🔄 Mettre à jour le partage", "btn-sm", () => { enregistrer(actuel); dessiner(); }));
+      }
+      const retirer = bouton("↩️ Retirer le partage", "btn-g", () => { if (!confirm("Retirer ces résultats de l'espace de " + prenom + " ?")) return; enregistrer(null); dessiner(); });
+      retirer.style.marginLeft = "6px"; zone.appendChild(retirer); return;
+    }
+    zone.appendChild(h("div",{style:"font-size:12.5px;color:#5A5648"}, "Quand vous les aurez relus ensemble, tu peux les partager : " + prenom + " les verra dans son espace, avec une explication bienveillante. La lecture croisée ci-dessus reste pour toi seul·e."));
+    const mot = h("textarea",{rows:"2",maxlength:"1000",placeholder:"Un mot pour l'accompagner (facultatif)",style:"width:100%;box-sizing:border-box;border:1px solid #E4DAC0;border-radius:8px;padding:8px;font-family:inherit;font-size:16px;margin:6px 0;background:#fff"});
+    zone.appendChild(mot);
+    zone.appendChild(bouton("📤 Partager les résultats avec " + prenom, "btn", () => {
+      if (!r.repondues) { alert("Il n'y a pas encore de réponse à partager."); return; }
+      if (r.repondues < r.total && !confirm("Le questionnaire n'est pas terminé (" + r.repondues + "/" + r.total + " réponses). Partager quand même ?")) return;
+      if (!confirm("Partager ces résultats avec " + prenom + " ?\n\nIls apparaîtront dans son espace, avec une explication bienveillante.")) return;
+      enregistrer(payloadPartage(cat, r, mot.value.trim().slice(0, 1000))); dessiner();
+    }));
+  }
+  dessiner(); return zone;
+}
+
+function derniereReponse(c, catalogueId) {
+  const l = (c.exercices || []).filter(e => e.catalogueId === catalogueId); if (!l.length) return null;
+  const e = l[l.length - 1]; return { ex: e, rep: (c.reponsesExercices || {})[e.id] || {} };
+}
+function positionsDominantes(rp) {
+  if (!rp || !rp.max) return []; const m = Math.max.apply(null, Object.values(rp.comptes));
+  return m > 0 ? Object.keys(rp.comptes).filter(p => rp.comptes[p] === m) : [];
+}
+
+// Lecture croisée drivers × positions de vie (Playbook diagnostique) : réservée au coach, jamais partagée.
+function buildLectureCroisee(c) {
+  const d = derniereReponse(c, "test_drivers"), p = derniereReponse(c, "test_positions_vie");
+  const rd = d ? calculerResultatsCoach("drivers", d.rep) : null, rp = p ? calculerResultatsCoach("positions", p.rep) : null;
+  const dom = positionsDominantes(rp), haut = rd && rd.repondues ? Math.max.apply(null, rd.lignes.map(l => l.somme)) : 0;
+  const box = h("details",{style:"margin-top:12px;border:1px solid #6B8CAE88;border-radius:10px;background:#F3F6FA;padding:8px 12px"});
+  box.appendChild(h("summary",{style:"cursor:pointer;font-weight:700;font-size:13px;color:#2E2A20"}, "🔗 Lecture croisée drivers × positions de vie · pour toi seul·e"));
+  box.appendChild(h("p",{style:"font-size:12.5px;color:#5A5648;margin:6px 0"}, PLAYBOOK_CONCLUSION));
+  box.appendChild(h("p",{style:"font-size:12.5px;margin:4px 0;color:" + (rd && rp ? "#2F7D3B" : "#B26A00")}, rd && rp ? "✅ Les deux tests sont là : le quadrant de la position dominante est mis en évidence." : "⚠️ Pour croiser, il faut les deux tests : " + (rd ? "" : "drivers (non envoyé) ") + (rp ? "" : "positions de vie (non envoyé)") + ". Les quadrants sont affichés sans mise en évidence."));
+  if (dom.length) box.appendChild(h("p",{style:"font-size:13px;font-weight:700;margin:6px 0"}, "Position dominante : " + dom.map(x => TAGS_POS[x] + " · " + QUADRANTS_PLAYBOOK[x][0]).join("  |  ") + " (" + rp.comptes[dom[0]] + " / " + rp.max + " pts)"));
+  const carte = (id, ligne) => {
+    const pb = PLAYBOOK_DRIVERS[id], k = h("div",{style:"margin-top:10px;border:1px solid #D5DCE6;border-radius:10px;background:#fff;padding:8px 10px"});
+    k.appendChild(h("div",{style:"font-weight:700;font-size:14px;color:#2E2A20"}, pb.nom + (ligne ? " · " + ligne.somme + " / " + ligne.max : "")));
+    k.appendChild(h("div",{style:"font-size:12.5px;color:#5A5648;margin:3px 0 6px"}, "Objectif sain : " + pb.objectif + " · Force : " + pb.force + " · Piège sous stress (−/−) : " + pb.piege + " · Antidote : " + pb.antidote));
+    ["++", "+-", "-+", "--"].forEach(pos => {
+      const actif = dom.indexOf(pos) > -1, r = h("div",{style:"font-size:12.5px;padding:5px 8px;margin:3px 0;border-radius:8px;background:" + (actif ? "#FFF1C9" : "#F7F7F4") + ";border:1px solid " + (actif ? "#9C7A2E" : "#E9E9E2")});
+      r.appendChild(h("div",{style:"font-weight:700;color:#2E2A20"}, TAGS_POS[pos] + " · " + QUADRANTS_PLAYBOOK[pos][0] + (actif ? "  ◀ position dominante" : "")));
+      r.appendChild(h("div",{}, "Fonctionnement : " + pb.q[pos].f)); r.appendChild(h("div",{style:"color:#6B6355"}, "Vigilance : " + pb.q[pos].v)); k.appendChild(r);
+    });
+    k.appendChild(h("div",{style:"font-size:12.5px;margin-top:6px"}, "Ressources à préserver : " + pb.ressources.join(" · ")));
+    const ol = h("div",{style:"font-size:12.5px;margin-top:4px"}, "Axes d'amélioration :"); pb.axes.forEach((a, i) => ol.appendChild(h("div",{style:"margin-left:8px"}, (i + 1) + ". " + a))); k.appendChild(ol);
+    const pa = h("div",{style:"font-size:12.5px;margin-top:4px"}, "Paroles de coach :");
+    ["-+", "+-", "--"].forEach(pos => { const act = dom.indexOf(pos) > -1; pa.appendChild(h("div",{style:"margin:3px 0 0 8px;padding:3px 6px;border-radius:6px;background:" + (act ? "#FFF1C9" : "transparent") + ";font-style:italic"}, "[" + TAGS_POS[pos] + "] « " + pb.paroles[pos] + " »")); });
+    if (dom.indexOf("++") > -1) pa.appendChild(h("div",{style:"margin:3px 0 0 8px;color:#2F7D3B"}, "Position +/+ : rien à corriger, il s'agit de soutenir et d'ancrer cette force (voir la conclusion ci-dessus)."));
+    k.appendChild(pa); return k;
+  };
+  const ordre = rd ? rd.lignes.slice().sort((a, b) => b.somme - a.somme) : Object.keys(PLAYBOOK_DRIVERS).map(id => ({ id, somme: 0, max: 35 }));
+  const forts = rd && haut > 0 ? ordre.filter(l => l.somme === haut) : [], autres = ordre.filter(l => forts.indexOf(l) < 0);
+  forts.forEach(l => box.appendChild(carte(l.id, l)));
+  const reste = h("details",{style:"margin-top:8px"}); reste.appendChild(h("summary",{style:"cursor:pointer;font-size:12.5px;color:#6B8CAE"}, forts.length ? "Voir les " + autres.length + " autres drivers" : "Voir les 5 drivers"));
+  autres.forEach(l => reste.appendChild(carte(l.id, rd ? l : null))); box.appendChild(reste);
+  box.appendChild(h("div",{style:"font-size:11.5px;color:#6B6355;margin-top:8px;font-style:italic"}, "Source : Playbook diagnostique « Réponses croisées : décoder les drivers et positions de vie » (document du coach)."));
+  return box;
+}
+
+function buildResultatsCoach(cat, rep, c, ex) {
   const r = calculerResultatsCoach(cat.resultats, rep);
   const box = h("details",{style:"margin-top:10px;border:1px solid #9C7A2E55;border-radius:10px;background:#FFF9EA;padding:8px 12px"});
   box.appendChild(h("summary",{style:"cursor:pointer;font-weight:700;font-size:13px;color:#2E2A20"}, "🔒 Résultats réservés au coach" + (r ? " · " + r.repondues + "/" + r.total + " réponses" : "")));
   if (!r) return box;
-  box.appendChild(h("p",{style:"font-size:12px;color:#6B6355;margin:6px 0"}, "Jamais visibles par le coaché. Un repère de travail à relire ensemble, pas un diagnostic."));
+  box.appendChild(h("p",{style:"font-size:12px;color:#6B6355;margin:6px 0"}, "Jamais visibles par le coaché tant que tu ne les partages pas. Un repère de travail à relire ensemble, pas un diagnostic."));
   if (r.repondues < r.total) box.appendChild(h("p",{style:"font-size:12.5px;color:#B26A00;margin:4px 0"}, "⚠️ Résultats partiels : le questionnaire n'est pas terminé."));
   const barre = (lib, val, max, fort) => { const l = h("div",{style:"margin:7px 0"}); l.appendChild(h("div",{style:"display:flex;justify-content:space-between;font-size:13px;color:#2E2A20;font-weight:" + (fort ? "700" : "400")}, h("span",{}, lib), h("span",{}, val + " / " + max))); const fond = h("div",{style:"height:8px;border-radius:4px;background:#E9E3D2;margin-top:3px"}); fond.appendChild(h("div",{style:"height:8px;border-radius:4px;background:#9C7A2E;width:" + Math.round(max ? val * 100 / max : 0) + "%"})); l.appendChild(fond); return l; };
   if (r.type === "drivers") {
@@ -7172,49 +7286,89 @@ function buildResultatsCoach(cat, rep) {
     r.lignes.slice().sort((a, b) => b.somme - a.somme).forEach(l => box.appendChild(barre(l.nom + (l.repondues < l.total ? " (" + l.repondues + "/" + l.total + " rép.)" : ""), l.somme, l.max, l.somme === haut && haut > 0)));
     box.appendChild(h("p",{style:"font-size:12px;color:#6B6355;margin:6px 0 0"}, "Chaque message est la somme de 7 questions (de 7 à 35) : plus elle est haute, plus il est présent."));
   } else {
-    ["++", "+-", "-+", "--"].forEach(p => box.appendChild(barre(POSITIONS_VIE[p], r.comptes[p], 8, r.comptes[p] === Math.max.apply(null, Object.values(r.comptes)) && r.repondues > 0)));
+    const hors = r.detail.filter(d => d.points && !d.valide).length;
+    if (hors) box.appendChild(h("p",{style:"font-size:12.5px;color:#B26A00;margin:4px 0"}, "⚠️ " + hors + " situation(s) dont le total n'est pas 10 : non comptée(s) dans les résultats."));
+    const maxi = Math.max.apply(null, Object.values(r.comptes));
+    ["++", "+-", "-+", "--"].forEach(p => box.appendChild(barre(POSITIONS_VIE[p], r.comptes[p], r.max, r.max > 0 && r.comptes[p] === maxi)));
+    box.appendChild(h("p",{style:"font-size:12px;color:#6B6355;margin:6px 0 0"}, "Points répartis sur 10 par situation, additionnés sur les situations complètes (80 points au maximum)."));
     const det = h("details",{style:"margin-top:6px"}); det.appendChild(h("summary",{style:"cursor:pointer;font-size:12.5px;color:#9C7A2E"}, "Détail par situation"));
     const champs = (cat.champs || []);
-    r.detail.forEach(d => det.appendChild(h("div",{style:"font-size:12.5px;color:#2E2A20;margin-top:3px"}, d.theme + ". " + ((champs[d.theme - 1] || {}).label || "") + " → " + (d.position ? POSITIONS_VIE[d.position] + " (réponse " + d.choix + ")" : "pas répondu"))));
+    r.detail.forEach(d => { const lab = (champs[d.theme - 1] || {}).label || ""; let t;
+      if (d.valide) t = Object.keys(d.repartition).filter(p => d.repartition[p] > 0).sort((a, b) => d.repartition[b] - d.repartition[a]).map(p => POSITIONS_VIE[p] + " : " + d.repartition[p] + " pt" + (d.repartition[p] > 1 ? "s" : "")).join(" · ");
+      else if (d.points) t = "total " + d.somme + " / 10 : non compté"; else t = "pas répondu";
+      det.appendChild(h("div",{style:"font-size:12.5px;color:#2E2A20;margin-top:3px"}, d.theme + ". " + lab + " → " + t)); });
     box.appendChild(det);
   }
+  if (c) box.appendChild(buildLectureCroisee(c));
+  if (c && ex) box.appendChild(panneauPartage(cat, r, c, ex));
   return box;
 }
 
-// Guide de séance : le coach conduit l'exercice, note les réponses et les garde dans le dossier du client.
+// Guide de séance : le coach conduit l'exercice, note les réponses, et peut le partager EN DIRECT avec le coaché.
 function ouvrirGuideSeance(cat, client) {
   const fond = h("div",{style:"position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:12px"});
   const boite = h("div",{style:"background:#FFFDF7;border-radius:16px;max-width:640px;width:100%;max-height:92vh;overflow:auto;padding:16px"});
   const st = "width:100%;box-sizing:border-box;border:1px solid #E4DAC0;border-radius:8px;padding:8px;font-family:inherit;font-size:16px;background:#fff";
+  const colClients = () => firebase.firestore().collection("clients");
   boite.appendChild(h("div",{style:"font-weight:700;font-size:17px;color:#2E2A20"}, "👥 En séance · " + cat.titre));
-  boite.appendChild(h("div",{style:"font-size:12px;color:#6B6355;margin:2px 0 8px"}, "Exercice conduit par toi : il n'est pas envoyé au coaché. Tes notes restent dans son dossier."));
+  boite.appendChild(h("div",{style:"font-size:12px;color:#6B6355;margin:2px 0 8px"}, "Exercice conduit par toi : il n'est pas envoyé au coaché dans ses exercices. Tes notes restent dans son dossier."));
   if (cat.consigne) boite.appendChild(h("div",{style:"font-size:13px;color:#5A5648;white-space:pre-wrap;border-left:3px solid #9C7A2E;padding:4px 10px;margin:6px 0 10px"}, cat.consigne));
   const sel = h("select",{style:st}); sel.appendChild(h("option",{value:""}, "— Choisir la personne accompagnée —"));
   (state.clients || []).filter(c => c.status === "actif").forEach(c => sel.appendChild(h("option",{value:c.id}, c.name)));
   if (client) sel.value = client.id;
   boite.appendChild(h("label",{style:"display:block;font-size:12.5px;font-weight:600;margin-bottom:3px"}, "Séance avec")); boite.appendChild(sel);
-  const notes = {};
+  const choisi = () => (state.clients || []).find(x => x.id === sel.value), prenomDe = c => String(c.name || "").trim().split(/\s+/)[0] || "la personne";
+  const msg = h("div",{style:"font-size:12.5px;min-height:18px;margin-top:8px;color:#B0413E"});
+  // ── Partage en direct ──
+  const live = h("div",{style:"margin:10px 0;padding:8px 10px;border:1px dashed #C0392B88;border-radius:10px;background:#FFF5F3"});
+  const etatLive = h("div",{style:"font-size:12.5px;color:#5A5648;margin-bottom:6px"}, "Tu peux montrer ce protocole au coaché sur son téléphone, question par question, et voir ses réponses apparaître ici en direct.");
+  const bLive = h("button",{class:"btn-sm"}, "📡 Partager en direct"); live.appendChild(etatLive); live.appendChild(bLive); boite.appendChild(live);
+  let enDirect = false, unsub = null, courant = -1; const reponsesCoache = {}, zonesRep = {}, boutonsMontrer = [], notes = {};
+  const marquer = () => boutonsMontrer.forEach((b, i) => { const actif = enDirect && i === courant; b.disabled = !enDirect; b.style.background = actif ? "#C0392B" : ""; b.style.color = actif ? "#fff" : ""; b.textContent = actif ? "👁️ Montrée" : "👁️ Montrer"; });
+  async function demarrer() {
+    const c = choisi(); msg.style.color = "#B0413E";
+    if (!c) { msg.textContent = "Choisis d'abord la personne accompagnée."; return; }
+    const t = new Date().toISOString();
+    try { await colClients().doc(c.id).update({ seanceDirect: { actif: true, catalogueId: cat.id, titre: cat.titre, consigne: cat.consigne || "", champs: (cat.champs || []).map(ch => ({ id: ch.id, label: ch.label, aide: ch.aide || "" })), courant: -1, reponses: {}, demarreLe: t, majLe: t } }); }
+    catch (e) { console.error("direct:", e); msg.textContent = "Le partage en direct n'a pas pu démarrer. Réessaie dans un instant."; return; }
+    enDirect = true; courant = -1; sel.disabled = true; msg.textContent = ""; bLive.textContent = "⏹️ Arrêter le partage";
+    etatLive.textContent = "🔴 En direct avec " + prenomDe(c) + " : " + prenomDe(c) + " voit la question que tu lui montres, et tu vois ses réponses ici.";
+    unsub = colClients().doc(c.id).onSnapshot(s => { const d = s.data && s.data(), r = d && d.seanceDirect; if (!r) return;
+      Object.keys(zonesRep).forEach(k => { const v = r.reponses && r.reponses[k]; if (v) reponsesCoache[k] = v; else delete reponsesCoache[k]; zonesRep[k].style.display = v ? "block" : "none"; zonesRep[k].textContent = v ? prenomDe(c) + " : " + v : ""; }); }, e => console.error("direct:", e));
+    marquer();
+  }
+  async function arreter() {
+    const c = choisi(); if (unsub) { unsub(); unsub = null; }
+    if (enDirect && c) { try { await colClients().doc(c.id).update({ "seanceDirect.actif": false, "seanceDirect.termineLe": new Date().toISOString() }); } catch (e) { console.error("direct:", e); } }
+    enDirect = false; courant = -1; sel.disabled = false; bLive.textContent = "📡 Partager en direct"; etatLive.textContent = "Partage terminé. Les réponses reçues restent affichées ci-dessous."; marquer();
+  }
+  bLive.addEventListener("click", () => enDirect ? arreter() : demarrer());
+  async function montrer(i) { const c = choisi(); if (!enDirect || !c) return; try { await colClients().doc(c.id).update({ "seanceDirect.courant": i, "seanceDirect.majLe": new Date().toISOString() }); courant = i; marquer(); } catch (e) { msg.style.color = "#B0413E"; msg.textContent = "Impossible de montrer cette question pour le moment."; } }
   (cat.champs || []).forEach((ch, i) => {
     const ta = h("textarea",{rows:"2",style:st + ";margin-top:4px",placeholder:"Tes notes"}); notes[ch.id] = ta;
-    boite.appendChild(h("div",{style:"margin-top:12px"}, h("div",{style:"font-weight:600;font-size:13.5px;color:#2E2A20"}, (i + 1) + ". " + ch.label), ch.aide ? h("div",{style:"font-size:12.5px;color:#6B6355"}, ch.aide) : h("span",{}), ta));
+    const bm = h("button",{class:"btn-sm",style:"margin-top:4px"}, "👁️ Montrer"); bm.disabled = true; bm.addEventListener("click", () => montrer(i)); boutonsMontrer.push(bm);
+    const zr = h("div",{style:"display:none;font-size:13px;color:#1F6B2E;background:#EEF7F0;border-radius:8px;padding:6px 8px;margin-top:4px;white-space:pre-wrap"}); zonesRep[ch.id] = zr;
+    boite.appendChild(h("div",{style:"margin-top:12px"}, h("div",{style:"font-weight:600;font-size:13.5px;color:#2E2A20"}, (i + 1) + ". " + ch.label), ch.aide ? h("div",{style:"font-size:12.5px;color:#6B6355"}, ch.aide) : h("span",{}), bm, zr, ta));
   });
-  const msg = h("div",{style:"font-size:12.5px;min-height:18px;margin-top:8px;color:#B0413E"}); boite.appendChild(msg);
+  boite.appendChild(msg);
   const pied = h("div",{style:"display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"});
   const enreg = h("button",{class:"btn"}, "💾 Enregistrer dans le dossier"), ferme = h("button",{class:"btn-g"}, "Fermer");
-  ferme.addEventListener("click", () => fond.remove());
+  const fermer = async () => { if (enDirect) await arreter(); fond.remove(); };
+  ferme.addEventListener("click", fermer);
   enreg.addEventListener("click", () => {
-    const c = (state.clients || []).find(x => x.id === sel.value), saisies = {};
+    const c = choisi(), saisies = {};
     Object.keys(notes).forEach(k => { const v = notes[k].value.trim(); if (v) saisies[k] = v.slice(0, 4000); });
     msg.style.color = "#B0413E";
     if (!c) { msg.textContent = "Choisis d'abord la personne accompagnée."; return; }
-    if (!Object.keys(saisies).length) { msg.textContent = "Ajoute au moins une note avant d'enregistrer."; return; }
+    if (!Object.keys(saisies).length && !Object.keys(reponsesCoache).length) { msg.textContent = "Ajoute au moins une note avant d'enregistrer."; return; }
     const entree = { id: "sp_" + Date.now(), catalogueId: cat.id, titre: cat.titre, date: new Date().toISOString(), notes: saisies };
+    if (Object.keys(reponsesCoache).length) entree.coache = Object.assign({}, reponsesCoache);
     c.seancesProtocoles = (c.seancesProtocoles || []).concat([entree]);
     ClientsManager.saveClient(c.id, { seancesProtocoles: c.seancesProtocoles });
     msg.style.color = "#2F7D3B"; msg.textContent = "✅ Enregistré dans le dossier de " + c.name + ".";
   });
   pied.appendChild(enreg); pied.appendChild(ferme); boite.appendChild(pied);
-  fond.appendChild(boite); fond.addEventListener("click", e => { if (e.target === fond) fond.remove(); }); document.body.appendChild(fond);
+  fond.appendChild(boite); fond.addEventListener("click", e => { if (e.target === fond) fermer(); }); document.body.appendChild(fond);
 }
 
 function buildProtocolesFaits(c) {
@@ -7224,7 +7378,7 @@ function buildProtocolesFaits(c) {
   if (!l.length) { box.appendChild(h("p",{style:"font-size:12.5px;color:#6B6355"}, "Aucun exercice de protocole enregistré pour l'instant.")); return box; }
   l.forEach(x => { const d = new Date(x.date), det = h("details",{style:"margin-top:6px"}); det.appendChild(h("summary",{style:"cursor:pointer;font-size:13px"}, x.titre + (isNaN(d) ? "" : " · " + d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }))));
     const cat = catalogueComplet().find(k => k.id === x.catalogueId), champs = cat ? cat.champs : [];
-    Object.keys(x.notes || {}).forEach(k => { const ch = champs.find(q => q.id === k); det.appendChild(h("div",{style:"font-size:12px;color:#6B6355;margin-top:6px"}, ch ? ch.label : k)); det.appendChild(h("div",{style:"font-size:13px;white-space:pre-wrap"}, x.notes[k])); }); box.appendChild(det); });
+    Array.from(new Set(Object.keys(x.notes || {}).concat(Object.keys(x.coache || {})))).forEach(k => { const ch = champs.find(q => q.id === k); det.appendChild(h("div",{style:"font-size:12px;color:#6B6355;margin-top:6px"}, ch ? ch.label : k)); if ((x.notes || {})[k]) det.appendChild(h("div",{style:"font-size:13px;white-space:pre-wrap"}, x.notes[k])); if ((x.coache || {})[k]) det.appendChild(h("div",{style:"font-size:13px;white-space:pre-wrap;color:#1F6B2E"}, "Réponse du coaché : " + x.coache[k])); }); box.appendChild(det); });
   return box;
 }
 

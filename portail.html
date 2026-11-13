@@ -331,14 +331,79 @@ function exerciceSimpleHtml(ex, idx){
 }
 
 // Exercice avec questions : le client répond directement, l'enregistrement est automatique.
+// Résultats partagés par le coach (le portail ne reçoit que des chiffres déjà calculés : aucun barème).
+function resultatsPartagesHtml(res){
+  if (!res || !Array.isArray(res.barres) || !res.barres.length) return "";
+  const haut = Math.max.apply(null, res.barres.map(b => Number(b.valeur) || 0));
+  const intro = res.type === "drivers"
+    ? "Voici ce que ton coach a relevé avec toi. Plus la barre est haute, plus ce message est présent dans ta vie ces temps-ci. Ce n'est pas un diagnostic : c'est un point de départ pour en parler ensemble."
+    : "Voici les positions que tu as le plus choisies dans ta vie de tous les jours. Elles décrivent des habitudes, pas ce que tu vaux, et elles peuvent évoluer.";
+  const barres = res.barres.map(b => { const v = Number(b.valeur) || 0, m = Number(b.max) || 1, fort = v === haut && haut > 0;
+    return `<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;gap:8px;font-size:13.5px;${fort ? "font-weight:700" : ""}"><span>${esc(b.nom)}</span><span>${v} / ${m}</span></div><div style="height:9px;border-radius:5px;background:#E9E3D2;margin-top:3px"><div style="height:9px;border-radius:5px;background:var(--accent);width:${Math.min(100, Math.round(v * 100 / m))}%"></div></div></div>`; }).join("");
+  const detail = (res.detail || []).length ? `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:13px">Voir le détail par situation</summary>${res.detail.map(d => `<div style="font-size:13px;margin-top:4px"><b>${esc(d.theme)}</b> → ${esc(d.position)}</div>`).join("")}</details>` : "";
+  const mot = res.message ? `<div style="margin-top:8px;padding:8px 10px;border-left:3px solid var(--accent);background:#FBF7EC;font-size:13.5px;white-space:pre-wrap"><b>Le mot de ton coach :</b> ${esc(res.message)}</div>` : "";
+  return `<div style="margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#FFFDF7"><div style="font-weight:700;font-size:14px">📊 Mes résultats</div><p class="muted" style="font-size:13px;margin:4px 0 6px">${esc(intro)}</p>${barres}${detail}${mot}</div>`;
+}
+
+// Question « répartir des points » (par exemple 10 points entre 4 réponses), avec total contrôlé en direct.
+function pointsChampHtml(c, idx, rep){
+  const tot = c.total || 10, p = String(rep[c.id] || "").split(",").map(x => x.trim());
+  const somme = p.reduce((a, x) => a + (parseInt(x, 10) || 0), 0);
+  const lignes = (c.options || []).map((o, k) => `<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;margin:5px 0;border:1px solid var(--line);border-radius:10px;font-size:14px;line-height:1.4;background:#fff"><span style="flex:1">${esc(o.texte)}</span><input type="number" inputmode="numeric" min="0" max="${tot}" step="1" value="${esc(p[k] === undefined ? "" : p[k])}" data-pts="rep_${idx}_${esc(c.id)}" oninput="saisiePoints(${idx}, '${esc(c.id)}', ${tot})" aria-label="Points pour : ${esc(o.texte)}" style="width:62px;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:inherit;font-size:16px;text-align:center"></label>`).join("");
+  return `<fieldset style="margin:12px 0;border:0;padding:0;min-width:0"><legend style="font-weight:600;font-size:13.5px;padding:0">${esc(c.label)}</legend>${c.aide ? `<div class="muted" style="font-size:12.5px;margin:2px 0 4px">${esc(c.aide)}</div>` : ""}${lignes}<div id="tot_${idx}_${esc(c.id)}" style="font-size:13px;margin:4px 2px;font-weight:600;color:${somme === tot ? "#2F7D3B" : "#8F5200"}">${libelleTotal(somme, tot)}</div></fieldset>`;
+}
+function libelleTotal(somme, tot){
+  if (somme === tot) return "✅ Total : " + tot + " / " + tot;
+  const ecart = Math.abs(tot - somme), s = ecart > 1 ? "s" : "";
+  return "Total : " + somme + " / " + tot + (somme < tot ? " — il te reste " + ecart + " point" + s + " à répartir" : " — tu as dépassé de " + ecart + " point" + s);
+}
+function saisiePoints(idx, champId, tot){
+  const champs = Array.from(document.querySelectorAll('input[data-pts="rep_' + idx + '_' + champId + '"]'));
+  let somme = 0;
+  const vals = champs.map(i => { let v = parseInt(i.value, 10); if (isNaN(v)) v = 0; if (v < 0) { v = 0; i.value = "0"; } if (v > tot) { v = tot; i.value = String(tot); } somme += v; return v; });
+  const t = document.getElementById("tot_" + idx + "_" + champId);
+  if (t) { t.textContent = libelleTotal(somme, tot); t.style.color = somme === tot ? "#2F7D3B" : "#8F5200"; }
+  saisieReponse(idx, champId, champs.every(i => i.value === "") ? "" : vals.join(","));
+}
+
+// Séance en direct : le coach partage un protocole pendant la séance ; la personne voit la question montrée et répond.
+let _liveUnsub = null, _liveCourant = null, _liveTimer = null;
+function demarrerLive(){
+  if (_liveUnsub || !PORTAL.clientId) return;
+  try { _liveUnsub = firebase.firestore().collection("clients").doc(PORTAL.clientId).onSnapshot(s => { const d = s.data && s.data(); if (PORTAL.client) PORTAL.client.seanceDirect = d ? d.seanceDirect : null; renderLive(); }, e => { console.error("direct:", e); _liveUnsub = null; }); } catch (e) { console.error("direct:", e); }
+}
+function renderLive(){
+  const z = document.getElementById("liveZone"); if (!z) return;
+  const l = PORTAL.client && PORTAL.client.seanceDirect;
+  if (!l || !l.actif) { z.innerHTML = ""; _liveCourant = null; return; }
+  const i = typeof l.courant === "number" ? l.courant : -1, ch = (l.champs || [])[i];
+  if (z.querySelector("#live_rep") && _liveCourant === i) return;   // on ne reconstruit pas la zone pendant que la personne écrit
+  _liveCourant = i;
+  const rep = ch && l.reponses ? (l.reponses[ch.id] || "") : "";
+  z.innerHTML = `<div class="card" style="border:2px solid #C0392B55"><div style="font-weight:700">🔴 Séance en direct avec ton coach</div><div class="muted" style="margin:2px 0 6px">${esc(l.titre || "")}</div>` + (ch
+    ? `<div style="font-weight:600;font-size:15px;margin:8px 0 2px">${esc(ch.label)}</div>${ch.aide ? `<div class="muted" style="font-size:13px">${esc(ch.aide)}</div>` : ""}<textarea id="live_rep" rows="4" placeholder="Écris ici, ton coach te voit en direct" oninput="saisieLive(this.value)" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:10px;font-family:inherit;font-size:16px;margin-top:8px">${esc(rep)}</textarea><div id="live_etat" class="muted" style="font-size:12px;min-height:16px"></div>`
+    : `<p class="muted" style="font-size:14px">${l.consigne ? esc(l.consigne) + "<br><br>" : ""}Ton coach va te présenter les questions une par une. Tu peux répondre ici, ou à l'oral.</p>`) + `</div>`;
+}
+function saisieLive(valeur){
+  clearTimeout(_liveTimer);
+  const l = PORTAL.client && PORTAL.client.seanceDirect; if (!l || !l.actif) return;
+  const ch = (l.champs || [])[l.courant]; if (!ch) return;
+  const etat = document.getElementById("live_etat"); if (etat) etat.textContent = "…";
+  _liveTimer = setTimeout(async () => {
+    try { await firebase.firestore().collection("clients").doc(PORTAL.clientId).update({ ["seanceDirect.reponses." + ch.id]: String(valeur).slice(0, 4000), "seanceDirect.majLe": new Date().toISOString() }); const e2 = document.getElementById("live_etat"); if (e2) e2.textContent = "✓ Vu par ton coach"; }
+    catch (e) { console.error("direct:", e); const e2 = document.getElementById("live_etat"); if (e2) e2.textContent = "⚠️ Non envoyé, réessaie"; }
+  }, 700);
+}
+
 function exerciceStructureHtml(ex, idx, rep){
   const remplis = ex.champs.filter(c => String(rep[c.id] || "").trim()).length;
+  const res = (PORTAL.client.resultatsPartages || {})[ex.id];
   const champs = ex.champs.map(c => c.type === "choix" ? `
     <fieldset style="margin:12px 0;border:0;padding:0;min-width:0">
       <legend style="font-weight:600;font-size:13.5px;padding:0">${esc(c.label)}</legend>
       ${c.aide ? `<div class="muted" style="font-size:12.5px;margin:2px 0 4px">${esc(c.aide)}</div>` : ""}
       ${(c.options || []).map(o => `<label style="display:flex;align-items:flex-start;gap:10px;padding:9px 10px;margin:5px 0;border:1px solid var(--line);border-radius:10px;font-size:14px;line-height:1.4;cursor:pointer;background:#fff"><input type="radio" name="rep_${idx}_${esc(c.id)}" value="${esc(o.id)}" ${rep[c.id] === o.id ? "checked" : ""} data-champ="${esc(c.id)}" onchange="saisieReponse(${idx}, this.dataset.champ, this.value)" style="margin-top:2px;width:18px;height:18px;flex:none"><span>${esc(o.texte)}</span></label>`).join("")}
-    </fieldset>` : `
+    </fieldset>` : c.type === "points" ? pointsChampHtml(c, idx, rep) : `
     <div style="margin:12px 0">
       <label for="rep_${idx}_${esc(c.id)}" style="font-weight:600;font-size:13.5px">${esc(c.label)}</label>
       ${c.aide ? `<div class="muted" style="font-size:12.5px;margin:2px 0 4px">${esc(c.aide)}</div>` : ""}
@@ -346,8 +411,9 @@ function exerciceStructureHtml(ex, idx, rep){
     </div>`).join("");
   return `
     <details style="border-bottom:1px solid var(--line);padding:10px 0">
-      <summary style="cursor:pointer;font-size:14px;font-weight:600">${esc(ex.titre)} <span class="muted" style="font-weight:400;font-size:12.5px">· ${remplis}/${ex.champs.length} rempli(s)${ex.done ? " · terminé ✅" : ""}</span></summary>
+      <summary style="cursor:pointer;font-size:14px;font-weight:600">${esc(ex.titre)} <span class="muted" style="font-weight:400;font-size:12.5px">· ${remplis}/${ex.champs.length} rempli(s)${ex.done ? " · terminé ✅" : ""}${res && res.barres ? " · 📊 résultats partagés" : ""}</span></summary>
       ${ex.consigne ? `<p class="muted" style="font-size:13px;white-space:pre-line">${esc(ex.consigne)}</p>` : ""}
+      ${resultatsPartagesHtml(res)}
       ${champs}
       <label style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13.5px"><input type="checkbox" ${ex.done ? "checked" : ""} onchange="toggleExercice(${idx}, this.checked)"> J'ai terminé cet exercice</label>
       <div id="msg_${idx}" class="muted" style="font-size:12px;min-height:16px;margin-top:4px"></div>
@@ -806,6 +872,7 @@ function renderPortal(){
   app.innerHTML = `
     <h1>👋 Bonjour ${esc(nom)}</h1>
     <p class="muted" style="margin-bottom:16px">Ton espace personnel de coaching</p>
+    <div id="liveZone"></div>
     ${rdvPortailHtml(PORTAL.client)}
     <div id="contractZone"></div>
     ${questionnaireHtml(PORTAL.client)}
@@ -817,7 +884,7 @@ function renderPortal(){
     ${outilsCardHtml(PORTAL.client)}
     <div class="card" id="echangeZone">${echangesHtml(PORTAL.client)}</div>
   `;
-  renderContractButton();
+  renderContractButton(); demarrerLive();
   document.getElementById("echangeSend").addEventListener("click", sendEchange);
 }
 
