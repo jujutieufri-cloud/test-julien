@@ -6428,7 +6428,10 @@ function renderExercicesTab() {
     const top = h("div",{style:"display:flex;justify-content:space-between;align-items:flex-start;gap:10px"}), txt = h("div",{style:"flex:1"});
     txt.appendChild(h("div",{style:"font-weight:700;font-size:14.5px;color:#2E2A20"}, cat.titre + (cat.perso ? "  ·  créé par toi" : "")));
     txt.appendChild(h("div",{style:"font-size:12.5px;color:#6B6355;margin-top:2px"}, [cat.resume, cat.duree].filter(Boolean).join(" · "))); top.appendChild(txt);
-    const b = h("button",{class:"btn-sm"}, seance ? "Ouvrir le guide" : "Attribuer à…"); b.addEventListener("click", () => seance ? ouvrirGuideSeance(cat) : ouvrirAttribution(cat)); top.appendChild(b); row.appendChild(top);
+    const b = h("button",{class:"btn-sm"}, seance ? "Ouvrir le guide" : "Attribuer à…"); b.addEventListener("click", () => seance ? ouvrirGuideSeance(cat) : ouvrirAttribution(cat));
+    const actions = h("div",{style:"display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"});
+    if (cat.resultats) { const bp = h("button",{class:"btn-g"}, "👁️ Aperçu"); bp.addEventListener("click", () => ouvrirApercuTest(cat)); actions.appendChild(bp); }
+    actions.appendChild(b); top.appendChild(actions); row.appendChild(top);
     if (cat.resultats) row.appendChild(h("div",{style:"font-size:11.5px;color:#9C7A2E;font-weight:700;margin-top:4px"}, "🔒 Résultats pour toi d'abord · partageables ensuite avec le coaché"));
     const det = h("details",{style:"margin-top:6px"});
     det.appendChild(h("summary",{style:"cursor:pointer;font-size:12px;color:#9C7A2E"}, "Aperçu (" + cat.champs.length + " questions)"));
@@ -7369,6 +7372,45 @@ function ouvrirGuideSeance(cat, client) {
   });
   pied.appendChild(enreg); pied.appendChild(ferme); boite.appendChild(pied);
   fond.appendChild(boite); fond.addEventListener("click", e => { if (e.target === fond) fermer(); }); document.body.appendChild(fond);
+}
+
+// Aperçu d'un test : ce que voit le coaché, puis ce que voit le coach (exemple fictif, rien n'est enregistré).
+function ouvrirApercuTest(cat) {
+  const fond = h("div",{style:"position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:12px"});
+  const boite = h("div",{style:"background:#FFFDF7;border-radius:16px;max-width:680px;width:100%;max-height:92vh;overflow:auto;padding:16px"});
+  const titre = t => h("div",{style:"font-weight:700;font-size:12px;letter-spacing:.08em;color:#6B6355;margin:16px 0 6px"}, t);
+  boite.appendChild(h("div",{style:"font-weight:700;font-size:17px;color:#2E2A20"}, "👁️ Aperçu · " + cat.titre));
+  boite.appendChild(h("div",{style:"font-size:12.5px;color:#6B6355;margin:2px 0"}, "Pour tout voir sans client : rien n'est enregistré, les données de la partie 2 sont fictives."));
+  boite.appendChild(titre("1 · CE QUE VOIT LE COACHÉ DANS SON ESPACE"));
+  boite.appendChild(h("div",{style:"font-size:13px;color:#5A5648;white-space:pre-wrap;margin-bottom:6px"}, cat.consigne));
+  const st = "width:62px;box-sizing:border-box;border:1px solid #E4DAC0;border-radius:8px;padding:8px;font-family:inherit;font-size:16px;text-align:center";
+  (cat.champs || []).slice(0, 3).forEach((ch, qi) => {
+    const bloc = h("div",{style:"margin:10px 0;padding:8px 10px;border:1px solid #E4DAC0;border-radius:10px;background:#fff"});
+    bloc.appendChild(h("div",{style:"font-weight:600;font-size:13.5px"}, ch.label)); if (ch.aide) bloc.appendChild(h("div",{style:"font-size:12.5px;color:#6B6355"}, ch.aide));
+    const total = h("div",{style:"font-size:13px;font-weight:600;margin-top:4px;color:#8F5200"});
+    const majTotal = champs => { const s = champs.reduce((a, i) => a + (Math.max(0, parseInt(i.value, 10)) || 0), 0), t = ch.total || 10; const e = Math.abs(t - s); total.textContent = s === t ? "✅ Total : " + t + " / " + t : "Total : " + s + " / " + t + (s < t ? " — il te reste " + e + " point" + (e > 1 ? "s" : "") + " à répartir" : " — tu as dépassé de " + e + " point" + (e > 1 ? "s" : "")); total.style.color = s === t ? "#2F7D3B" : "#8F5200"; };
+    const saisies = [];
+    (ch.options || []).forEach(o => {
+      const lab = h("label",{style:"display:flex;align-items:center;gap:10px;padding:7px 8px;margin:4px 0;border:1px solid #E4DAC0;border-radius:8px;font-size:13.5px"});
+      if (ch.type === "points") { const i = h("input",{type:"number",min:"0",max:"10",step:"1",inputmode:"numeric",style:st}); i.addEventListener("input", () => majTotal(saisies)); saisies.push(i); lab.appendChild(h("span",{style:"flex:1"}, o.texte)); lab.appendChild(i); }
+      else { lab.appendChild(h("input",{type:"radio",name:"apercu_" + qi})); lab.appendChild(h("span",{}, o.texte)); }
+      bloc.appendChild(lab);
+    });
+    if (ch.type === "points") { majTotal(saisies); bloc.appendChild(total); }
+    boite.appendChild(bloc);
+  });
+  if ((cat.champs || []).length > 3) boite.appendChild(h("div",{style:"font-size:12.5px;color:#6B6355"}, "… et " + (cat.champs.length - 3) + " autres questions du même type."));
+  // Exemple fictif des deux tests, pour la lecture croisée
+  const dem = { id: "__apercu__", name: "Alex (exemple)", exercices: [{ id: "ex_d", catalogueId: "test_drivers" }, { id: "ex_p", catalogueId: "test_positions_vie" }], reponsesExercices: { ex_d: {}, ex_p: {} } };
+  for (let n = 1; n <= 35; n++) dem.reponsesExercices.ex_d["q" + n] = "badce"[(n - 1) % 5];   // fort 35, parfait 28, plaisir 28, dépêche 21, effort 14
+  GRILLES_COACH.positions.mapping.forEach((m, i) => { const pt = {}; pt[m["-+"]] = 5; pt[m["++"]] = 3; pt[m["+-"]] = 1; pt[m["--"]] = 1; dem.reponsesExercices.ex_p["t" + (i + 1)] = "abcd".split("").map(l => pt[l]).join(","); });
+  boite.appendChild(titre("2 · CE QUE TU VOIS ENSUITE DANS LA FICHE (EXEMPLE FICTIF)"));
+  const res = buildResultatsCoach(cat, dem.reponsesExercices[cat.id === "test_drivers" ? "ex_d" : "ex_p"], dem, null); res.open = true;
+  Array.from(res.children).filter(x => x.tagName === "DETAILS").forEach(x => { x.open = true; }); boite.appendChild(res);
+  boite.appendChild(titre("3 · POUR UN VRAI CLIENT"));
+  boite.appendChild(h("div",{style:"font-size:13px;color:#5A5648"}, "Fiche du client → Parcours → « Envoyer » ce test. La personne répond via son lien « 🔗 Portail ». Tu retrouves ses réponses, ces résultats et le bouton « 📤 Partager les résultats » dans sa fiche, sous ses exercices."));
+  const ferme = h("button",{class:"btn",style:"margin-top:12px"}, "Fermer"); ferme.addEventListener("click", () => fond.remove()); boite.appendChild(ferme);
+  fond.appendChild(boite); fond.addEventListener("click", e => { if (e.target === fond) fond.remove(); }); document.body.appendChild(fond);
 }
 
 function buildProtocolesFaits(c) {
