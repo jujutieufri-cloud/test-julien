@@ -345,24 +345,26 @@ function resultatsPartagesHtml(res){
   return `<div style="margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#FFFDF7"><div style="font-weight:700;font-size:14px">📊 Mes résultats</div><p class="muted" style="font-size:13px;margin:4px 0 6px">${esc(intro)}</p>${barres}${detail}${mot}</div>`;
 }
 
-// Question « répartir des points » (par exemple 10 points entre 4 réponses), avec total contrôlé en direct.
+// Question « noter chaque réponse » (par exemple de 1 à 8, avec un total qui ne dépasse pas 10), total contrôlé en direct.
 function pointsChampHtml(c, idx, rep){
-  const tot = c.total || 10, p = String(rep[c.id] || "").split(",").map(x => x.trim());
-  const somme = p.reduce((a, x) => a + (parseInt(x, 10) || 0), 0);
-  const lignes = (c.options || []).map((o, k) => `<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;margin:5px 0;border:1px solid var(--line);border-radius:10px;font-size:14px;line-height:1.4;background:#fff"><span style="flex:1">${esc(o.texte)}</span><input type="number" inputmode="numeric" min="0" max="${tot}" step="1" value="${esc(p[k] === undefined ? "" : p[k])}" data-pts="rep_${idx}_${esc(c.id)}" oninput="saisiePoints(${idx}, '${esc(c.id)}', ${tot})" aria-label="Points pour : ${esc(o.texte)}" style="width:62px;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:inherit;font-size:16px;text-align:center"></label>`).join("");
-  return `<fieldset style="margin:12px 0;border:0;padding:0;min-width:0"><legend style="font-weight:600;font-size:13.5px;padding:0">${esc(c.label)}</legend>${c.aide ? `<div class="muted" style="font-size:12.5px;margin:2px 0 4px">${esc(c.aide)}</div>` : ""}${lignes}<div id="tot_${idx}_${esc(c.id)}" style="font-size:13px;margin:4px 2px;font-weight:600;color:${somme === tot ? "#2F7D3B" : "#8F5200"}">${libelleTotal(somme, tot)}</div></fieldset>`;
+  const tot = c.total || 10, mx = c.max || tot, toutes = !!c.toutes, p = String(rep[c.id] || "").split(",").map(x => x.trim());
+  const somme = p.reduce((a, x) => a + (parseInt(x, 10) || 0), 0), vides = toutes ? (c.options || []).filter((o, k) => !(parseInt(p[k], 10) > 0)).length : 0;
+  const lignes = (c.options || []).map((o, k) => { const v = p[k] === undefined || (p[k] === "0" && !toutes) ? "" : p[k];
+    return `<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;margin:5px 0;border:1px solid var(--line);border-radius:10px;font-size:14px;line-height:1.4;background:#fff"><span style="flex:1">${esc(o.texte)}</span><input type="number" inputmode="numeric" min="${toutes ? 1 : 0}" max="${mx}" step="1" value="${esc(v)}" placeholder="–" data-pts="rep_${idx}_${esc(c.id)}" oninput="saisiePoints(${idx}, '${esc(c.id)}', ${tot}, ${mx}, ${toutes ? 1 : 0})" aria-label="Note de 1 à ${mx} pour : ${esc(o.texte)}" style="width:62px;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:inherit;font-size:16px;text-align:center"></label>`; }).join("");
+  return `<fieldset style="margin:12px 0;border:0;padding:0;min-width:0"><legend style="font-weight:600;font-size:13.5px;padding:0">${esc(c.label)}</legend>${c.aide ? `<div class="muted" style="font-size:12.5px;margin:2px 0 4px">${esc(c.aide)}</div>` : ""}${lignes}<div id="tot_${idx}_${esc(c.id)}" style="font-size:13px;margin:4px 2px;font-weight:600;color:${couleurTotal(somme, tot, vides)}">${libelleTotal(somme, tot, vides)}</div></fieldset>`;
 }
-function libelleTotal(somme, tot){
-  if (somme === tot) return "✅ Total : " + tot + " / " + tot;
-  const ecart = Math.abs(tot - somme), s = ecart > 1 ? "s" : "";
-  return "Total : " + somme + " / " + tot + (somme < tot ? " — il te reste " + ecart + " point" + s + " à répartir" : " — tu as dépassé de " + ecart + " point" + s);
+function couleurTotal(somme, tot, vides){ return somme > tot || vides ? "#8F5200" : (somme === 0 ? "#6B6355" : "#2F7D3B"); }
+function libelleTotal(somme, tot, vides){
+  if (somme > tot) { const e = somme - tot; return "Total : " + somme + " / " + tot + " — tu as dépassé de " + e + " point" + (e > 1 ? "s" : ""); }
+  if (vides) return "Total : " + somme + " / " + tot + " — il manque une note pour " + vides + " réponse" + (vides > 1 ? "s" : "");
+  return somme === 0 ? "Total : 0 / " + tot + " (maximum)" : "✅ Total : " + somme + " / " + tot + " (maximum)";
 }
-function saisiePoints(idx, champId, tot){
+function saisiePoints(idx, champId, tot, mx, toutes){
   const champs = Array.from(document.querySelectorAll('input[data-pts="rep_' + idx + '_' + champId + '"]'));
   let somme = 0;
-  const vals = champs.map(i => { let v = parseInt(i.value, 10); if (isNaN(v)) v = 0; if (v < 0) { v = 0; i.value = "0"; } if (v > tot) { v = tot; i.value = String(tot); } somme += v; return v; });
-  const t = document.getElementById("tot_" + idx + "_" + champId);
-  if (t) { t.textContent = libelleTotal(somme, tot); t.style.color = somme === tot ? "#2F7D3B" : "#8F5200"; }
+  const vals = champs.map(i => { let v = parseInt(i.value, 10); if (isNaN(v)) v = 0; if (v < 0) { v = 0; i.value = "0"; } if (v > mx) { v = mx; i.value = String(mx); } somme += v; return v; });
+  const vides = toutes ? vals.filter(v => v < 1).length : 0, t = document.getElementById("tot_" + idx + "_" + champId);
+  if (t) { t.textContent = libelleTotal(somme, tot, vides); t.style.color = couleurTotal(somme, tot, vides); }
   saisieReponse(idx, champId, champs.every(i => i.value === "") ? "" : vals.join(","));
 }
 
