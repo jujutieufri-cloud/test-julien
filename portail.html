@@ -370,9 +370,39 @@ function saisiePoints(idx, champId, tot, mx, toutes){
 
 // Séance en direct : le coach partage un protocole pendant la séance ; la personne voit la question montrée et répond.
 let _liveUnsub = null, _liveCourant = null, _liveTimer = null;
+// Visioconférence : la salle du coaché, mise en avant quand le coach démarre la séance.
+const VISIO_DEFAUT = "https://meet.jit.si/";
+const VISIO_BASE_OK = /^https:\/\/[a-z0-9]([a-z0-9.\-]*[a-z0-9])?(:\d{2,5})?\/?$/i;
+const salleValide = s => /^[A-Za-z0-9\-]{12,64}$/.test(String(s || ""));
+function urlVisio(base, salle, nom, sujet){
+  if (!salleValide(salle)) return null;
+  const b = VISIO_BASE_OK.test(String(base || "")) ? String(base).replace(/\/?$/, "/") : VISIO_DEFAUT;
+  const p = ["config.prejoinPageEnabled=true", "config.disableDeepLinking=true", "config.subject=" + encodeURIComponent(JSON.stringify(sujet || "Séance de coaching")).replace(/'/g, "%27")];
+  const n = String(nom || "").replace(/[\u0000-\u001f]/g, "").trim().slice(0, 40);
+  if (n) p.push("userInfo.displayName=" + encodeURIComponent(JSON.stringify(n)).replace(/'/g, "%27"));
+  return b + salle + "#" + p.join("&");
+}
+let _titreInitial = null;
+function renderVisio(){
+  const z = document.getElementById("visioZone"); if (!z) return;
+  if (_titreInitial === null) _titreInitial = document.title;
+  const v = PORTAL.client && PORTAL.client.visio, prenom = String((PORTAL.client && PORTAL.client.name) || "").trim().split(/\s+/)[0] || "";
+  const url = v && v.salle ? urlVisio(v.base, v.salle, prenom) : null;
+  if (!url) { z.innerHTML = ""; document.title = _titreInitial; return; }
+  const actif = !!v.actif; document.title = (actif ? "🔴 " : "") + _titreInitial;
+  z.innerHTML = `<div class="card" style="border:2px solid ${actif ? "#C0392B66" : "var(--line)"}"><div style="font-weight:700">${actif ? "🔴 Ton coach t'attend en visio" : "📹 Ta salle de visio"}</div>
+    <p class="muted" style="margin:4px 0 10px">${actif ? "La séance est ouverte : tu peux rejoindre maintenant." : "Le jour de votre rendez-vous, rejoins-nous ici. Tu peux entrer dès que tu es prêt·e."}</p>
+    <a href="${esc(url)}" target="_blank" rel="noopener noreferrer" style="display:block;text-align:center;border-radius:12px;padding:14px 16px;background:var(--accent);color:#fff;font-weight:700;font-size:16px;text-decoration:none">📹 Rejoindre la visio</a>
+    <details style="margin-top:10px"><summary style="cursor:pointer;font-size:13.5px">Avant de rejoindre : 3 petits conseils</summary>
+      <ul style="margin:8px 0 6px 18px;padding:0;font-size:13.5px;line-height:1.55"><li>Autorise la caméra et le micro quand ton navigateur te le demande.</li><li>Un casque ou des écouteurs améliorent beaucoup le son.</li><li>Installe-toi dans un endroit calme, avec une bonne connexion (au besoin, passe en 4G ou 5G).</li></ul>
+      <div class="muted" style="font-size:12.5px">Si le bouton ne s'ouvre pas, copie ce lien :</div>
+      <input readonly value="${esc(url)}" onclick="this.select()" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:inherit;font-size:16px;margin-top:4px"></details></div>`;
+}
+
 function demarrerLive(){
+  renderVisio();
   if (_liveUnsub || !PORTAL.clientId) return;
-  try { _liveUnsub = firebase.firestore().collection("clients").doc(PORTAL.clientId).onSnapshot(s => { const d = s.data && s.data(); if (PORTAL.client) PORTAL.client.seanceDirect = d ? d.seanceDirect : null; renderLive(); }, e => { console.error("direct:", e); _liveUnsub = null; }); } catch (e) { console.error("direct:", e); }
+  try { _liveUnsub = firebase.firestore().collection("clients").doc(PORTAL.clientId).onSnapshot(s => { const d = s.data && s.data(); if (PORTAL.client) { PORTAL.client.seanceDirect = d ? d.seanceDirect : null; PORTAL.client.visio = d ? d.visio : null; } renderLive(); renderVisio(); }, e => { console.error("direct:", e); _liveUnsub = null; }); } catch (e) { console.error("direct:", e); }
 }
 function renderLive(){
   const z = document.getElementById("liveZone"); if (!z) return;
@@ -875,6 +905,7 @@ function renderPortal(){
     <h1>👋 Bonjour ${esc(nom)}</h1>
     <p class="muted" style="margin-bottom:16px">Ton espace personnel de coaching</p>
     <div id="liveZone"></div>
+    <div id="visioZone"></div>
     ${rdvPortailHtml(PORTAL.client)}
     <div id="contractZone"></div>
     ${questionnaireHtml(PORTAL.client)}

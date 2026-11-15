@@ -6085,8 +6085,6 @@ const TABS = [
 
   // ── PÔLE : SUIVI CLIENTS ──
   {id:"clients",      icon:"◉", label:"Mes clients",              pole:"Suivi clients", cat:"Clients"},
-  {id:"intake",      icon:"📋", label:"INTAKE",                    pole:"Suivi clients", cat:"Neuro-Coaching"},
-  {id:"live",        icon:"🧠", label:"EN LIVE",                   pole:"Suivi clients", cat:"Neuro-Coaching"},
   {id:"clairiere",    icon:"🧭", label:"La Clairière",             pole:"Suivi clients", cat:"Clients"},
   {id:"deroules",     icon:"📖", label:"Déroulés de séance",       pole:"Suivi clients", cat:"Préparer une séance"},
   {id:"bibliotheque", icon:"▣", label:"Bibliothèque coach",        pole:"Suivi clients", cat:"Préparer une séance"},
@@ -6189,7 +6187,7 @@ function renderAccueilTab() {
   [["🗓️", "Vue calendrier (liste, semaine, mois)", "agenda"], ["📅", "Demandes RDV", "rdv"], ["🔄", "Synchronisation Google Agenda (panneau dans l'Agenda)", "agenda"], ["🕘", "Mes disponibilités et horaires du site", "reglages"]].forEach(x => m1.appendChild(ligne(x[0], x[1], x[2])));
   wrap.appendChild(m1);
   const m2 = carte("2. Gestion des clients");
-  [["◉", "Mes clients : fiches, rendez-vous, parcours", "clients"], ["📋", "INTAKE (questionnaire d'entrée)", "intake"], ["🧭", "La Clairière", "clairiere"]].forEach(x => m2.appendChild(ligne(x[0], x[1], x[2])));
+  [["◉", "Mes clients : fiches, rendez-vous, parcours", "clients"],  ["🧭", "La Clairière", "clairiere"]].forEach(x => m2.appendChild(ligne(x[0], x[1], x[2])));
   wrap.appendChild(m2);
   const m3 = carte("3. Services & tarifs");
   m3.appendChild(ligne("💰", "Finances", "finances")); m3.appendChild(ligne("📊", "Statistiques", "statistiques")); m3.appendChild(ligne("✍️", "Édition des prestations et des tarifs", null));
@@ -6198,7 +6196,7 @@ function renderAccueilTab() {
   [["▣", "Bibliothèque coach (fiches et techniques)", "bibliotheque"], ["📖", "Déroulés de séance", "deroules"], ["🛠️", "Outils Coaching (Ikigaï, Arbre de vie)", "outils"], ["📚", "Attribuer des exercices à plusieurs clients (cases à cocher)", "exercices"], ["🕒", "Fil du temps de chaque client (dans la fiche)", "clients"], ["◇", "Mes ressources", "ressources"], ["🌱", "Reconversion / Burnout", "reconversion"]].forEach(x => m4.appendChild(ligne(x[0], x[1], x[2])));
   wrap.appendChild(m4);
   const m5 = carte("5. Déroulement de séance", true);
-  [["🧠", "EN LIVE : séance guidée", "live"], ["📋", "INTAKE", "intake"], ["◻", "Journal de bord (notes)", "notes"]].forEach(x => m5.appendChild(ligne(x[0], x[1], x[2])));
+  [  ["◻", "Journal de bord (notes)", "notes"]].forEach(x => m5.appendChild(ligne(x[0], x[1], x[2])));
   m5.appendChild(ligne("⏱️", "Chronomètre et rappel de temps", null));
   wrap.appendChild(m5);
   const com = carte("Communication avec les coachés", true);
@@ -7435,6 +7433,88 @@ function buildProtocolesFaits(c) {
   return box;
 }
 
+// ═════════ VISIOCONFÉRENCE : une salle par coaché, lien partageable, invitation en direct ═════════
+const VISIO_DEFAUT = "https://meet.jit.si/";
+const VISIO_BASE_OK = /^https:\/\/[a-z0-9]([a-z0-9.\-]*[a-z0-9])?(:\d{2,5})?\/?$/i;
+const salleValide = s => /^[A-Za-z0-9\-]{12,64}$/.test(String(s || ""));
+function visioBase() { try { const v = String(localStorage.getItem("cs4-visio-base") || "").trim(); return VISIO_BASE_OK.test(v) ? v.replace(/\/?$/, "/") : VISIO_DEFAUT; } catch (e) { return VISIO_DEFAUT; } }
+function nouvelleSalleVisio() { const a = new Uint8Array(10); (window.crypto || window.msCrypto).getRandomValues(a); return "JC-" + Array.from(a).map(b => b.toString(16).padStart(2, "0")).join(""); }
+// Adresse de la salle : salle d'attente avant d'entrer, prénom déjà renseigné, sujet de la séance.
+function urlVisio(base, salle, nom, sujet) {
+  if (!salleValide(salle)) return null;
+  const b = VISIO_BASE_OK.test(String(base || "")) ? String(base).replace(/\/?$/, "/") : VISIO_DEFAUT;
+  const p = ["config.prejoinPageEnabled=true", "config.disableDeepLinking=true", "config.subject=" + encodeURIComponent(JSON.stringify(sujet || "Séance de coaching")).replace(/'/g, "%27")];
+  const n = String(nom || "").replace(/[\u0000-\u001f]/g, "").trim().slice(0, 40);
+  if (n) p.push("userInfo.displayName=" + encodeURIComponent(JSON.stringify(n)).replace(/'/g, "%27"));
+  return b + salle + "#" + p.join("&");
+}
+const prenomVisio = c => String((c && c.name) || "").trim().split(/\s+/)[0] || "";
+function lienCoache(c) { const v = c && c.visio; return v && salleValide(v.salle) ? urlVisio(v.base || visioBase(), v.salle, prenomVisio(c)) : null; }
+
+// Démarre la séance : la salle s'ouvre tout de suite (avant toute attente réseau, pour ne pas être bloquée) puis le coaché est prévenu dans son espace.
+async function demarrerVisio(c, apres) {
+  const v = c.visio || {}, salle = salleValide(v.salle) ? v.salle : nouvelleSalleVisio(), base = visioBase(), maintenant = new Date().toISOString();
+  const url = urlVisio(base, salle, "Julien (coach)");
+  const fen = window.open(url, "_blank"); if (fen) { try { fen.opener = null; } catch (e) {} }
+  c.visio = { salle, base, actif: true, depuis: maintenant, creeLe: v.creeLe || maintenant };
+  let prevenu = true;
+  try { await firebase.firestore().collection("clients").doc(c.id).update({ visio: c.visio }); } catch (e) { console.error("visio:", e); prevenu = false; }
+  const info = { ouverte: !!fen, prevenu, url };
+  if (apres) apres(info);
+  return info;
+}
+async function terminerVisio(c, apres) {
+  const t = new Date().toISOString(); if (c.visio) c.visio = Object.assign({}, c.visio, { actif: false, termineLe: t });
+  try { await firebase.firestore().collection("clients").doc(c.id).update({ "visio.actif": false, "visio.termineLe": t }); } catch (e) { console.error("visio:", e); }
+  if (apres) apres();
+}
+
+function buildVisioSection(c) {
+  const box = h("div",{style:"border:1px solid #E4DAC0;border-radius:12px;padding:10px 14px;margin-bottom:14px;background:#FFFDF7"}), prenom = prenomVisio(c) || "la personne";
+  const bouton = (lib, cls, fn) => { const b = h("button",{class: cls}, lib); b.addEventListener("click", fn); return b; };
+  function dessiner(info) {
+    box.innerHTML = "";
+    const v = c.visio, pret = !!(v && salleValide(v.salle)), actif = !!(pret && v.actif);
+    const tete = h("div",{style:"display:flex;align-items:center;gap:10px;flex-wrap:wrap"});
+    tete.appendChild(h("span",{style:"font-weight:700;color:#2E2A20"}, "📹 Visioconférence"));
+    const [lib, coul] = actif ? ["🔴 En cours : " + prenom + " peut rejoindre", "#C0392B"] : pret ? ["Salle prête", "#2F7D3B"] : ["Pas encore de salle", "#6B6355"];
+    tete.appendChild(h("span",{style:"font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 9px;color:" + coul + ";background:" + coul + "18;border:1px solid " + coul + "33"}, lib));
+    box.appendChild(tete);
+    const actions = h("div",{style:"display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"});
+    actions.appendChild(bouton(actif ? "📹 Rouvrir la visio" : "📹 Démarrer la visio", "btn", () => demarrerVisio(c, dessiner)));
+    if (actif) actions.appendChild(bouton("⏹️ Terminer la visio", "btn-g", () => terminerVisio(c, dessiner)));
+    box.appendChild(actions);
+    if (info && !info.ouverte) { const m = h("div",{style:"font-size:12.5px;color:#B26A00;margin-top:6px"}, "Ton navigateur a bloqué l'ouverture de la salle. Ouvre-la avec ce lien : "); m.appendChild(h("a",{href:info.url,target:"_blank",rel:"noopener noreferrer"}, "ouvrir la salle")); box.appendChild(m); }
+    if (info && !info.prevenu) box.appendChild(h("div",{style:"font-size:12.5px;color:#B26A00;margin-top:6px"}, "La salle s'est ouverte, mais " + prenom + " n'a pas pu être prévenu dans son espace : envoie-lui le lien ci-dessous."));
+    if (info && info.ouverte && info.prevenu) box.appendChild(h("div",{style:"font-size:12.5px;color:#2F7D3B;margin-top:6px"}, "✅ La salle est ouverte dans un nouvel onglet. " + prenom + " voit « Rejoindre la visio » dans son espace."));
+    if (pret) {
+      const lien = lienCoache(c), num = numeroInternational(c.tel), mail = String(c.email || "").trim();
+      const texte = "Bonjour " + prenom + ",\nvoici le lien pour notre séance en visio : " + lien + "\nTu peux cliquer dessus à l'heure du rendez-vous : autorise la caméra et le micro quand on te le demande. À tout de suite !\nJulien";
+      box.appendChild(h("div",{style:"font-size:11.5px;color:#6B6355;margin-top:8px"}, "Salle : " + v.salle));
+      box.appendChild(h("div",{style:"font-size:12.5px;font-weight:600;color:#2E2A20;margin-top:10px"}, "Lien à envoyer à " + prenom));
+      const champ = h("input",{type:"text",readonly:"readonly",value:lien,style:"width:100%;box-sizing:border-box;border:1px solid #E4DAC0;border-radius:8px;padding:8px;font-family:inherit;font-size:16px;background:#fff;margin-top:4px"}); champ.addEventListener("focus", () => champ.select()); box.appendChild(champ);
+      const envoi = h("div",{style:"display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"});
+      const cp = bouton("📋 Copier le lien", "btn-sm", async () => { try { await navigator.clipboard.writeText(lien); cp.textContent = "✓ Lien copié"; } catch (e) { champ.select(); cp.textContent = "Copie impossible : sélectionné, copie à la main"; } });
+      envoi.appendChild(cp);
+      const lienAction = (lib, href) => { const a = href ? h("a",{class:"btn-sm",href,target:"_blank",rel:"noopener noreferrer",style:"text-decoration:none"}, lib) : h("span",{class:"btn-sm",style:"opacity:.45;cursor:not-allowed",title:"Renseigne cette coordonnée dans la fiche"}, lib); return a; };
+      envoi.appendChild(lienAction("💬 WhatsApp", num ? "https://wa.me/" + num + "?text=" + encodeURIComponent(texte) : null));
+      envoi.appendChild(lienAction("✉️ SMS", num ? "sms:+" + num + "?&body=" + encodeURIComponent(texte) : null));
+      envoi.appendChild(lienAction("📧 Email", /^[^\s@<>"'(),;:\\]+@[^\s@<>"'(),;:\\]+\.[^\s@<>"'(),;:\\]{2,}$/.test(mail) ? "mailto:" + encodeURIComponent(mail) + "?subject=" + encodeURIComponent("Notre séance en visio") + "&body=" + encodeURIComponent(texte) : null));
+      box.appendChild(envoi);
+    }
+    box.appendChild(h("div",{style:"font-size:11.5px;color:#6B6355;margin-top:8px"}, "La salle reste la même pour ce coaché (adresse non devinable). La visio passe par le service de visioconférence choisi ci-dessous ; l'application n'enregistre ni la vidéo ni le son."));
+    const av = h("details",{style:"margin-top:6px"}); av.appendChild(h("summary",{style:"cursor:pointer;font-size:12px;color:#9C7A2E"}, "Service de visioconférence (avancé)"));
+    const champBase = h("input",{type:"text",value:visioBase(),placeholder:"https://meet.jit.si/",style:"width:100%;box-sizing:border-box;border:1px solid #E4DAC0;border-radius:8px;padding:8px;font-family:inherit;font-size:16px;background:#fff;margin-top:6px"}), retour = h("div",{style:"font-size:12.5px;min-height:16px;margin-top:4px"});
+    av.appendChild(h("div",{style:"font-size:12px;color:#5A5648;margin-top:4px"}, "Par défaut : meet.jit.si (gratuit, sans compte). Tu peux indiquer ton propre serveur Jitsi (adresse en https)."));
+    av.appendChild(champBase);
+    const ligneBase = h("div",{style:"display:flex;gap:6px;margin-top:6px"});
+    ligneBase.appendChild(bouton("Enregistrer", "btn-sm", () => { const v2 = champBase.value.trim(); if (!VISIO_BASE_OK.test(v2)) { retour.style.color = "#B0413E"; retour.textContent = "Adresse non valide : elle doit commencer par https://"; return; } try { localStorage.setItem("cs4-visio-base", v2.replace(/\/?$/, "/")); retour.style.color = "#2F7D3B"; retour.textContent = "✅ Enregistré pour les prochaines visios."; } catch (e) { retour.style.color = "#B0413E"; retour.textContent = "Impossible d'enregistrer sur cet appareil."; } }));
+    ligneBase.appendChild(bouton("Rétablir meet.jit.si", "btn-g", () => { try { localStorage.removeItem("cs4-visio-base"); } catch (e) {} champBase.value = VISIO_DEFAUT; retour.style.color = "#2F7D3B"; retour.textContent = "✅ Service par défaut rétabli."; }));
+    av.appendChild(ligneBase); av.appendChild(retour); box.appendChild(av);
+  }
+  dessiner(); return box;
+}
+
 function renderNav() {
   const nav = document.getElementById("nav");
   nav.innerHTML = "";
@@ -7723,21 +7803,11 @@ function renderClientDetail() {
   );
   box.appendChild(hdr);
 
-  const neuroWrap = h("div",{style:"margin-bottom:20px"});
-  neuroWrap.appendChild(h("div",{style:"font-weight:700;font-size:11.5px;color:#9C7A2E;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em"},"Neuro-coaching"));
-  const neuroBtns = h("div",{style:"display:flex;gap:10px;flex-wrap:wrap"});
-  [
-    {label:"📋 INTAKE", color:"#5aaec8", act:()=>setState({tab:"intake"})},
-    {label:"🧠 EN LIVE", color:"#9C7A2E", act:()=>setState({tab:"live"})}
-  ].forEach(q => {
-    const btn = h("div",{class:"tool-btn",style:`color:${q.color};background:${q.color}0c;border-color:${q.color}55`}, q.label);
-    btn.addEventListener("click", q.act);
-    btn.addEventListener("mouseenter",()=>btn.style.background=q.color+"1c");
-    btn.addEventListener("mouseleave",()=>btn.style.background=q.color+"0c");
-    neuroBtns.appendChild(btn);
-  });
-  neuroWrap.appendChild(neuroBtns);
-  box.appendChild(neuroWrap);
+  const seanceWrap = h("div",{style:"margin-bottom:20px"});
+  seanceWrap.appendChild(h("div",{style:"font-weight:700;font-size:11.5px;color:#9C7A2E;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em"},"Séance"));
+  const bVisio = h("div",{class:"tool-btn",style:"color:#2F7D3B;background:#2F7D3B0c;border-color:#2F7D3B55"}, (c.visio && c.visio.actif) ? "🔴 Visio en cours" : "📹 Démarrer la visio");
+  bVisio.addEventListener("click", () => demarrerVisio(c, () => render()));
+  seanceWrap.appendChild(bVisio); box.appendChild(seanceWrap);
 
   // Subtabs
   const stabs = h("div",{class:"subtabs"});
@@ -8267,6 +8337,7 @@ function buildFiche(c) {
     }
 
     wrap.appendChild(buildContratSection(c));
+    wrap.appendChild(buildVisioSection(c));
     // --- Rendez-vous : section complète (À venir / Passés), tout en haut de la fiche ---
     wrap.appendChild(buildRdvSection(c));
 
@@ -9366,6 +9437,7 @@ function exportOutilsPDF(sessionId, clientName) {
 // ══════════════════════════════════════════
 let _renderScheduled = false;
 function render() {
+  if (state.tab === "intake" || state.tab === "live") state.tab = "dashboard";   // rubriques retirées : on ne reste jamais sur une page vide
   if (_renderScheduled) return;
   _renderScheduled = true;
   Promise.resolve().then(() => {
@@ -9382,8 +9454,6 @@ function renderNow() {
   let content;
   if (state.tab==="dashboard")    content = renderDashboard();
   else if (state.tab==="clients") content = renderClients();
-  else if (state.tab==="intake") content = renderIntakeTab();
-  else if (state.tab==="live") content = renderLiveTab();
   else if (state.tab==="agenda") content = renderAgendaTab();
   else if (state.tab==="finances") content = renderFinancesTab();
   else if (state.tab==="accueil2") content = renderAccueil2Tab();
