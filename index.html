@@ -3971,6 +3971,7 @@ const ClientsManager = {
           protegerCopieLocale(this.data);
           localStorage.setItem("cs4-clients", JSON.stringify(this.data));
           state.clients = this.data;
+          this.data.forEach(c => { if (c.signatureRelais) finaliserSignatureRelais(c); });
           if (cb) cb();
           render();
           reconcilierRendezVousClients();
@@ -7014,6 +7015,32 @@ function erreursContratV2(p, sigCoach) {
   if (!sigCoach) e.push("ta signature");
   return e;
 }
+// Signature déposée par le portail (plan B quand l'écriture directe dans le contrat est refusée) : validée ici, avec les droits du coach.
+const _relaisSignature = new Set();
+async function finaliserSignatureRelais(c) {
+  const r = c && c.signatureRelais;
+  if (!r || !r.contractId || !r.clientSignature) return false;
+  const cle = c.id + "|" + r.contractId + "|" + r.signedAt;
+  if (_relaisSignature.has(cle)) return false;
+  _relaisSignature.add(cle);
+  try {
+    const db = firebase.firestore();
+    const ref = db.collection("clients").doc(c.id).collection("contracts").doc(r.contractId);
+    const snap = await ref.get();
+    if (!snap.exists) return false;
+    const d = snap.data();
+    if (d.status === "signed") { await db.collection("clients").doc(c.id).update({ signatureRelais: firebase.firestore.FieldValue.delete() }); return true; }
+    if (d.status !== "pending_signature") return false;
+    const attendu = await contratEmpreinte(d.params, r.mention || "Lu et approuvé");
+    if (!attendu || attendu !== r.contentHash) { notifCoach("⚠️ Signature de " + c.name + " reçue, mais le contrat a changé depuis : à vérifier avant de valider."); return false; }
+    const sig = { coach: d.coachSignature, client: r.clientSignature, mention: r.mention, signeLe: r.signedAt, ip: r.signerIp, empreinte: r.contentHash };
+    await ref.update({ status: "signed", clientSignature: r.clientSignature, mention: r.mention, signedAt: r.signedAt, signerIp: r.signerIp || null, ipStatus: r.ipStatus || "indisponible", signerUserAgent: r.signerUserAgent || "", contentHash: r.contentHash, htmlContent: contratHtml(d.params, sig), signedVia: "relais-portail" });
+    await db.collection("clients").doc(c.id).update({ contractStatus: "signed", signatureRelais: firebase.firestore.FieldValue.delete() });
+    notifCoach("✍️ " + c.name + " a signé son contrat");
+    return true;
+  } catch (e) { console.error("relais signature:", e); _relaisSignature.delete(cle); return false; }
+}
+
 async function enregistrerContratV2(c, ex, statut, p, sigCoach) {
   const db = firebase.firestore(), ref = db.collection("clients").doc(c.id).collection("contracts").doc(ex ? ex.id : "v2_" + Date.now());
   const maintenant = new Date().toISOString(), donnees = { version: 2, type: "coaching_contract", status: statut, params: p, updatedAt: maintenant };
