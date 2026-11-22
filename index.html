@@ -5821,6 +5821,191 @@ function renderStatistiquesTab() {
   return wrap;
 }
 
+// ===== TABLEAU DE BORD BUSINESS (brouillon hub) =====
+// Calculé uniquement à partir des paiements, rendez-vous et forfaits déjà saisis dans l'app. Lecture seule : rien n'est modifié.
+function businessCle(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
+function businessJour(d) { return businessCle(d) + "-" + String(d.getDate()).padStart(2, "0"); }
+
+function businessCalculer(clients, rdvs, objectifMensuel, maintenant) {
+  maintenant = maintenant || new Date();
+  clients = clients || []; rdvs = rdvs || [];
+  const cleMois = businessCle(maintenant), aujourdhui = businessJour(maintenant), annee = String(maintenant.getFullYear());
+  const clePrec = businessCle(new Date(maintenant.getFullYear(), maintenant.getMonth() - 1, 1));
+  const estDecouverte = m => /d[ée]couverte/i.test(m || "");
+  const estActif = c => !c.status || c.status === "actif";
+
+  // --- Paiements ---
+  const parMois = {}, retards = {};
+  let totalAnnee = 0, nbPayesAnnee = 0, enAttente = 0, enRetard = 0;
+  clients.forEach(c => (c.paiements || []).forEach(p => {
+    if (!p || !p.date) return;
+    const m = Number(p.montant) || 0, mk = String(p.date).slice(0, 7);
+    if (p.statut === "payé") {
+      parMois[mk] = (parMois[mk] || 0) + m;
+      if (mk.slice(0, 4) === annee) { totalAnnee += m; nbPayesAnnee++; }
+    } else {
+      enAttente += m;
+      if (String(p.date).slice(0, 10) < aujourdhui) {
+        enRetard += m;
+        const r = retards[c.id] || (retards[c.id] = { id: c.id, nom: c.name || c.nom || "(sans nom)", montant: 0, nb: 0 });
+        r.montant += m; r.nb++;
+      }
+    }
+  }));
+  const ceMois = parMois[cleMois] || 0, moisPrecedent = parMois[clePrec] || 0;
+  const variation = moisPrecedent > 0 ? Math.round((ceMois - moisPrecedent) / moisPrecedent * 100) : null;
+  const serie = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(maintenant.getFullYear(), maintenant.getMonth() - i, 1), cle = businessCle(d);
+    serie.push({ cle, mois: d.toLocaleDateString("fr-FR", { month: "short" }), valeur: parMois[cle] || 0 });
+  }
+
+  // --- Rendez-vous par client ---
+  const rdvParClient = {};
+  rdvs.forEach(r => { if (r && r.clientId && r.date) (rdvParClient[r.clientId] = rdvParClient[r.clientId] || []).push(r); });
+  let seancesMois = 0, decouvertesMois = 0;
+  rdvs.forEach(r => {
+    if (!r || !r.date || String(r.date).slice(0, 7) !== cleMois || String(r.date).slice(0, 10) > aujourdhui) return;
+    seancesMois++; if (estDecouverte(r.motif)) decouvertesMois++;
+  });
+
+  // --- Clients : actifs, nouveaux ce mois, conversion découverte -> suite ---
+  let nouveaux = 0, avecDecouverte = 0, convertis = 0;
+  clients.forEach(c => {
+    const liste = rdvParClient[c.id] || [];
+    const dates = liste.map(r => String(r.date).slice(0, 10)).concat((c.paiements || []).filter(p => p && p.date).map(p => String(p.date).slice(0, 10))).sort();
+    if (dates.length && dates[0].slice(0, 7) === cleMois) nouveaux++;
+    if (liste.some(r => estDecouverte(r.motif))) {
+      avecDecouverte++;
+      const suite = liste.some(r => r.motif && !estDecouverte(r.motif)) || (c.paiements || []).some(p => p && p.statut === "payé" && Number(p.montant) > 0);
+      if (suite) convertis++;
+    }
+  });
+  const conversion = avecDecouverte > 0 ? Math.round(convertis / avecDecouverte * 100) : null;
+
+  // --- À relancer (renouvellement) ---
+  const relances = [];
+  clients.filter(estActif).forEach(c => {
+    const total = Number(c.forfaitTotal) || 0;
+    if (!total) return;
+    const restant = total - (Number(c.forfaitUtilisees) || 0);
+    const nom = c.name || c.nom || "(sans nom)";
+    if (restant <= 0) { relances.push({ id: c.id, nom, raison: "Forfait terminé : proposer la suite", prio: 1 }); return; }
+    if (restant === 1) { relances.push({ id: c.id, nom, raison: "Dernière séance du forfait", prio: 2 }); return; }
+    const liste = rdvParClient[c.id] || [];
+    if (liste.some(r => String(r.date).slice(0, 10) >= aujourdhui)) return;
+    const passes = liste.map(r => String(r.date).slice(0, 10)).sort();
+    const dernier = passes[passes.length - 1];
+    if (dernier) {
+      const jours = Math.floor((new Date(aujourdhui + "T00:00:00") - new Date(dernier + "T00:00:00")) / 86400000);
+      if (jours > 21) relances.push({ id: c.id, nom, raison: "Aucun RDV prévu (dernier il y a " + jours + " j)", prio: 3 });
+    }
+  });
+  relances.sort((a, b) => a.prio - b.prio || a.nom.localeCompare(b.nom));
+
+  const objectif = Number(objectifMensuel) || 0;
+  return {
+    ceMois, moisPrecedent, variation, totalAnnee, nbPayesAnnee,
+    panierMoyen: nbPayesAnnee ? totalAnnee / nbPayesAnnee : 0,
+    enAttente, enRetard, retards: Object.values(retards).sort((a, b) => b.montant - a.montant),
+    serie, seancesMois, decouvertesMois,
+    clientsActifs: clients.filter(estActif).length, nouveaux, avecDecouverte, convertis, conversion,
+    relances: relances.slice(0, 8), nbRelances: relances.length,
+    objectif, pctObjectif: objectif > 0 ? Math.round(ceMois / objectif * 100) : null
+  };
+}
+
+function renderBusinessTab() {
+  const wrap = h("div", { class: "page-wrap" });
+  wrap.appendChild(h("h3", { style: "font-size:20px;color:#2E2A20;font-weight:600;margin-bottom:6px;font-style:italic" }, "Tableau de bord business"));
+  wrap.appendChild(h("p", { style: "color:#6B6355;font-size:13px;margin:0 0 16px;line-height:1.45" }, "Vue d'ensemble de ton activité, calculée à partir des paiements, rendez-vous et forfaits saisis dans l'app. Lecture seule."));
+  if (CoachLink.user && !CoachSettings.data) CoachSettings.listen(() => { if (state.tab === "business") render(); });
+  const k = businessCalculer(state.clients, state.appointments, (CoachSettings.data || {}).objectifMensuel, new Date());
+  const eur = n => Math.round(n).toLocaleString("fr-FR") + " €";
+
+  const kpi = (titre, valeur, sous, couleur) => h("div", { class: "card", style: "padding:14px;text-align:center;border-color:" + couleur + "44" },
+    h("div", { style: "font-size:12px;color:#5A5648;margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em" }, titre),
+    h("div", { style: "font-size:24px;font-weight:800;color:" + couleur }, valeur),
+    sous ? h("div", { style: "font-size:12.5px;color:#5A5648;margin-top:2px;line-height:1.35" }, sous) : null);
+
+  // Objectif mensuel
+  const objCard = h("div", { class: "card", style: "padding:14px 16px;margin-bottom:14px" });
+  objCard.appendChild(h("div", { style: "font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:8px" }, "🎯 Objectif du mois"));
+  if (k.objectif > 0) {
+    const pct = Math.min(100, k.pctObjectif);
+    const bg = h("div", { style: "background:#E4DAC0;border-radius:6px;height:9px;overflow:hidden" });
+    bg.appendChild(h("div", { style: "background:" + (k.pctObjectif >= 100 ? "#4a9e6a" : "#9C7A2E") + ";height:100%;width:" + pct + "%" }));
+    objCard.appendChild(h("div", { style: "font-size:13.5px;color:#2E2A20;margin-bottom:6px" }, eur(k.ceMois) + " encaissés sur " + eur(k.objectif) + " (" + k.pctObjectif + " %)"));
+    objCard.appendChild(bg);
+  } else {
+    objCard.appendChild(h("div", { style: "font-size:13px;color:#5A5648;margin-bottom:6px" }, "Aucun objectif défini. Indique le chiffre d'affaires mensuel que tu vises."));
+  }
+  const champ = h("input", { type: "number", min: "0", step: "50", placeholder: "Objectif mensuel en €", value: k.objectif > 0 ? String(k.objectif) : "", style: "width:170px;padding:8px 10px;border:1px solid #E4DAC0;border-radius:8px;font-size:16px;margin:10px 8px 0 0" });
+  const bOk = h("button", { class: "btn-g" }, "Enregistrer");
+  bOk.addEventListener("click", () => {
+    if (!CoachLink.user) { alert("Connecte-toi pour enregistrer l'objectif."); return; }
+    const n = Math.max(0, Number(champ.value) || 0);
+    CoachSettings.save({ objectifMensuel: n });
+    if (CoachSettings.data) CoachSettings.data.objectifMensuel = n;
+    render();
+  });
+  objCard.appendChild(champ); objCard.appendChild(bOk);
+  wrap.appendChild(objCard);
+
+  // Chiffres clés
+  const grille = h("div", { style: "display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px" });
+  const evol = k.variation === null ? "pas de mois précédent à comparer" : (k.variation >= 0 ? "+" : "") + k.variation + " % vs mois dernier (" + eur(k.moisPrecedent) + ")";
+  grille.appendChild(kpi("Encaissé ce mois", eur(k.ceMois), evol, "#4a9e6a"));
+  grille.appendChild(kpi("Encaissé cette année", eur(k.totalAnnee), k.nbPayesAnnee + " paiement(s)", "#9C7A2E"));
+  grille.appendChild(kpi("Panier moyen", eur(k.panierMoyen), "par paiement encaissé cette année", "#5aaec8"));
+  grille.appendChild(kpi("À encaisser", eur(k.enAttente), k.enRetard > 0 ? eur(k.enRetard) + " en retard" : "aucun retard", k.enRetard > 0 ? "#c0392b" : "#5A5648"));
+  grille.appendChild(kpi("Clients actifs", String(k.clientsActifs), k.nouveaux + " nouveau(x) ce mois", "#9C7A2E"));
+  grille.appendChild(kpi("Séances ce mois", String(k.seancesMois), k.decouvertesMois + " découverte(s)", "#5aaec8"));
+  grille.appendChild(kpi("Conversion découverte", k.conversion === null ? "—" : k.conversion + " %", k.avecDecouverte ? k.convertis + " sur " + k.avecDecouverte + " sont allés plus loin" : "aucune séance découverte enregistrée", "#4a9e6a"));
+  wrap.appendChild(grille);
+
+  // Graphique 12 mois
+  const gCard = h("div", { class: "card", style: "padding:14px 16px;margin-bottom:16px" });
+  gCard.appendChild(h("div", { style: "font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:10px" }, "📈 Encaissé sur 12 mois"));
+  const max = Math.max.apply(null, k.serie.map(s => s.valeur).concat([1]));
+  const barres = h("div", { style: "display:flex;align-items:flex-end;gap:4px;height:130px" });
+  k.serie.forEach((s, i) => {
+    const hauteur = s.valeur > 0 ? Math.max(3, Math.round(s.valeur / max * 100)) : 0;
+    const montrer = s.valeur > 0 && (i === k.serie.length - 1 || s.valeur === max);
+    barres.appendChild(h("div", { title: s.mois + " : " + eur(s.valeur), style: "flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;min-width:0" },
+      montrer ? h("div", { style: "font-size:10px;color:#5A5648;margin-bottom:2px;white-space:nowrap" }, eur(s.valeur)) : null,
+      h("div", { style: "width:100%;background:" + (i === k.serie.length - 1 ? "#4a9e6a" : "#9C7A2E") + ";border-radius:4px 4px 0 0;height:" + hauteur + "px" })));
+  });
+  gCard.appendChild(barres);
+  const etiq = h("div", { style: "display:flex;gap:4px;margin-top:4px" });
+  k.serie.forEach(s => etiq.appendChild(h("div", { style: "flex:1;text-align:center;font-size:10px;color:#6B6355;min-width:0;overflow:hidden" }, s.mois.replace(".", ""))));
+  gCard.appendChild(etiq);
+  wrap.appendChild(gCard);
+
+  // Listes d'actions
+  const ouvrir = id => setState({ tab: "clients", selClientId: id, subTab: "fiche" });
+  const liste = (titre, vide, items) => {
+    const c = h("div", { class: "card", style: "padding:14px 16px;margin-bottom:14px" });
+    c.appendChild(h("div", { style: "font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:8px" }, titre));
+    if (!items.length) c.appendChild(h("div", { style: "font-size:13px;color:#5A5648" }, vide));
+    items.forEach(it => {
+      const l = h("div", { style: "display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #EFE7D2;cursor:pointer" },
+        h("div", { style: "min-width:0" },
+          h("div", { style: "font-size:13.5px;font-weight:600;color:#2E2A20" }, it.nom),
+          h("div", { style: "font-size:12.5px;color:#5A5648" }, it.detail)),
+        h("div", { style: "font-size:12px;color:#9C7A2E;white-space:nowrap" }, "Ouvrir ›"));
+      l.addEventListener("click", () => ouvrir(it.id));
+      c.appendChild(l);
+    });
+    return c;
+  };
+  wrap.appendChild(liste("🔔 À relancer (renouvellement)" + (k.nbRelances > k.relances.length ? " — " + k.nbRelances + " au total" : ""), "Rien à relancer pour l'instant.", k.relances.map(r => ({ id: r.id, nom: r.nom, detail: r.raison }))));
+  wrap.appendChild(liste("💶 Paiements en retard", "Aucun paiement en retard.", k.retards.map(r => ({ id: r.id, nom: r.nom, detail: eur(r.montant) + " (" + r.nb + " paiement" + (r.nb > 1 ? "s" : "") + " en attente)" }))));
+
+  wrap.appendChild(h("p", { style: "color:#6B6355;font-size:12px;line-height:1.5;margin:6px 0 0" }, "Comment c'est calculé : « encaissé » = paiements au statut payé. « Nouveaux clients » = premier rendez-vous ou paiement enregistré ce mois-ci. « Conversion » = clients ayant eu une séance découverte puis un autre rendez-vous ou un paiement. Plus tes paiements et motifs de rendez-vous sont renseignés, plus ces chiffres sont fiables."));
+  return wrap;
+}
+
 function renderFinancesTab() {
   const wrap = h("div",{});
 
@@ -6154,6 +6339,7 @@ const TABS = [
   {id:"agenda",       icon:"🗓️", label:"Agenda",                  pole:"Gestion", cat:"Planning"},
   {id:"rdv",          icon:"📅", label:"Demandes RDV",             pole:"Gestion", cat:"Planning"},
   {id:"finances",     icon:"💰", label:"Finances",                 pole:"Gestion", cat:"Finances"},
+  {id:"business",     icon:"📈", label:"Tableau de bord business", pole:"Gestion", cat:"Finances"},
   {id:"statistiques", icon:"📊", label:"Statistiques",             pole:"Gestion", cat:"Statistiques"},
   {id:"reglages",     icon:"⚙️", label:"Site internet & réglages", pole:"Gestion", cat:"Site internet"},
   {id:"notes",        icon:"◻", label:"Journal de bord",           pole:"Gestion", cat:"Administratif"},
@@ -9238,6 +9424,7 @@ function renderNow() {
   else if (state.tab==="clients") content = renderClients();
   else if (state.tab==="agenda") content = renderAgendaTab();
   else if (state.tab==="finances") content = renderFinancesTab();
+  else if (state.tab==="business") content = renderBusinessTab();
   else if (state.tab==="exercices") content = renderExercicesTab();
   else if (state.tab==="statistiques") content = renderStatistiquesTab();
   else if (state.tab==="clairiere") content = renderClairiereTab();
