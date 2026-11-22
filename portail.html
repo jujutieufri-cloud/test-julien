@@ -3,55 +3,90 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <title>Mon espace — Coaching</title>
 <style>
   :root{
     box-sizing:border-box;
-    --bg:#F7F3E8; --card:#FFFDF7; --line:#E4DAC0; --text:#3A3226; --muted:#6B6355;
-    --accent: #9C7A2E; --accentSoft:#FBF5E4;
+    color-scheme:light;
+    --bg:#F7F3E8; --card:#FFFDF7; --line:#E4DAC0; --text:#3A3226; --muted:#5A5648;
+    --accent:#7A5C1A; --onAccent:#FFFFFF; --accentSoft:#FBF5E4;
+    --field:#FFFFFF; --ok:#2F7D3B; --alertBg:#FFF5F3; --alertLine:#C0392B;
+    --paperBg:#FFFDF7; --paperText:#2E2A20;
     padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --bg:#1C1812; --card:#26211A; --line:#4A4030; --text:#F0E8D2; --muted:#B8AC94;
+    --accent:#E0BC6A; --onAccent:#1C1812; --accentSoft:#2E2718;
+    --field:#1C1812; --ok:#7FD59B; --alertBg:#3A1D1A; --alertLine:#E5736F;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --bg:#1C1812; --card:#26211A; --line:#4A4030; --text:#F0E8D2; --muted:#B8AC94;
+      --accent:#E0BC6A; --onAccent:#1C1812; --accentSoft:#2E2718;
+      --field:#1C1812; --ok:#7FD59B; --alertBg:#3A1D1A; --alertLine:#E5736F;
+    }
   }
   *{box-sizing:border-box}
   html,body{height:100%}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;font-size:16px;line-height:1.5}
   #app{max-width:640px;margin:0 auto;padding:20px 16px 60px}
+  :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+  textarea,select,input[type=text],input[type=email],input[type=search],input[type=number],input[type=date],input[type=time]{background:var(--field);color:var(--text);font:inherit;font-size:16px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:16px}
-  h1{font-size:19px;margin:4px 0 2px}
-  .muted{color:var(--muted);font-size:13px}
-  .reminder{background:var(--accentSoft);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:18px;font-size:14px;line-height:1.5}
+  h1{font-size:22px;margin:4px 0 2px;line-height:1.25}
+  .muted{color:var(--muted);font-size:14px}
+  .reminder{background:var(--accentSoft);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:18px;font-size:15px;line-height:1.55}
   .reminder b{color:var(--accent)}
   .tabs{display:flex;gap:8px;margin:18px 0 14px}
-  .tab-btn{flex:1;padding:10px;border:1px solid var(--line);background:#fff;border-radius:10px;font-weight:600;font-size:13.5px;cursor:pointer;color:var(--text)}
-  .tab-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-  .outil-desc{color:var(--muted);font-size:13px;margin-bottom:14px;font-style:italic}
-  .rv-summary{background:var(--accentSoft);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.55;margin-bottom:14px}
-  .rv-dom{background:#fff;border:1px solid var(--line);border-radius:14px;margin:10px 0;padding:0 14px}
+  .tab-btn{flex:1;padding:10px;min-height:44px;border:1px solid var(--line);background:var(--field);border-radius:10px;font-weight:600;font-size:14.5px;cursor:pointer;color:var(--text)}
+  .tab-btn.active{background:var(--accent);color:var(--onAccent);border-color:var(--accent)}
+  .outil-desc{color:var(--muted);font-size:14.5px;line-height:1.5;margin-bottom:14px;font-style:italic}
+  .rv-summary{background:var(--accentSoft);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:14.5px;line-height:1.6;margin-bottom:14px}
+  .rv-dom{background:var(--field);color:var(--text);border:1px solid var(--line);border-radius:14px;margin:10px 0;padding:0 14px}
   .rv-dom[open]{padding-bottom:14px}
-  .rv-dhead{list-style:none;display:flex;align-items:center;gap:10px;cursor:pointer;padding:13px 0;min-height:44px}
+  .rv-dhead{list-style:none;display:flex;align-items:center;gap:10px;cursor:pointer;padding:13px 0;min-height:48px}
   .rv-dhead::-webkit-details-marker{display:none}
-  .rv-title{flex:1;font-weight:600;font-size:14.5px;line-height:1.35}
+  .rv-title{flex:1;font-weight:600;font-size:15.5px;line-height:1.4}
   .rv-dscore{display:flex;flex-direction:column;align-items:flex-end;color:var(--accent);line-height:1.1}
-  .rv-dscore b{font-size:19px}
-  .rv-dscore small{font-size:10.5px;color:var(--muted)}
+  .rv-dscore b{font-size:20px}
+  .rv-dscore small{font-size:12px;color:var(--muted)}
   .rv-chev{font-size:20px;color:var(--muted);transition:transform .2s}
   .rv-dom[open] .rv-chev{transform:rotate(90deg)}
-  .rv-q{padding:11px 0 9px;border-top:1px solid var(--line)}
+  .rv-q{padding:12px 0 10px;border-top:1px solid var(--line)}
   .rv-q-top{display:flex;align-items:flex-start;gap:10px}
-  .rv-q-text{flex:1;font-size:14.5px;line-height:1.4}
-  .rv-q-score{min-width:24px;text-align:right;font-weight:700;font-size:17px;color:var(--accent)}
-  .rv-slider{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:30px}
-  .rv-slider.untouched{opacity:.5}
-  .rv-scale{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
-  .rv-note{width:100%;margin-top:9px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;font:inherit;font-size:13.5px;background:#fff}
-  .rv-saved{font-size:11.5px;color:#4a9e6a;text-align:right;min-height:15px}
-  .btn{display:inline-block;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:11px 18px;font-weight:600;font-size:13.5px;cursor:pointer}
-  .contract-view{max-height:60vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:12px;font-size:12.5px;background:#fff}
-  .empty{color:var(--muted);font-size:13.5px;text-align:center;padding:30px 10px}
-  @media (prefers-color-scheme: dark){
-    :root:not([data-theme="light"]){--bg:#1C1812;--card:#26211A;--line:#3A3226;--text:#F0E8D2;--muted:#B8AC94;--accentSoft:#2E2718}
-    .rv-note,.tab-btn,.contract-view{background:#1C1812;color:var(--text)}
+  .rv-q-text{flex:1;font-size:15.5px;line-height:1.5}
+  .rv-q-score{min-width:26px;text-align:right;font-weight:700;font-size:18px;color:var(--accent)}
+  .rv-slider{width:100%;margin:10px 0 2px;accent-color:var(--accent);height:34px}
+  .rv-slider.untouched{opacity:.6}
+  .rv-scale{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted)}
+  .rv-note{width:100%;margin-top:9px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;font-size:16px;line-height:1.45;background:var(--field);color:var(--text)}
+  .rv-saved{font-size:13px;color:var(--ok);text-align:right;min-height:17px}
+  .btn{display:inline-block;background:var(--accent);color:var(--onAccent);border:none;border-radius:10px;padding:12px 18px;min-height:44px;font-weight:600;font-size:15px;cursor:pointer}
+  .contract-view{border:0;padding:0;background:transparent}
+  .empty{color:var(--muted);font-size:14.5px;text-align:center;padding:30px 10px}
+  /* Affichage clair / sombre : libellés du bouton (sans JavaScript supplémentaire) */
+  .theme-btn{min-height:44px;padding:8px 12px;border:1px solid var(--line);background:var(--field);color:var(--text);border-radius:10px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .th-light,.th-dark{display:none}
+  html[data-theme="light"] .th-auto,html[data-theme="light"] .th-dark{display:none}
+  html[data-theme="light"] .th-light{display:inline}
+  html[data-theme="dark"] .th-auto,html[data-theme="dark"] .th-light{display:none}
+  html[data-theme="dark"] .th-dark{display:inline}
+  /* Lecture du contrat : feuille toujours lisible, texte agrandissable, fond clair ou sombre au choix */
+  .lecture-contrat{margin-top:8px}
+  .lecture-barre{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+  .lecture-barre button{min-height:44px;min-width:44px;padding:8px 12px;border:1px solid var(--line);background:var(--field);color:var(--text);border-radius:10px;font:inherit;font-size:15px;font-weight:600;cursor:pointer}
+  .papier{background:var(--paperBg);color:var(--paperText);border:1px solid var(--line);border-radius:10px;padding:16px;overflow:auto;max-height:70vh;zoom:var(--ct-zoom,1.3);-webkit-overflow-scrolling:touch}
+  html[data-ct-nuit="1"] .papier{background:#E3E7ED;filter:invert(1) hue-rotate(180deg)}
+  html[data-ct-nuit="1"] .si-nuit,html[data-ct-nuit="0"] .si-clair{display:none}
+  @media (max-width:560px){
+    .papier div[style*="display:flex"]{flex-wrap:wrap !important}
+    .papier div[style*="flex:1"]{flex:1 1 100% !important;min-width:0}
   }
 </style>
+<script>(function(){try{var t=localStorage.getItem("portail_theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
 </head>
 <body>
 <div id="app"><div class="empty">Chargement…</div></div>
@@ -325,7 +360,7 @@ function exerciceSimpleHtml(ex, idx){
       <input type="checkbox" ${ex.done ? "checked" : ""} onchange="toggleExercice(${idx}, this.checked)" style="margin-top:3px">
       <span>
         <span style="font-size:14px;${ex.done ? "text-decoration:line-through;color:var(--muted)" : ""}">${esc(ex.titre)}</span>
-        ${ex.consigne ? `<div style="font-size:12.5px;color:var(--muted);margin-top:2px">${esc(ex.consigne)}</div>` : ""}
+        ${ex.consigne ? `<div style="font-size:14px;color:var(--muted);margin-top:2px">${esc(ex.consigne)}</div>` : ""}
       </span>
     </label>`;
 }
@@ -339,10 +374,10 @@ function resultatsPartagesHtml(res){
     ? "Voici ce que ton coach a relevé avec toi. Plus la barre est haute, plus ce message est présent dans ta vie ces temps-ci. Ce n'est pas un diagnostic : c'est un point de départ pour en parler ensemble."
     : "Voici les positions que tu as le plus choisies dans ta vie de tous les jours. Elles décrivent des habitudes, pas ce que tu vaux, et elles peuvent évoluer.";
   const barres = res.barres.map(b => { const v = Number(b.valeur) || 0, m = Number(b.max) || 1, fort = v === haut && haut > 0;
-    return `<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;gap:8px;font-size:13.5px;${fort ? "font-weight:700" : ""}"><span>${esc(b.nom)}</span><span>${v} / ${m}</span></div><div style="height:9px;border-radius:5px;background:#E9E3D2;margin-top:3px"><div style="height:9px;border-radius:5px;background:var(--accent);width:${Math.min(100, Math.round(v * 100 / m))}%"></div></div></div>`; }).join("");
-  const detail = (res.detail || []).length ? `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:13px">Voir le détail par situation</summary>${res.detail.map(d => `<div style="font-size:13px;margin-top:4px"><b>${esc(d.theme)}</b> → ${esc(d.position)}</div>`).join("")}</details>` : "";
-  const mot = res.message ? `<div style="margin-top:8px;padding:8px 10px;border-left:3px solid var(--accent);background:#FBF7EC;font-size:13.5px;white-space:pre-wrap"><b>Le mot de ton coach :</b> ${esc(res.message)}</div>` : "";
-  return `<div style="margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#FFFDF7"><div style="font-weight:700;font-size:14px">📊 Mes résultats</div><p class="muted" style="font-size:13px;margin:4px 0 6px">${esc(intro)}</p>${barres}${detail}${mot}</div>`;
+    return `<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;gap:8px;font-size:13.5px;${fort ? "font-weight:700" : ""}"><span>${esc(b.nom)}</span><span>${v} / ${m}</span></div><div style="height:9px;border-radius:5px;background:var(--line);margin-top:3px"><div style="height:9px;border-radius:5px;background:var(--accent);width:${Math.min(100, Math.round(v * 100 / m))}%"></div></div></div>`; }).join("");
+  const detail = (res.detail || []).length ? `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:14.5px">Voir le détail par situation</summary>${res.detail.map(d => `<div style="font-size:14.5px;margin-top:4px"><b>${esc(d.theme)}</b> → ${esc(d.position)}</div>`).join("")}</details>` : "";
+  const mot = res.message ? `<div style="margin-top:8px;padding:8px 10px;border-left:3px solid var(--accent);background:var(--accentSoft);font-size:13.5px;white-space:pre-wrap"><b>Le mot de ton coach :</b> ${esc(res.message)}</div>` : "";
+  return `<div style="margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card)"><div style="font-weight:700;font-size:14px">📊 Mes résultats</div><p class="muted" style="font-size:14.5px;margin:4px 0 6px">${esc(intro)}</p>${barres}${detail}${mot}</div>`;
 }
 
 // Question « noter chaque réponse » (par exemple de 1 à 8, avec un total qui ne dépasse pas 10), total contrôlé en direct.
@@ -350,8 +385,8 @@ function pointsChampHtml(c, idx, rep){
   const tot = c.total || 10, mx = c.max || tot, toutes = !!c.toutes, p = String(rep[c.id] || "").split(",").map(x => x.trim());
   const somme = p.reduce((a, x) => a + (parseInt(x, 10) || 0), 0), vides = toutes ? (c.options || []).filter((o, k) => !(parseInt(p[k], 10) > 0)).length : 0;
   const lignes = (c.options || []).map((o, k) => { const v = p[k] === undefined || (p[k] === "0" && !toutes) ? "" : p[k];
-    return `<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;margin:5px 0;border:1px solid var(--line);border-radius:10px;font-size:14px;line-height:1.4;background:#fff"><span style="flex:1">${esc(o.texte)}</span><input type="number" inputmode="numeric" min="${toutes ? 1 : 0}" max="${mx}" step="1" value="${esc(v)}" placeholder="–" data-pts="rep_${idx}_${esc(c.id)}" oninput="saisiePoints(${idx}, '${esc(c.id)}', ${tot}, ${mx}, ${toutes ? 1 : 0})" aria-label="Note de 1 à ${mx} pour : ${esc(o.texte)}" style="width:62px;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:inherit;font-size:16px;text-align:center"></label>`; }).join("");
-  return `<fieldset style="margin:12px 0;border:0;padding:0;min-width:0"><legend style="font-weight:600;font-size:13.5px;padding:0">${esc(c.label)}</legend>${c.aide ? `<div class="muted" style="font-size:12.5px;margin:2px 0 4px">${esc(c.aide)}</div>` : ""}${lignes}<div id="tot_${idx}_${esc(c.id)}" style="font-size:13px;margin:4px 2px;font-weight:600;color:${couleurTotal(somme, tot, vides)}">${libelleTotal(somme, tot, vides)}</div></fieldset>`;
+    return `<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;margin:5px 0;border:1px solid var(--line);border-radius:10px;font-size:14px;line-height:1.4;background:var(--field)"><span style="flex:1">${esc(o.texte)}</span><input type="number" inputmode="numeric" min="${toutes ? 1 : 0}" max="${mx}" step="1" value="${esc(v)}" placeholder="–" data-pts="rep_${idx}_${esc(c.id)}" oninput="saisiePoints(${idx}, '${esc(c.id)}', ${tot}, ${mx}, ${toutes ? 1 : 0})" aria-label="Note de 1 à ${mx} pour : ${esc(o.texte)}" style="width:62px;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:inherit;font-size:16px;text-align:center"></label>`; }).join("");
+  return `<fieldset style="margin:12px 0;border:0;padding:0;min-width:0"><legend style="font-weight:600;font-size:13.5px;padding:0">${esc(c.label)}</legend>${c.aide ? `<div class="muted" style="font-size:14px;margin:2px 0 4px">${esc(c.aide)}</div>` : ""}${lignes}<div id="tot_${idx}_${esc(c.id)}" style="font-size:14.5px;margin:4px 2px;font-weight:600;color:${couleurTotal(somme, tot, vides)}">${libelleTotal(somme, tot, vides)}</div></fieldset>`;
 }
 function couleurTotal(somme, tot, vides){ return somme > tot || vides ? "#8F5200" : (somme === 0 ? "#6B6355" : "#2F7D3B"); }
 function libelleTotal(somme, tot, vides){
@@ -382,11 +417,11 @@ function renderVisio(){
   const actif = !!v.actif; document.title = (actif ? "🔴 " : "") + _titreInitial;
   z.innerHTML = `<div class="card" style="border:2px solid ${actif ? "#C0392B66" : "var(--line)"}"><div style="font-weight:700">${actif ? "🔴 Ton coach t'attend en visio" : "📹 Ta salle de visio"}</div>
     <p class="muted" style="margin:4px 0 10px">${actif ? "La séance est ouverte : tu peux rejoindre maintenant." : "Voici ton lien de visio personnel : c'est toujours le même. Le jour de votre rendez-vous, rejoins-nous ici."}</p>
-    <a href="${esc(url)}" target="_blank" rel="noopener noreferrer" style="display:block;text-align:center;border-radius:12px;padding:14px 16px;background:var(--accent);color:#fff;font-weight:700;font-size:16px;text-decoration:none">📹 Rejoindre la visio (Google Meet)</a>
+    <a href="${esc(url)}" target="_blank" rel="noopener noreferrer" style="display:block;text-align:center;border-radius:12px;padding:14px 16px;background:var(--accent);color:var(--onAccent);font-weight:700;font-size:16px;text-decoration:none">📹 Rejoindre la visio (Google Meet)</a>
     <details style="margin-top:10px"><summary style="cursor:pointer;font-size:13.5px">Avant de rejoindre : quelques conseils</summary>
       <ul style="margin:8px 0 6px 18px;padding:0;font-size:13.5px;line-height:1.55"><li>Quand Google Meet s'ouvre, saisis ton prénom si on te le demande, puis clique sur « Demander à participer » : ton coach t'accepte aussitôt.</li><li>Autorise la caméra et le micro quand ton navigateur te le demande.</li><li>Un casque ou des écouteurs améliorent beaucoup le son.</li><li>Installe-toi dans un endroit calme, avec une bonne connexion (au besoin, passe en 4G ou 5G).</li></ul>
-      <div class="muted" style="font-size:12.5px;margin-top:6px">Pendant la séance : si ton coach partage son écran, tu le vois directement dans la visio. Pour répondre à un exercice, reviens sur cette page : ta réponse apparaît en direct chez ton coach.</div>
-      <div class="muted" style="font-size:12.5px;margin-top:8px">Si le bouton ne s'ouvre pas, copie ce lien :</div>
+      <div class="muted" style="font-size:14px;margin-top:6px">Pendant la séance : si ton coach partage son écran, tu le vois directement dans la visio. Pour répondre à un exercice, reviens sur cette page : ta réponse apparaît en direct chez ton coach.</div>
+      <div class="muted" style="font-size:14px;margin-top:8px">Si le bouton ne s'ouvre pas, copie ce lien :</div>
       <input readonly value="${esc(url)}" onclick="this.select()" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:inherit;font-size:16px;margin-top:4px"></details></div>`;
 }
 
@@ -405,7 +440,7 @@ function renderLive(){
   _liveCourant = cle;
   const rep = ch && l.reponses ? (l.reponses[ch.id] || "") : "";
   z.innerHTML = `<div class="card" style="border:2px solid #C0392B55"><div style="font-weight:700">🔴 Séance en direct avec ton coach</div><div class="muted" style="margin:2px 0 6px">${esc(l.titre || "")}</div>${urlV ? `<a href="${esc(urlV)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin:2px 0 6px;font-size:14px;font-weight:600;color:var(--accent)">📹 Rejoindre la visio</a>` : ""}` + (ch
-    ? `<div style="font-weight:600;font-size:15px;margin:8px 0 2px">${esc(ch.label)}</div>${ch.aide ? `<div class="muted" style="font-size:13px">${esc(ch.aide)}</div>` : ""}<textarea id="live_rep" rows="4" placeholder="Écris ici, ton coach te voit en direct" oninput="saisieLive(this.value)" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:10px;font-family:inherit;font-size:16px;margin-top:8px">${esc(rep)}</textarea><div id="live_etat" class="muted" style="font-size:12px;min-height:16px"></div>`
+    ? `<div style="font-weight:600;font-size:15px;margin:8px 0 2px">${esc(ch.label)}</div>${ch.aide ? `<div class="muted" style="font-size:14.5px">${esc(ch.aide)}</div>` : ""}<textarea id="live_rep" rows="4" placeholder="Écris ici, ton coach te voit en direct" oninput="saisieLive(this.value)" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;padding:10px;font-family:inherit;font-size:16px;margin-top:8px">${esc(rep)}</textarea><div id="live_etat" class="muted" style="font-size:13.5px;min-height:16px"></div>`
     : `<p class="muted" style="font-size:14px">${l.consigne ? esc(l.consigne) + "<br><br>" : ""}Ton coach va te présenter les questions une par une. Tu peux répondre ici, ou à l'oral.</p>`) + `</div>`;
 }
 function saisieLive(valeur){
@@ -425,22 +460,22 @@ function exerciceStructureHtml(ex, idx, rep){
   const champs = ex.champs.map(c => c.type === "choix" ? `
     <fieldset style="margin:12px 0;border:0;padding:0;min-width:0">
       <legend style="font-weight:600;font-size:13.5px;padding:0">${esc(c.label)}</legend>
-      ${c.aide ? `<div class="muted" style="font-size:12.5px;margin:2px 0 4px">${esc(c.aide)}</div>` : ""}
-      ${(c.options || []).map(o => `<label style="display:flex;align-items:flex-start;gap:10px;padding:9px 10px;margin:5px 0;border:1px solid var(--line);border-radius:10px;font-size:14px;line-height:1.4;cursor:pointer;background:#fff"><input type="radio" name="rep_${idx}_${esc(c.id)}" value="${esc(o.id)}" ${rep[c.id] === o.id ? "checked" : ""} data-champ="${esc(c.id)}" onchange="saisieReponse(${idx}, this.dataset.champ, this.value)" style="margin-top:2px;width:18px;height:18px;flex:none"><span>${esc(o.texte)}</span></label>`).join("")}
+      ${c.aide ? `<div class="muted" style="font-size:14px;margin:2px 0 4px">${esc(c.aide)}</div>` : ""}
+      ${(c.options || []).map(o => `<label style="display:flex;align-items:flex-start;gap:10px;padding:9px 10px;margin:5px 0;border:1px solid var(--line);border-radius:10px;font-size:14px;line-height:1.4;cursor:pointer;background:var(--field)"><input type="radio" name="rep_${idx}_${esc(c.id)}" value="${esc(o.id)}" ${rep[c.id] === o.id ? "checked" : ""} data-champ="${esc(c.id)}" onchange="saisieReponse(${idx}, this.dataset.champ, this.value)" style="margin-top:2px;width:18px;height:18px;flex:none"><span>${esc(o.texte)}</span></label>`).join("")}
     </fieldset>` : c.type === "points" ? pointsChampHtml(c, idx, rep) : `
     <div style="margin:12px 0">
       <label for="rep_${idx}_${esc(c.id)}" style="font-weight:600;font-size:13.5px">${esc(c.label)}</label>
-      ${c.aide ? `<div class="muted" style="font-size:12.5px;margin:2px 0 4px">${esc(c.aide)}</div>` : ""}
+      ${c.aide ? `<div class="muted" style="font-size:14px;margin:2px 0 4px">${esc(c.aide)}</div>` : ""}
       <textarea id="rep_${idx}_${esc(c.id)}" rows="3" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:inherit;font-size:16px" data-champ="${esc(c.id)}" oninput="saisieReponse(${idx}, this.dataset.champ, this.value)">${esc(rep[c.id] || "")}</textarea>
     </div>`).join("");
   return `
     <details style="border-bottom:1px solid var(--line);padding:10px 0">
-      <summary style="cursor:pointer;font-size:14px;font-weight:600">${esc(ex.titre)} <span class="muted" style="font-weight:400;font-size:12.5px">· ${remplis}/${ex.champs.length} rempli(s)${ex.done ? " · terminé ✅" : ""}${res && res.barres ? " · 📊 résultats partagés" : ""}</span></summary>
-      ${ex.consigne ? `<p class="muted" style="font-size:13px;white-space:pre-line">${esc(ex.consigne)}</p>` : ""}
+      <summary style="cursor:pointer;font-size:14px;font-weight:600">${esc(ex.titre)} <span class="muted" style="font-weight:400;font-size:14px">· ${remplis}/${ex.champs.length} rempli(s)${ex.done ? " · terminé ✅" : ""}${res && res.barres ? " · 📊 résultats partagés" : ""}</span></summary>
+      ${ex.consigne ? `<p class="muted" style="font-size:14.5px;white-space:pre-line">${esc(ex.consigne)}</p>` : ""}
       ${resultatsPartagesHtml(res)}
       ${champs}
       <label style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13.5px"><input type="checkbox" ${ex.done ? "checked" : ""} onchange="toggleExercice(${idx}, this.checked)"> J'ai terminé cet exercice</label>
-      <div id="msg_${idx}" class="muted" style="font-size:12px;min-height:16px;margin-top:4px"></div>
+      <div id="msg_${idx}" class="muted" style="font-size:13.5px;min-height:16px;margin-top:4px"></div>
     </details>`;
 }
 
@@ -486,7 +521,7 @@ function echangesHtml(client){
     const isClient = e.author === "client";
     return `<div style="margin-bottom:10px;text-align:${isClient ? "right" : "left"}">
       <div style="display:inline-block;max-width:80%;text-align:left;padding:8px 12px;border-radius:12px;font-size:13.5px;line-height:1.4;background:${isClient ? "var(--accentSoft)" : "#fff"};border:1px solid var(--line)">
-        <div style="font-size:10.5px;font-weight:700;color:var(--accent);margin-bottom:3px">${isClient ? "Toi" : "Ton coach"}</div>
+        <div style="font-size:12.5px;font-weight:700;color:var(--accent);margin-bottom:3px">${isClient ? "Toi" : "Ton coach"}</div>
         <div>${esc(e.text)}</div>
       </div>
     </div>`;
@@ -531,7 +566,7 @@ function rythmesHtml(client) {
   const cur = client.rythme && client.rythme.etat;
   const btns = Object.keys(RYTHMES).map(k => {
     const r = RYTHMES[k], on = cur === k;
-    return `<button type="button" onclick="setRythme('${k}')" style="border:2px solid ${r.color};background:${on ? r.color : "#fff"};color:${on ? "#fff" : r.color};border-radius:14px;padding:12px 8px;font-weight:700;font-size:13.5px;cursor:pointer;min-height:64px;line-height:1.3">${r.emoji}<br>${r.court}<br><span style="font-weight:500;font-size:12px">${esc(r.label)}</span></button>`;
+    return `<button type="button" onclick="setRythme('${k}')" style="border:2px solid ${r.color};background:${on ? r.color : "#fff"};color:${on ? "#fff" : r.color};border-radius:14px;padding:12px 8px;font-weight:700;font-size:13.5px;cursor:pointer;min-height:64px;line-height:1.3">${r.emoji}<br>${r.court}<br><span style="font-weight:500;font-size:13.5px">${esc(r.label)}</span></button>`;
   }).join("");
   const msgs = {
     play: "Super, continue à ton rythme 🌱",
@@ -540,7 +575,7 @@ function rythmesHtml(client) {
   };
   let msg = "";
   if (cur === "sos") {
-    msg = `<div style="margin-top:12px;border:2px solid #D9534F;background:#FFF5F3;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.5">
+    msg = `<div style="margin-top:12px;border:2px solid var(--alertLine);background:var(--alertBg);border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.5">
       <b>Ton coach n'est pas prévenu instantanément.</b><br>
       Si tu es en danger ou en grande détresse, appelle maintenant :<br>
       📞 <a href="tel:3114"><b>3114</b></a> — numéro national de prévention du suicide, gratuit, 24h/24 et 7j/7<br>
@@ -607,7 +642,7 @@ function progressionParcours(p) {
 function planteHtml(client) {
   const r = progressionParcours(client.parcours), st = r < 0.25 ? 1 : r < 0.5 ? 2 : r < 0.75 ? 3 : 4;
   const noms = ["Le lancement", "La mise en place", "La pratique", "La floraison"];
-  return `<div class="card" id="planteZone" style="display:flex;align-items:center;gap:14px">${plantSvg(st)}<div><div class="muted" style="font-size:12px;letter-spacing:.08em">ÉVOLUTION DE MON PROJET</div><div style="font-size:17px;font-weight:700;margin:4px 0">Étape ${st} · ${noms[st-1]}</div><div class="muted" style="font-size:13px">${Math.round(r * 100)}% des étapes franchies</div></div></div>`;
+  return `<div class="card" id="planteZone" style="display:flex;align-items:center;gap:14px">${plantSvg(st)}<div><div class="muted" style="font-size:13.5px;letter-spacing:.08em">ÉVOLUTION DE MON PROJET</div><div style="font-size:17px;font-weight:700;margin:4px 0">Étape ${st} · ${noms[st-1]}</div><div class="muted" style="font-size:14.5px">${Math.round(r * 100)}% des étapes franchies</div></div></div>`;
 }
 function rdvPortailListe(client) {
   const l = (client.rendezVous || []).filter(r => r && r.date);
@@ -622,8 +657,8 @@ function rdvPortailHtml(client) {
   const jolie = d => { const x = new Date(d + "T00:00:00"); return isNaN(x) ? d : x.toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long", year:"numeric" }); };
   const avenir = tous.filter(r => cle(r) >= maintenant).sort((a, b) => cle(a) < cle(b) ? -1 : 1);
   const passes = tous.filter(r => cle(r) < maintenant).sort((a, b) => cle(a) < cle(b) ? 1 : -1);
-  const ligne = (r, lien) => `<div style="padding:8px 10px;border:1px solid #E4DAC0;border-radius:8px;margin-bottom:6px;font-size:14px"><b>${esc(jolie(r.date))}</b>${r.heure ? " à " + esc(r.heure) : ""}${r.motif ? '<span class="muted"> — ' + esc(r.motif) + "</span>" : ""}${lien ? '<br><a href="' + agendaLien({ nextSession: r.date, nextSessionHeure: r.heure }) + '" target="_blank" rel="noopener" style="font-size:12.5px;color:var(--accent);font-weight:600;text-decoration:none">📅 Ajouter à mon agenda</a>' : ""}</div>`;
-  const bloc = (titre, liste, lien) => `<div style="font-weight:700;font-size:13px;margin:10px 0 6px">${titre} (${liste.length})</div>` + (liste.length ? liste.map(r => ligne(r, lien)).join("") : '<div class="muted" style="font-size:13px">Aucun</div>');
+  const ligne = (r, lien) => `<div style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;font-size:14px"><b>${esc(jolie(r.date))}</b>${r.heure ? " à " + esc(r.heure) : ""}${r.motif ? '<span class="muted"> — ' + esc(r.motif) + "</span>" : ""}${lien ? '<br><a href="' + agendaLien({ nextSession: r.date, nextSessionHeure: r.heure }) + '" target="_blank" rel="noopener" style="font-size:14px;color:var(--accent);font-weight:600;text-decoration:none">📅 Ajouter à mon agenda</a>' : ""}</div>`;
+  const bloc = (titre, liste, lien) => `<div style="font-weight:700;font-size:14.5px;margin:10px 0 6px">${titre} (${liste.length})</div>` + (liste.length ? liste.map(r => ligne(r, lien)).join("") : '<div class="muted" style="font-size:14.5px">Aucun</div>');
   if (!tous.length) return `<div class="card" id="rdvZone"><div style="font-weight:700">📅 Mes rendez-vous</div><p class="muted">Pas encore de rendez-vous ici. Dès que ton coach en planifie un, il apparaîtra juste ici 🌿</p></div>`;
   return `<div class="card" id="rdvZone"><div style="font-weight:700">📅 Mes rendez-vous</div>${bloc("À venir", avenir, true)}${bloc("Passés", passes, false)}</div>`;
 }
@@ -640,8 +675,8 @@ function checkinInterieur(client, envoye) {
     <label style="font-size:13.5px;display:block;margin-top:8px">Ma charge mentale : <b id="ck_c_val">3</b>/5 <span class="muted">(1 = légère, 5 = très lourde)</span></label>
     <input type="range" id="ck_c" min="1" max="5" value="3" style="width:100%" oninput="document.getElementById('ck_c_val').textContent=this.value">
     <textarea id="ck_note" rows="2" maxlength="300" placeholder="Un mot si tu veux (facultatif)" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit;margin-top:8px"></textarea>
-    <button type="button" id="ck_btn" onclick="envoyerCheckin()" style="margin-top:8px;border:none;border-radius:10px;padding:10px 14px;background:var(--accent);color:#fff;font:inherit;font-weight:600;cursor:pointer">Envoyer mon check-in</button>
-    <div class="muted" id="ck_msg" style="font-size:12.5px;margin-top:6px">${esc(info)}</div>${bas}`;
+    <button type="button" id="ck_btn" onclick="envoyerCheckin()" style="margin-top:8px;border:none;border-radius:10px;padding:10px 14px;background:var(--accent);color:var(--onAccent);font:inherit;font-weight:600;cursor:pointer">Envoyer mon check-in</button>
+    <div class="muted" id="ck_msg" style="font-size:14px;margin-top:6px">${esc(info)}</div>${bas}`;
 }
 function checkinHtml(client) { return `<div class="card" id="checkinZone">${checkinInterieur(client, false)}</div>`; }
 function envoyerCheckin() {
@@ -668,10 +703,10 @@ function questionnaireInterieur(client, modif) {
   const r = client.questionnaireAccueil;
   if (r && !modif) {
     const quand = new Date(r.modifieLe || r.envoyeLe);
-    const lignes = QUESTIONS_ACCUEIL.filter(x => r[x.id]).map(x => `<div style="margin:10px 0"><div style="font-weight:600;font-size:13px">${esc(x.label)}</div><div style="white-space:pre-wrap;font-size:14px;margin-top:2px">${esc(r[x.id])}</div></div>`).join("");
+    const lignes = QUESTIONS_ACCUEIL.filter(x => r[x.id]).map(x => `<div style="margin:10px 0"><div style="font-weight:600;font-size:14.5px">${esc(x.label)}</div><div style="white-space:pre-wrap;font-size:14px;margin-top:2px">${esc(r[x.id])}</div></div>`).join("");
     return `<div style="font-weight:700">📋 Mon questionnaire d'accueil</div>
       <p class="muted" style="margin:2px 0 6px">✅ Envoyé${isNaN(quand) ? "" : " le " + quand.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}. Merci, cela m'aide à préparer notre premier rendez-vous.</p>${lignes}
-      <button type="button" onclick="modifierQuestionnaire()" style="margin-top:6px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 12px;font:inherit;cursor:pointer">Modifier mes réponses</button>`;
+      <button type="button" onclick="modifierQuestionnaire()" style="margin-top:6px;border:1px solid var(--line);background:var(--field);border-radius:10px;padding:8px 12px;font:inherit;cursor:pointer">Modifier mes réponses</button>`;
   }
   const champs = QUESTIONS_ACCUEIL.map(x => {
     const val = (r && r[x.id]) || "";
@@ -680,8 +715,8 @@ function questionnaireInterieur(client, modif) {
   }).join("");
   return `<div style="font-weight:700">📋 Mon questionnaire d'accueil</div>
     <p class="muted" style="margin:2px 0 4px">Quelques questions pour préparer notre premier rendez-vous. Il n'y a pas de bonne ou de mauvaise réponse, et tu peux laisser vide ce que tu ne souhaites pas partager.</p>${champs}
-    <button type="button" id="qa_btn" onclick="envoyerQuestionnaire()" style="border:none;border-radius:10px;padding:10px 14px;background:var(--accent);color:#fff;font:inherit;font-weight:600;cursor:pointer">Envoyer mes réponses</button>
-    <div class="muted" id="qa_msg" style="font-size:12.5px;margin-top:6px;min-height:16px"></div>`;
+    <button type="button" id="qa_btn" onclick="envoyerQuestionnaire()" style="border:none;border-radius:10px;padding:10px 14px;background:var(--accent);color:var(--onAccent);font:inherit;font-weight:600;cursor:pointer">Envoyer mes réponses</button>
+    <div class="muted" id="qa_msg" style="font-size:14px;margin-top:6px;min-height:16px"></div>`;
 }
 function questionnaireHtml(client) { return accueilVisible(client) ? `<div class="card" id="questZone">${questionnaireInterieur(client, false)}</div>` : ""; }
 function modifierQuestionnaire() { document.getElementById("questZone").innerHTML = questionnaireInterieur(PORTAL.client, true); }
@@ -698,6 +733,36 @@ function envoyerQuestionnaire() {
   firebase.firestore().collection("clients").doc(PORTAL.clientId).update({ questionnaireAccueil: data })
     .then(() => { PORTAL.client.questionnaireAccueil = data; document.getElementById("questZone").innerHTML = questionnaireInterieur(PORTAL.client, false); })
     .catch(e => { console.error("questionnaire:", e); btn.disabled = false; btn.textContent = "Envoyer mes réponses"; msg.textContent = "⚠️ Non envoyé, vérifie ta connexion et réessaie. Tes réponses sont toujours là."; });
+}
+
+// ═════════ Affichage : thème clair / sombre et confort de lecture du contrat ═════════
+function stockage(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} return null; }
+const zoomParDefaut = () => (window.innerWidth <= 560 ? 1.35 : 1.2);
+function themeSombreActif() { const t = document.documentElement.getAttribute("data-theme"); if (t === "dark") return true; if (t === "light") return false; return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches); }
+function appliquerAffichage() {
+  const root = document.documentElement;
+  const z = parseFloat(stockage("ct_zoom")) || zoomParDefaut();
+  root.style.setProperty("--ct-zoom", String(Math.max(1, Math.min(2, z))));
+  const n = stockage("ct_nuit");
+  root.setAttribute("data-ct-nuit", (n === "1" || n === "0") ? n : (themeSombreActif() ? "1" : "0"));
+}
+function basculerTheme() {
+  const root = document.documentElement, t = root.getAttribute("data-theme");
+  const suivant = !t ? "light" : (t === "light" ? "dark" : null);
+  if (suivant) root.setAttribute("data-theme", suivant); else root.removeAttribute("data-theme");
+  stockage("portail_theme", suivant); stockage("ct_nuit", null); appliquerAffichage();
+}
+function ctZoom(delta) {
+  const actuel = parseFloat(document.documentElement.style.getPropertyValue("--ct-zoom")) || zoomParDefaut();
+  stockage("ct_zoom", Math.max(1, Math.min(2, actuel + delta)).toFixed(2)); appliquerAffichage();
+}
+function ctNuit() { stockage("ct_nuit", document.documentElement.getAttribute("data-ct-nuit") === "1" ? "0" : "1"); appliquerAffichage(); }
+function lectureContratHtml(inner) {
+  return '<div class="lecture-contrat"><div class="lecture-barre" role="group" aria-label="Confort de lecture du contrat">'
+    + '<button type="button" onclick="ctZoom(-0.15)" aria-label="Réduire le texte">A−</button>'
+    + '<button type="button" onclick="ctZoom(0.15)" aria-label="Agrandir le texte">A+</button>'
+    + '<button type="button" onclick="ctNuit()"><span class="si-nuit">🌙 Fond sombre</span><span class="si-clair">☀️ Fond clair</span></button></div>'
+    + '<div class="papier" tabindex="0" aria-label="Texte du contrat">' + inner + '</div></div>';
 }
 
 // ═════════ CONTRAT v2 : texte officiel, statuts, signature du client ═════════
@@ -763,7 +828,7 @@ async function contratEmpreinte(p, mention) {
 }
 
 // Zone de signature manuscrite (doigt, stylet ou souris).
-function creerPadSignature(canvas) {
+function creerPadSignature(canvas, onChange) {
   const ctx = canvas.getContext && canvas.getContext("2d"); let dessin = false, trace = false;
   const r0 = canvas.getBoundingClientRect(), ratio = window.devicePixelRatio || 1;
   if (r0.width && ctx) { canvas.width = Math.round(r0.width * ratio); canvas.height = Math.round((r0.height || 140) * ratio); ctx.scale(ratio, ratio); }
@@ -771,7 +836,7 @@ function creerPadSignature(canvas) {
   canvas.style.touchAction = "none";
   const pos = e => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   canvas.addEventListener("pointerdown", e => { if (!ctx) return; dessin = true; const q = pos(e); ctx.beginPath(); ctx.moveTo(q.x, q.y); try { canvas.setPointerCapture(e.pointerId); } catch (x) {} e.preventDefault(); });
-  canvas.addEventListener("pointermove", e => { if (!dessin || !ctx) return; const q = pos(e); ctx.lineTo(q.x, q.y); ctx.stroke(); trace = true; e.preventDefault(); });
+  canvas.addEventListener("pointermove", e => { if (!dessin || !ctx) return; const q = pos(e); ctx.lineTo(q.x, q.y); ctx.stroke(); const avant = trace; trace = true; if (!avant && onChange) onChange(); e.preventDefault(); });
   const fin = () => { dessin = false; };
   canvas.addEventListener("pointerup", fin); canvas.addEventListener("pointercancel", fin); canvas.addEventListener("pointerleave", fin);
   return { vide: () => !trace, dataUrl: () => trace ? canvas.toDataURL("image/png") : null, effacer: () => { trace = false; if (ctx) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.restore(); } } };
@@ -791,30 +856,32 @@ async function chargerContratV2() {
   const l = []; q.forEach(d => l.push({ id: d.id, data: d.data() }));
   const dernier = l[0]; if (!dernier || dernier.data.version !== 2) return false;
   PORTAL.contrat = dernier; const d = dernier.data;
-  if (d.status === "signed") zone.innerHTML = contratSigneHtml(d); else if (d.status === "pending_signature") zone.innerHTML = contratASignerHtml(d); else { zone.innerHTML = ""; return true; }
-  if (d.status === "pending_signature") initContratSignature();
+  const rel = PORTAL.client && PORTAL.client.signatureRelais, relaisRecu = !!(rel && rel.contractId === dernier.id);
+  if (d.status === "signed") zone.innerHTML = contratSigneHtml(d); else if (d.status === "pending_signature") zone.innerHTML = relaisRecu ? contratRelaisHtml(d, rel) : contratASignerHtml(d); else { zone.innerHTML = ""; return true; }
+  if (d.status === "pending_signature" && !relaisRecu) initContratSignature();
   return true;
 }
 const contratSigObj = d => ({ coach: d.coachSignature, client: d.clientSignature, mention: d.mention, signeLe: d.signedAt, ip: d.signerIp, empreinte: d.contentHash });
 function contratSigneHtml(d) {
   const quand = new Date(d.signedAt);
   return `<div class="card" id="contratV2Zone"><div style="font-weight:700">📄 Mon contrat de coaching</div>
-    <p style="margin:6px 0;color:#2F7D3B;font-weight:600">✅ Signé le ${escC(quand.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }))}. Merci pour ta confiance 🌿</p>
-    <button type="button" onclick="telechargerContratClient()" style="border:none;border-radius:10px;padding:10px 14px;background:var(--accent);color:#fff;font-family:inherit;font-size:16px;font-weight:600;cursor:pointer">📥 Télécharger mon contrat (PDF)</button>
-    <details style="margin-top:10px"><summary style="cursor:pointer">Relire le contrat</summary><div style="max-height:50vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:8px;background:#fff">${contratHtml(d.params, contratSigObj(d))}</div></details></div>`;
+    <p style="margin:6px 0;color:var(--ok);font-weight:600">✅ Signé le ${escC(quand.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }))}. Merci pour ta confiance 🌿</p>
+    <button type="button" onclick="telechargerContratClient()" style="border:none;border-radius:10px;padding:10px 14px;background:var(--accent);color:var(--onAccent);font-family:inherit;font-size:16px;font-weight:600;cursor:pointer">📥 Télécharger mon contrat (PDF)</button>
+    <details style="margin-top:10px"><summary style="cursor:pointer">Relire le contrat</summary>${lectureContratHtml(contratHtml(d.params, contratSigObj(d)))}</details></div>`;
 }
 function contratASignerHtml(d) {
   return `<div class="card" id="contratV2Zone"><div style="font-weight:700">📄 Mon contrat à signer</div>
     <p class="muted" style="margin:4px 0 8px">Prends ton temps pour le relire. Tu signes ici, directement avec ton doigt. Rien n'est envoyé avant que tu valides.</p>
-    <div style="max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff">${contratHtml(d.params, { coach: d.coachSignature })}</div>
+    ${lectureContratHtml(contratHtml(d.params, { coach: d.coachSignature }))}
     <div style="margin-top:12px"><label for="ct_mention" style="font-weight:600;font-size:14px">Écris la mention « Lu et approuvé »</label>
       <input id="ct_mention" type="text" autocomplete="off" placeholder="Lu et approuvé" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:9px;font-family:inherit;font-size:16px;margin-top:4px" oninput="majContratSignature()"></div>
     <div style="margin-top:10px;font-weight:600;font-size:14px">Ta signature</div>
     <canvas id="ct_canvas" style="width:100%;height:150px;border:1px dashed var(--accent);border-radius:8px;background:#fff;display:block"></canvas>
-    <button type="button" onclick="effacerContratSignature()" style="margin-top:6px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 12px;font-family:inherit;font-size:16px;cursor:pointer">Effacer</button>
-    <p class="muted" style="font-size:12.5px;margin:10px 0 6px">En signant, la date et l'heure de ta signature ainsi que l'adresse IP de ta connexion sont enregistrées, pour prouver que c'est bien toi qui as signé.</p>
-    <button type="button" id="ct_btn" disabled onclick="signerContratV2()" style="border:none;border-radius:10px;padding:11px 16px;background:var(--accent);color:#fff;font-family:inherit;font-size:16px;font-weight:600;cursor:pointer;opacity:.5">✍️ Signer le contrat</button>
-    <div class="muted" id="ct_msg" style="font-size:12.5px;margin-top:6px;min-height:16px"></div></div>`;
+    <button type="button" onclick="effacerContratSignature()" style="margin-top:6px;border:1px solid var(--line);background:var(--field);border-radius:10px;padding:8px 12px;font-family:inherit;font-size:16px;cursor:pointer">Effacer</button>
+    <p class="muted" style="font-size:14px;margin:10px 0 6px">En signant, la date et l'heure de ta signature ainsi que l'adresse IP de ta connexion sont enregistrées, pour prouver que c'est bien toi qui as signé.</p>
+    <button type="button" id="ct_btn" disabled onclick="signerContratV2()" style="border:none;border-radius:10px;padding:11px 16px;background:var(--accent);color:var(--onAccent);font-family:inherit;font-size:16px;font-weight:600;cursor:pointer;opacity:.5">✍️ Signer le contrat</button>
+    <div id="ct_etat" style="font-size:14.5px;line-height:1.6;margin-top:8px"></div>
+    <div class="muted" id="ct_msg" style="font-size:14px;margin-top:6px;min-height:16px"></div></div>`;
 }
 // Les anciens contrats sont réaffichés depuis du HTML enregistré : on en retire tout ce qui pourrait s'exécuter.
 function assainirHtml(html) {
@@ -824,30 +891,62 @@ function assainirHtml(html) {
   return doc.body.innerHTML;
 }
 let _ctPad = null;
-function initContratSignature() { const cv = document.getElementById("ct_canvas"); if (!cv) return; _ctPad = creerPadSignature(cv); ["pointerup", "pointerleave"].forEach(ev => cv.addEventListener(ev, majContratSignature)); }
-const mentionOk = t => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z ]/g, "").replace(/\s+/g, " ").trim().toLowerCase() === "lu et approuve";
-function majContratSignature() { const b = document.getElementById("ct_btn"); if (!b) return; const ok = _ctPad && !_ctPad.vide() && mentionOk(document.getElementById("ct_mention").value); b.disabled = !ok; b.style.opacity = ok ? "1" : ".5"; }
+function initContratSignature() { const cv = document.getElementById("ct_canvas"); if (!cv) return; _ctPad = creerPadSignature(cv, majContratSignature); ["pointerup", "pointercancel", "pointerleave"].forEach(ev => cv.addEventListener(ev, majContratSignature)); majContratSignature(); }
+const mentionOk = t => { const n = String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z ]/g, " ").replace(/\s+/g, " ").trim().toLowerCase(); return /^lu(?: et)? approuve$/.test(n); };
+function majContratSignature() { const b = document.getElementById("ct_btn"); if (!b) return; const aTrace = !!(_ctPad && !_ctPad.vide()), aMention = mentionOk((document.getElementById("ct_mention") || {}).value), ok = aTrace && aMention; b.disabled = !ok; b.style.opacity = ok ? "1" : ".5"; const e = document.getElementById("ct_etat"); if (e) e.innerHTML = (aMention ? "✅" : "⬜") + " Mention « Lu et approuvé » écrite<br>" + (aTrace ? "✅" : "⬜") + " Signature dessinée" + (ok ? "<br><b>Tu peux maintenant valider.</b>" : ""); }
 function effacerContratSignature() { if (_ctPad) _ctPad.effacer(); majContratSignature(); }
 async function adresseIp() { try { const c = new AbortController(), t = setTimeout(() => c.abort(), 4000); const r = await fetch("https://api.ipify.org?format=json", { signal: c.signal }); clearTimeout(t); const j = await r.json(); return j && j.ip ? String(j.ip) : null; } catch (e) { return null; } }
+function messageErreurSignature(code) {
+  const base = "⚠️ La signature n'a pas pu être enregistrée. Ton dessin est conservé";
+  if (code === "unavailable" || code === "deadline-exceeded" || code === "network-request-failed") return base + " : vérifie ta connexion internet puis réessaie. (code : " + code + ")";
+  if (code === "invalid-argument" || code === "resource-exhausted" || code === "out-of-range") return base + " : efface ta signature et refais-la plus simplement. (code : " + code + ")";
+  if (code === "permission-denied") return base + ". Préviens ton coach en lui disant : « accès refusé à la signature ». (code : " + code + ")";
+  return base + " : réessaie dans un instant. (code : " + code + ")";
+}
+// Plan B : si l'écriture directe dans le contrat est refusée, la signature est déposée sur la fiche client ; le coach la valide automatiquement.
+async function deposerSignatureRelais(d, signature, maintenant, ip, empreinte) {
+  const rel = { contractId: PORTAL.contrat.id, clientSignature: signature, mention: "Lu et approuvé", signedAt: maintenant, signerIp: ip || null, ipStatus: ip ? "ok" : "indisponible",
+    signerUserAgent: String(navigator.userAgent || "").slice(0, 300), contentHash: empreinte || await contratEmpreinte(d.params, "Lu et approuvé") };
+  await firebase.firestore().collection("clients").doc(PORTAL.clientId).update({ signatureRelais: rel });
+  PORTAL.client = Object.assign({}, PORTAL.client, { signatureRelais: rel });
+  document.getElementById("contractZone").innerHTML = contratRelaisHtml(d, rel);
+}
+function contratRelaisHtml(d, r) {
+  const quand = new Date(r.signedAt);
+  return `<div class="card" id="contratV2Zone"><div style="font-weight:700">✍️ Mon contrat de coaching</div>
+    <p style="margin:6px 0;color:var(--ok);font-weight:600">✓ Ta signature a bien été reçue le ${escC(quand.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }))}. Ton coach la valide : le contrat apparaîtra ici comme « signé » très bientôt.</p>
+    <details style="margin-top:10px"><summary style="cursor:pointer">Relire le contrat</summary>${lectureContratHtml(contratHtml(d.params, { coach: d.coachSignature, client: r.clientSignature, mention: r.mention, signeLe: r.signedAt, ip: r.signerIp, empreinte: r.contentHash }))}</details></div>`;
+}
 async function signerContratV2() {
   const btn = document.getElementById("ct_btn"), msg = document.getElementById("ct_msg"); if (!btn || btn.disabled || !PORTAL.contrat) return;
   const mention = document.getElementById("ct_mention").value.trim(), signature = _ctPad && _ctPad.dataUrl();
   if (!signature || !mentionOk(mention)) { msg.textContent = "Écris « Lu et approuvé » et signe avant de valider."; return; }
   if (signature.length > 400000) { msg.textContent = "Ta signature est trop détaillée pour être enregistrée : efface-la et signe plus simplement."; return; }
-  btn.disabled = true; btn.textContent = "Signature en cours…";
+  btn.disabled = true; btn.textContent = "Signature en cours…"; msg.textContent = "";
+  const remettre = () => { btn.disabled = false; btn.textContent = "✍️ Signer le contrat"; };
+  let d = null, ip = null, empreinte = null; const maintenant = new Date().toISOString();
   try {
-    const ref = firebase.firestore().collection("clients").doc(PORTAL.clientId).collection("contracts").doc(PORTAL.contrat.id);
+    const db = firebase.firestore();
+    const ref = db.collection("clients").doc(PORTAL.clientId).collection("contracts").doc(PORTAL.contrat.id);
     const frais = await ref.get();
-    if (!frais.exists || frais.data().status !== "pending_signature") { msg.textContent = "Ce contrat vient d'être modifié par ton coach. Recharge la page pour voir la dernière version."; btn.textContent = "✍️ Signer le contrat"; return; }
-    const d = frais.data(), maintenant = new Date().toISOString(), ip = await adresseIp(), empreinte = await contratEmpreinte(d.params, "Lu et approuvé");
+    if (!frais.exists || frais.data().status !== "pending_signature") { msg.textContent = "Ce contrat vient d'être modifié par ton coach. Recharge la page pour voir la dernière version."; remettre(); return; }
+    d = frais.data(); ip = await adresseIp(); empreinte = await contratEmpreinte(d.params, "Lu et approuvé");
     const sig = { coach: d.coachSignature, client: signature, mention: "Lu et approuvé", signeLe: maintenant, ip, empreinte };
     const charge = { status: "signed", clientSignature: signature, mention: "Lu et approuvé", signedAt: maintenant, signedAtServer: firebase.firestore.FieldValue.serverTimestamp(), signerIp: ip, ipStatus: ip ? "ok" : "indisponible", signerUserAgent: String(navigator.userAgent || "").slice(0, 300), contentHash: empreinte, htmlContent: contratHtml(d.params, sig) };
-    const db = firebase.firestore();
     if (typeof db.runTransaction === "function") { await db.runTransaction(async tx => { const s = await tx.get(ref); if (!s.exists || s.data().status !== "pending_signature" || JSON.stringify(s.data().params) !== JSON.stringify(d.params)) throw new Error("MODIFIE"); tx.update(ref, charge); }); } else { await ref.update(charge); }
     try { await firebase.firestore().collection("clients").doc(PORTAL.clientId).update({ contractStatus: "signed" }); } catch (e) { console.error("statut client:", e); }
     PORTAL.contrat = { id: PORTAL.contrat.id, data: Object.assign({}, d, { status: "signed", clientSignature: signature, mention: "Lu et approuvé", signedAt: maintenant, signerIp: ip, contentHash: empreinte }) };
     document.getElementById("contractZone").innerHTML = contratSigneHtml(PORTAL.contrat.data);
-  } catch (e) { if (e && e.message === "MODIFIE") { msg.textContent = "Ce contrat vient d'être modifié par ton coach. Recharge la page pour voir la dernière version."; btn.textContent = "✍️ Signer le contrat"; btn.disabled = false; return; } console.error("signature:", e); btn.disabled = false; btn.textContent = "✍️ Signer le contrat"; msg.textContent = "⚠️ La signature n'a pas pu être enregistrée. Ton dessin est conservé : réessaie dans un instant."; }
+  } catch (e) {
+    if (e && e.message === "MODIFIE") { msg.textContent = "Ce contrat vient d'être modifié par ton coach. Recharge la page pour voir la dernière version."; remettre(); return; }
+    console.error("signature:", e);
+    const code = (e && (e.code || e.name)) || "erreur inconnue";
+    const dd = d || (PORTAL.contrat && PORTAL.contrat.data);
+    if (dd && (code === "permission-denied" || /permission/i.test(String(e && e.message)))) {
+      try { await deposerSignatureRelais(dd, signature, maintenant, ip, empreinte); return; } catch (e2) { console.error("relais signature:", e2); }
+    }
+    remettre(); msg.textContent = messageErreurSignature(code);
+  }
 }
 function telechargerContratClient() { const d = PORTAL.contrat && PORTAL.contrat.data; if (d) telechargerContratPDF(d.params, contratSigObj(d), "mon-contrat-de-coaching.pdf").catch(() => alert("Le PDF n'a pas pu être créé. Réessaie dans un instant.")); }
 
@@ -865,7 +964,7 @@ function renderContractButtonLegacy(){
       </div>`;
       document.getElementById("btnShowContract").addEventListener("click", function(){
         const z = document.getElementById("contractHtml");
-        if (z.style.display==="none"){ z.style.display="block"; z.innerHTML = assainirHtml(doc.htmlContent); this.textContent="Masquer"; }
+        if (z.style.display==="none"){ z.style.display="block"; z.innerHTML = lectureContratHtml(assainirHtml(doc.htmlContent)); this.textContent="Masquer"; }
         else { z.style.display="none"; this.textContent="Afficher"; }
       });
     }).catch(()=>{ box.innerHTML=""; });
@@ -894,7 +993,7 @@ function renderPortal(){
   const nom = (PORTAL.client && PORTAL.client.name) || "";
   const next = frenchDate(PORTAL.client && PORTAL.client.nextSession);
   app.innerHTML = `
-    <h1>👋 Bonjour ${esc(nom)}</h1>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><h1>👋 Bonjour ${esc(nom)}</h1><button type="button" class="theme-btn" onclick="basculerTheme()" aria-label="Changer l'affichage : automatique, clair ou sombre"><span class="th-auto">🌓 Auto</span><span class="th-light">☀️ Clair</span><span class="th-dark">🌙 Nuit</span></button></div>
     <p class="muted" style="margin-bottom:16px">Ton espace personnel de coaching</p>
     <div id="liveZone"></div>
     <div id="visioZone"></div>
@@ -914,6 +1013,7 @@ function renderPortal(){
 }
 
 (function init(){
+  appliquerAffichage();
   const params = new URLSearchParams(location.search);
   const token = params.get("t");
   const app = document.getElementById("app");
