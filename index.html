@@ -5409,6 +5409,7 @@ function creerOuMajClientDepuisRdv(req) {
       nextSession: req.date || "",
       nextSessionHeure: req.heure || "",
       status: "actif",
+      source: "Site web",
       notes: req.message || "",
       sessionHistory: ["Séance 1 — " + (req.motif || "RDV") + (req.theme ? " (" + req.theme + ")" : "") + (req.date ? " le " + req.date : "")],
       objectifs: [],
@@ -5821,8 +5822,6 @@ function renderStatistiquesTab() {
   return wrap;
 }
 
-// ===== TABLEAU DE BORD BUSINESS (brouillon hub) =====
-// Calculé uniquement à partir des paiements, rendez-vous et forfaits déjà saisis dans l'app. Lecture seule : rien n'est modifié.
 function businessCle(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
 function businessJour(d) { return businessCle(d) + "-" + String(d.getDate()).padStart(2, "0"); }
 
@@ -5835,11 +5834,13 @@ function businessCalculer(clients, rdvs, objectifMensuel, maintenant) {
   const estActif = c => !c.status || c.status === "actif";
 
   // --- Paiements ---
-  const parMois = {}, retards = {};
+  const parMois = {}, retards = {}, detail = {};
   let totalAnnee = 0, nbPayesAnnee = 0, enAttente = 0, enRetard = 0;
   clients.forEach(c => (c.paiements || []).forEach(p => {
     if (!p || !p.date) return;
     const m = Number(p.montant) || 0, mk = String(p.date).slice(0, 7);
+    const dm = detail[mk] || (detail[mk] = { reel: 0, prevu: 0, seances: 0 });
+    dm.prevu += m; dm.seances += 1; if (p.statut === "payé") dm.reel += m;
     if (p.statut === "payé") {
       parMois[mk] = (parMois[mk] || 0) + m;
       if (mk.slice(0, 4) === annee) { totalAnnee += m; nbPayesAnnee++; }
@@ -5904,7 +5905,15 @@ function businessCalculer(clients, rdvs, objectifMensuel, maintenant) {
   relances.sort((a, b) => a.prio - b.prio || a.nom.localeCompare(b.nom));
 
   const objectif = Number(objectifMensuel) || 0;
+  const cleProchain = businessCle(new Date(maintenant.getFullYear(), maintenant.getMonth() + 1, 1));
+  const moisTries = Object.keys(detail).sort().reverse();
   return {
+    detail, moisTries,
+    totalReel: moisTries.reduce((t, mk) => t + detail[mk].reel, 0),
+    totalPrevu: moisTries.reduce((t, mk) => t + detail[mk].prevu, 0),
+    totalSeancesPaiements: moisTries.reduce((t, mk) => t + detail[mk].seances, 0),
+    programmeMois: (detail[cleMois] || { prevu: 0 }).prevu, seancesMoisPaiements: (detail[cleMois] || { seances: 0 }).seances,
+    prochain: detail[cleProchain] || { prevu: 0, seances: 0 },
     ceMois, moisPrecedent, variation, totalAnnee, nbPayesAnnee,
     panierMoyen: nbPayesAnnee ? totalAnnee / nbPayesAnnee : 0,
     enAttente, enRetard, retards: Object.values(retards).sort((a, b) => b.montant - a.montant),
@@ -5915,58 +5924,106 @@ function businessCalculer(clients, rdvs, objectifMensuel, maintenant) {
   };
 }
 
-function renderBusinessTab() {
+function renderFinancesTab() {
   const wrap = h("div", { class: "page-wrap" });
-  wrap.appendChild(h("h3", { style: "font-size:20px;color:#2E2A20;font-weight:600;margin-bottom:6px;font-style:italic" }, "Tableau de bord business"));
-  wrap.appendChild(h("p", { style: "color:#6B6355;font-size:13px;margin:0 0 16px;line-height:1.45" }, "Vue d'ensemble de ton activité, calculée à partir des paiements, rendez-vous et forfaits saisis dans l'app. Lecture seule."));
-  if (CoachLink.user && !CoachSettings.data) CoachSettings.listen(() => { if (state.tab === "business") render(); });
+  if (CoachLink.user && !CoachSettings.data) CoachSettings.listen(() => { if (state.tab === "finances") render(); });
   const k = businessCalculer(state.clients, state.appointments, (CoachSettings.data || {}).objectifMensuel, new Date());
   const eur = n => Math.round(n).toLocaleString("fr-FR") + " €";
+  const ouvrir = id => setState({ tab: "clients", selClientId: id, subTab: "fiche" });
+  const titre = (emoji, texte, aide) => h("div", { style: "display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:26px 0 10px;padding-bottom:6px;border-bottom:1px solid #E4DAC0" },
+    h("span", { style: "font-weight:700;font-size:15px;color:#2E2A20" }, emoji + " " + texte),
+    aide ? h("span", { style: "font-size:12px;color:#6B6355" }, aide) : null);
 
-  const kpi = (titre, valeur, sous, couleur) => h("div", { class: "card", style: "padding:14px;text-align:center;border-color:" + couleur + "44" },
-    h("div", { style: "font-size:12px;color:#5A5648;margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em" }, titre),
-    h("div", { style: "font-size:24px;font-weight:800;color:" + couleur }, valeur),
-    sous ? h("div", { style: "font-size:12.5px;color:#5A5648;margin-top:2px;line-height:1.35" }, sous) : null);
+  wrap.appendChild(h("h3", { style: "font-size:20px;color:#2E2A20;font-weight:600;margin:0 0 4px;font-style:italic" }, "Finances & Business"));
+  wrap.appendChild(h("p", { style: "color:#6B6355;font-size:13px;margin:0 0 14px;line-height:1.45" }, "Ton activité en un coup d'œil : argent encaissé, clients à relancer, forfaits en cours."));
 
-  // Objectif mensuel
-  const objCard = h("div", { class: "card", style: "padding:14px 16px;margin-bottom:14px" });
-  objCard.appendChild(h("div", { style: "font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:8px" }, "🎯 Objectif du mois"));
-  if (k.objectif > 0) {
-    const pct = Math.min(100, k.pctObjectif);
-    const bg = h("div", { style: "background:#E4DAC0;border-radius:6px;height:9px;overflow:hidden" });
-    bg.appendChild(h("div", { style: "background:" + (k.pctObjectif >= 100 ? "#4a9e6a" : "#9C7A2E") + ";height:100%;width:" + pct + "%" }));
-    objCard.appendChild(h("div", { style: "font-size:13.5px;color:#2E2A20;margin-bottom:6px" }, eur(k.ceMois) + " encaissés sur " + eur(k.objectif) + " (" + k.pctObjectif + " %)"));
-    objCard.appendChild(bg);
-  } else {
-    objCard.appendChild(h("div", { style: "font-size:13px;color:#5A5648;margin-bottom:6px" }, "Aucun objectif défini. Indique le chiffre d'affaires mensuel que tu vises."));
-  }
-  const champ = h("input", { type: "number", min: "0", step: "50", placeholder: "Objectif mensuel en €", value: k.objectif > 0 ? String(k.objectif) : "", style: "width:170px;padding:8px 10px;border:1px solid #E4DAC0;border-radius:8px;font-size:16px;margin:10px 8px 0 0" });
-  const bOk = h("button", { class: "btn-g" }, "Enregistrer");
-  bOk.addEventListener("click", () => {
-    if (!CoachLink.user) { alert("Connecte-toi pour enregistrer l'objectif."); return; }
-    const n = Math.max(0, Number(champ.value) || 0);
-    CoachSettings.save({ objectifMensuel: n });
-    if (CoachSettings.data) CoachSettings.data.objectifMensuel = n;
-    render();
-  });
-  objCard.appendChild(champ); objCard.appendChild(bOk);
-  wrap.appendChild(objCard);
+  // ── 1. CE MOIS-CI (carte principale) ──
+  const hero = h("div", { class: "card", style: "padding:18px 18px 14px;border-color:#4a9e6a55;background:linear-gradient(180deg,#FBFAF1 0%,#FFFFFF 100%)" });
+  hero.appendChild(h("div", { style: "font-size:12px;color:#5A5648;letter-spacing:.05em;text-transform:uppercase" }, "Encaissé ce mois-ci"));
+  const ligneMontant = h("div", { style: "display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:2px" },
+    h("div", { style: "font-size:34px;font-weight:800;color:#4a9e6a;line-height:1.1" }, eur(k.ceMois)));
+  if (k.variation !== null) ligneMontant.appendChild(h("div", { style: "font-size:13px;font-weight:700;color:" + (k.variation >= 0 ? "#2f7d4f" : "#c0392b") }, (k.variation >= 0 ? "▲ +" : "▼ ") + k.variation + " % vs mois dernier (" + eur(k.moisPrecedent) + ")"));
+  hero.appendChild(ligneMontant);
 
-  // Chiffres clés
-  const grille = h("div", { style: "display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px" });
-  const evol = k.variation === null ? "pas de mois précédent à comparer" : (k.variation >= 0 ? "+" : "") + k.variation + " % vs mois dernier (" + eur(k.moisPrecedent) + ")";
-  grille.appendChild(kpi("Encaissé ce mois", eur(k.ceMois), evol, "#4a9e6a"));
+  const objZone = h("div", { style: "margin-top:12px" });
+  const dessinerObjectif = (edition) => {
+    objZone.innerHTML = "";
+    if (k.objectif > 0) {
+      const bg = h("div", { style: "background:#E4DAC0;border-radius:6px;height:9px;overflow:hidden" });
+      bg.appendChild(h("div", { style: "background:" + (k.pctObjectif >= 100 ? "#4a9e6a" : "#9C7A2E") + ";height:100%;width:" + Math.min(100, k.pctObjectif) + "%" }));
+      objZone.appendChild(h("div", { style: "font-size:13px;color:#2E2A20;margin-bottom:5px" }, "🎯 Objectif : " + eur(k.ceMois) + " sur " + eur(k.objectif) + " (" + k.pctObjectif + " %)"));
+      objZone.appendChild(bg);
+    }
+    if (edition) {
+      const champ = h("input", { type: "number", min: "0", step: "50", placeholder: "Objectif mensuel en €", value: k.objectif > 0 ? String(k.objectif) : "", style: "width:170px;padding:8px 10px;border:1px solid #E4DAC0;border-radius:8px;font-size:16px;margin:10px 8px 0 0" });
+      const ok = h("button", { class: "btn-g" }, "Enregistrer");
+      ok.addEventListener("click", () => {
+        if (!CoachLink.user) { alert("Connecte-toi pour enregistrer l'objectif."); return; }
+        const n = Math.max(0, Number(champ.value) || 0);
+        CoachSettings.save({ objectifMensuel: n });
+        if (CoachSettings.data) CoachSettings.data.objectifMensuel = n;
+        render();
+      });
+      objZone.appendChild(champ); objZone.appendChild(ok);
+    } else {
+      const b = h("button", { class: "btn-g", style: "margin-top:" + (k.objectif > 0 ? "8" : "0") + "px;font-size:12.5px;padding:6px 12px" }, k.objectif > 0 ? "✏️ Modifier l'objectif" : "🎯 Définir un objectif mensuel");
+      b.addEventListener("click", () => dessinerObjectif(true));
+      objZone.appendChild(b);
+    }
+  };
+  dessinerObjectif(false);
+  hero.appendChild(objZone);
+
+  const mini = (lib, val, sous, couleur) => h("div", { style: "flex:1;min-width:104px" },
+    h("div", { style: "font-size:11.5px;color:#5A5648;text-transform:uppercase;letter-spacing:.03em" }, lib),
+    h("div", { style: "font-size:18px;font-weight:700;color:" + couleur }, val),
+    sous ? h("div", { style: "font-size:11.5px;color:#6B6355" }, sous) : null);
+  hero.appendChild(h("div", { style: "display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid #EFE7D2" },
+    mini("Programmé ce mois", eur(k.programmeMois), k.seancesMoisPaiements + " paiement(s) enregistré(s)", "#9C7A2E"),
+    mini("Reste à encaisser", eur(Math.max(0, k.programmeMois - k.ceMois)), "sur le mois en cours", "#9C7A2E"),
+    mini("Mois prochain", eur(k.prochain.prevu), k.prochain.seances + " déjà programmé(s)", "#5aaec8")));
+  wrap.appendChild(hero);
+
+  // ── 2. CHIFFRES CLÉS ──
+  wrap.appendChild(titre("📊", "Chiffres clés"));
+  const kpi = (lib, val, sous, couleur) => h("div", { class: "card", style: "padding:13px 12px;text-align:center;border-color:" + couleur + "44" },
+    h("div", { style: "font-size:11.5px;color:#5A5648;margin-bottom:3px;text-transform:uppercase;letter-spacing:.03em" }, lib),
+    h("div", { style: "font-size:22px;font-weight:800;color:" + couleur }, val),
+    sous ? h("div", { style: "font-size:12px;color:#5A5648;margin-top:2px;line-height:1.35" }, sous) : null);
+  const grille = h("div", { style: "display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px" });
   grille.appendChild(kpi("Encaissé cette année", eur(k.totalAnnee), k.nbPayesAnnee + " paiement(s)", "#9C7A2E"));
-  grille.appendChild(kpi("Panier moyen", eur(k.panierMoyen), "par paiement encaissé cette année", "#5aaec8"));
+  grille.appendChild(kpi("Panier moyen", eur(k.panierMoyen), "par paiement, cette année", "#5aaec8"));
   grille.appendChild(kpi("À encaisser", eur(k.enAttente), k.enRetard > 0 ? eur(k.enRetard) + " en retard" : "aucun retard", k.enRetard > 0 ? "#c0392b" : "#5A5648"));
   grille.appendChild(kpi("Clients actifs", String(k.clientsActifs), k.nouveaux + " nouveau(x) ce mois", "#9C7A2E"));
   grille.appendChild(kpi("Séances ce mois", String(k.seancesMois), k.decouvertesMois + " découverte(s)", "#5aaec8"));
-  grille.appendChild(kpi("Conversion découverte", k.conversion === null ? "—" : k.conversion + " %", k.avecDecouverte ? k.convertis + " sur " + k.avecDecouverte + " sont allés plus loin" : "aucune séance découverte enregistrée", "#4a9e6a"));
+  grille.appendChild(kpi("Conversion découverte", k.conversion === null ? "—" : k.conversion + " %", k.avecDecouverte ? k.convertis + " sur " + k.avecDecouverte + " sont allés plus loin" : "aucune séance découverte", "#4a9e6a"));
   wrap.appendChild(grille);
+  wrap.appendChild(h("div", { style: "font-size:12.5px;color:#5A5648;margin-top:10px;line-height:1.5" },
+    "Depuis le début : " + eur(k.totalReel) + " encaissés · " + eur(k.totalPrevu) + " programmés · " + k.totalSeancesPaiements + " séance(s) enregistrée(s)"));
 
-  // Graphique 12 mois
-  const gCard = h("div", { class: "card", style: "padding:14px 16px;margin-bottom:16px" });
-  gCard.appendChild(h("div", { style: "font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:10px" }, "📈 Encaissé sur 12 mois"));
+  // ── 3. À FAIRE (actions commerciales) ──
+  wrap.appendChild(titre("🔔", "À faire", "clients à relancer et paiements en retard"));
+  const liste = (sousTitre, vide, items) => {
+    const c = h("div", { class: "card", style: "padding:12px 16px;margin-bottom:10px" });
+    c.appendChild(h("div", { style: "font-weight:700;font-size:13.5px;color:#2E2A20;margin-bottom:4px" }, sousTitre));
+    if (!items.length) c.appendChild(h("div", { style: "font-size:13px;color:#5A5648;padding:4px 0" }, vide));
+    items.forEach(it => {
+      const l = h("div", { style: "display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #EFE7D2;cursor:pointer" },
+        h("div", { style: "min-width:0" },
+          h("div", { style: "font-size:13.5px;font-weight:600;color:#2E2A20" }, it.nom),
+          h("div", { style: "font-size:12.5px;color:#5A5648" }, it.detail)),
+        h("div", { style: "font-size:12px;color:#9C7A2E;white-space:nowrap" }, "Ouvrir ›"));
+      l.addEventListener("click", () => ouvrir(it.id));
+      c.appendChild(l);
+    });
+    return c;
+  };
+  wrap.appendChild(liste("À relancer (renouvellement)" + (k.nbRelances > k.relances.length ? " — " + k.nbRelances + " au total" : ""), "Rien à relancer pour l'instant.", k.relances.map(r => ({ id: r.id, nom: r.nom, detail: r.raison }))));
+  wrap.appendChild(liste("Paiements en retard", "Aucun paiement en retard.", k.retards.map(r => ({ id: r.id, nom: r.nom, detail: eur(r.montant) + " (" + r.nb + " paiement" + (r.nb > 1 ? "s" : "") + " en attente)" }))));
+
+  // ── 4. ÉVOLUTION 12 MOIS ──
+  wrap.appendChild(titre("📈", "Évolution sur 12 mois", "montants encaissés"));
+  const gCard = h("div", { class: "card", style: "padding:14px 16px" });
   const max = Math.max.apply(null, k.serie.map(s => s.valeur).concat([1]));
   const barres = h("div", { style: "display:flex;align-items:flex-end;gap:4px;height:130px" });
   k.serie.forEach((s, i) => {
@@ -5982,164 +6039,60 @@ function renderBusinessTab() {
   gCard.appendChild(etiq);
   wrap.appendChild(gCard);
 
-  // Listes d'actions
-  const ouvrir = id => setState({ tab: "clients", selClientId: id, subTab: "fiche" });
-  const liste = (titre, vide, items) => {
-    const c = h("div", { class: "card", style: "padding:14px 16px;margin-bottom:14px" });
-    c.appendChild(h("div", { style: "font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:8px" }, titre));
-    if (!items.length) c.appendChild(h("div", { style: "font-size:13px;color:#5A5648" }, vide));
-    items.forEach(it => {
-      const l = h("div", { style: "display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-top:1px solid #EFE7D2;cursor:pointer" },
-        h("div", { style: "min-width:0" },
-          h("div", { style: "font-size:13.5px;font-weight:600;color:#2E2A20" }, it.nom),
-          h("div", { style: "font-size:12.5px;color:#5A5648" }, it.detail)),
-        h("div", { style: "font-size:12px;color:#9C7A2E;white-space:nowrap" }, "Ouvrir ›"));
-      l.addEventListener("click", () => ouvrir(it.id));
-      c.appendChild(l);
-    });
-    return c;
-  };
-  wrap.appendChild(liste("🔔 À relancer (renouvellement)" + (k.nbRelances > k.relances.length ? " — " + k.nbRelances + " au total" : ""), "Rien à relancer pour l'instant.", k.relances.map(r => ({ id: r.id, nom: r.nom, detail: r.raison }))));
-  wrap.appendChild(liste("💶 Paiements en retard", "Aucun paiement en retard.", k.retards.map(r => ({ id: r.id, nom: r.nom, detail: eur(r.montant) + " (" + r.nb + " paiement" + (r.nb > 1 ? "s" : "") + " en attente)" }))));
-
-  wrap.appendChild(h("p", { style: "color:#6B6355;font-size:12px;line-height:1.5;margin:6px 0 0" }, "Comment c'est calculé : « encaissé » = paiements au statut payé. « Nouveaux clients » = premier rendez-vous ou paiement enregistré ce mois-ci. « Conversion » = clients ayant eu une séance découverte puis un autre rendez-vous ou un paiement. Plus tes paiements et motifs de rendez-vous sont renseignés, plus ces chiffres sont fiables."));
-  return wrap;
-}
-
-function renderFinancesTab() {
-  const wrap = h("div",{});
-
-  // Agrégation de tous les paiements de tous les clients, groupés par mois
-  const parMois = {}; // "2026-07" -> {reel:0, prevu:0, seances:0}
-  state.clients.forEach(c => {
-    (c.paiements || []).forEach(p => {
-      if (!p.date) return;
-      const mk = p.date.slice(0,7); // YYYY-MM
-      if (!parMois[mk]) parMois[mk] = {reel:0, prevu:0, seances:0};
-      const montant = Number(p.montant || 0);
-      parMois[mk].prevu += montant;
-      parMois[mk].seances += 1;
-      if (p.statut === "payé") parMois[mk].reel += montant;
-    });
-  });
-
-  const moisTries = Object.keys(parMois).sort().reverse();
-  const totalReel = moisTries.reduce((s,mk) => s + parMois[mk].reel, 0);
-  const totalPrevu = moisTries.reduce((s,mk) => s + parMois[mk].prevu, 0);
-  const totalSeances = moisTries.reduce((s,mk) => s + parMois[mk].seances, 0);
-
-  const maintenant = new Date();
-  const cleMoisCourant = maintenant.getFullYear() + "-" + String(maintenant.getMonth()+1).padStart(2,"0");
-  const dataMoisCourant = parMois[cleMoisCourant] || {reel:0, prevu:0, seances:0};
-  const moisProchain = new Date(maintenant.getFullYear(), maintenant.getMonth()+1, 1);
-  const cleMoisProchain = moisProchain.getFullYear() + "-" + String(moisProchain.getMonth()+1).padStart(2,"0");
-  const dataMoisProchain = parMois[cleMoisProchain] || {reel:0, prevu:0, seances:0};
-
-  wrap.appendChild(h("div",{style:"font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:12px"},"📦 Suivi des forfaits en cours"));
-  const clientsAvecForfait = state.clients.filter(c => c.forfaitNom && c.forfaitTotal);
+  // ── 5. FORFAITS EN COURS ──
+  wrap.appendChild(titre("📦", "Forfaits en cours"));
+  const clientsAvecForfait = (state.clients || []).filter(c => c.forfaitNom && c.forfaitTotal);
   if (!clientsAvecForfait.length) {
-    wrap.appendChild(h("p",{style:"color:#5A5648;font-size:13px;padding:10px 0 20px"},"Aucun forfait en cours actuellement."));
+    wrap.appendChild(h("p", { style: "color:#5A5648;font-size:13px;padding:4px 0" }, "Aucun forfait en cours actuellement."));
   } else {
     clientsAvecForfait.forEach(c => {
       const utilisees = c.forfaitUtilisees || 0;
       const pct = Math.min(100, Math.round(utilisees / c.forfaitTotal * 100));
       const termine = utilisees >= c.forfaitTotal;
-      const fCard = h("div",{class:"card",style:"padding:14px 18px;margin-bottom:8px;cursor:pointer"});
-      fCard.addEventListener("click", () => setState({tab:"clients", selClientId:c.id, subTab:"fiche"}));
-      fCard.appendChild(h("div",{style:"display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"},
-        h("div",{style:"display:flex;align-items:center;gap:10px"},
+      const fCard = h("div", { class: "card", style: "padding:14px 18px;margin-bottom:8px;cursor:pointer" });
+      fCard.addEventListener("click", () => ouvrir(c.id));
+      fCard.appendChild(h("div", { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:6px" },
+        h("div", { style: "display:flex;align-items:center;gap:10px" },
           avatar(c.name, c.profile, 30),
-          h("div",{},
-            h("div",{style:"color:#2E2A20;font-size:13.5px;font-weight:600"}, c.name),
-            h("div",{style:"color:#5A5648;font-size:12px;margin-top:1px"}, c.forfaitNom)
-          )
-        ),
-        h("div",{style:"color:"+(termine?"#4a9e6a":"#9C7A2E")+";font-size:13px;font-weight:700"}, utilisees + " / " + c.forfaitTotal + (termine ? " ✓" : ""))
-      ));
-      const barBg = h("div",{style:"background:#E4DAC0;border-radius:6px;height:7px;overflow:hidden"});
-      barBg.appendChild(h("div",{style:"background:"+(termine?"#4a9e6a":"#9C7A2E")+";height:100%;width:"+pct+"%"}));
+          h("div", {},
+            h("div", { style: "color:#2E2A20;font-size:13.5px;font-weight:600" }, c.name),
+            h("div", { style: "color:#5A5648;font-size:12px;margin-top:1px" }, c.forfaitNom))),
+        h("div", { style: "color:" + (termine ? "#4a9e6a" : "#9C7A2E") + ";font-size:13px;font-weight:700" }, utilisees + " / " + c.forfaitTotal + (termine ? " ✓" : ""))));
+      const barBg = h("div", { style: "background:#E4DAC0;border-radius:6px;height:7px;overflow:hidden" });
+      barBg.appendChild(h("div", { style: "background:" + (termine ? "#4a9e6a" : "#9C7A2E") + ";height:100%;width:" + pct + "%" }));
       fCard.appendChild(barBg);
       wrap.appendChild(fCard);
     });
   }
 
-  wrap.appendChild(h("div",{style:"font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:10px"},"💰 Ce mois-ci"));
-  const summaryMoisCourant = h("div",{style:"display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px"});
-  summaryMoisCourant.appendChild(h("div",{class:"card",style:"padding:16px;text-align:center;border-color:#4a9e6a44"},
-    h("div",{style:"font-size:13px;color:#5A5648;margin-bottom:4px"},"ENCAISSÉ CE MOIS-CI (réel)"),
-    h("div",{style:"font-size:26px;font-weight:800;color:#4a9e6a"}, dataMoisCourant.reel.toFixed(0)+" €"),
-    h("div",{style:"font-size:12.5px;color:#5A5648;margin-top:2px"}, dataMoisCourant.seances + " séance(s)")
-  ));
-  summaryMoisCourant.appendChild(h("div",{class:"card",style:"padding:16px;text-align:center;border-color:#9C7A2E44"},
-    h("div",{style:"font-size:13px;color:#5A5648;margin-bottom:4px"},"PROGRAMMÉ CE MOIS-CI (total)"),
-    h("div",{style:"font-size:26px;font-weight:800;color:#9C7A2E"}, dataMoisCourant.prevu.toFixed(0)+" €"),
-    h("div",{style:"font-size:12.5px;color:#5A5648;margin-top:2px"}, "reste "+(dataMoisCourant.prevu-dataMoisCourant.reel).toFixed(0)+" € à encaisser")
-  ));
-  wrap.appendChild(summaryMoisCourant);
-
-  wrap.appendChild(h("div",{style:"font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:10px"},"📆 Le mois prochain"));
-  const summaryMoisProchain = h("div",{style:"margin-bottom:20px"});
-  summaryMoisProchain.appendChild(h("div",{class:"card",style:"padding:16px;text-align:center;border-color:#5aaec844"},
-    h("div",{style:"font-size:13px;color:#5A5648;margin-bottom:4px"},"PRÉVISIONNEL MOIS PROCHAIN"),
-    h("div",{style:"font-size:24px;font-weight:800;color:#5aaec8"}, dataMoisProchain.prevu.toFixed(0)+" €"),
-    h("div",{style:"font-size:12.5px;color:#5A5648;margin-top:2px"}, dataMoisProchain.seances + " séance(s) déjà programmée(s)")
-  ));
-  wrap.appendChild(summaryMoisProchain);
-
-  wrap.appendChild(h("div",{style:"font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:10px"},"📊 Totaux cumulés"));
-  // --- Résumé global ---
-  const summary = h("div",{style:"display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:12px"});
-  summary.appendChild(h("div",{class:"card",style:"padding:16px;text-align:center"},
-    h("div",{style:"font-size:13px;color:#5A5648;margin-bottom:4px"},"CHIFFRE D'AFFAIRES RÉEL"),
-    h("div",{style:"font-size:24px;font-weight:800;color:#4a9e6a"}, totalReel.toFixed(0)+" €")
-  ));
-  summary.appendChild(h("div",{class:"card",style:"padding:16px;text-align:center"},
-    h("div",{style:"font-size:13px;color:#5A5648;margin-bottom:4px"},"MONTANT PROGRAMMÉ (total)"),
-    h("div",{style:"font-size:24px;font-weight:800;color:#9C7A2E"}, totalPrevu.toFixed(0)+" €")
-  ));
-  wrap.appendChild(summary);
-  const summary2 = h("div",{style:"display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px"});
-  summary2.appendChild(h("div",{class:"card",style:"padding:16px;text-align:center"},
-    h("div",{style:"font-size:13px;color:#5A5648;margin-bottom:4px"},"SÉANCES ENREGISTRÉES (total)"),
-    h("div",{style:"font-size:24px;font-weight:800;color:#2E2A20"}, String(totalSeances))
-  ));
-  wrap.appendChild(summary2);
-
-  wrap.appendChild(h("div",{style:"font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:12px"},"📅 Détail par mois"));
-
-  if (!moisTries.length) {
-    wrap.appendChild(h("p",{style:"color:#5A5648;font-size:13px;padding:20px 0;text-align:center"},
-      "Aucun paiement enregistré pour l'instant. Ajoute des paiements depuis la fiche de chaque client (onglet € Paiements)."));
-    return wrap;
+  // ── 6. DÉTAIL PAR MOIS (replié) ──
+  wrap.appendChild(titre("🗂️", "Détail par mois"));
+  if (!k.moisTries.length) {
+    wrap.appendChild(h("p", { style: "color:#5A5648;font-size:13px;padding:10px 0;text-align:center" },
+      "Aucun paiement enregistré pour l'instant. Ajoute des paiements depuis la fiche de chaque client (onglet « Paiements »)."));
+  } else {
+    const details = h("details", {});
+    details.appendChild(h("summary", { style: "cursor:pointer;font-size:13.5px;color:#9C7A2E;font-weight:600;padding:6px 0" }, "Afficher le détail des " + k.moisTries.length + " mois"));
+    k.moisTries.forEach(mk => {
+      const [y, m] = mk.split("-");
+      const data = k.detail[mk];
+      const card = h("div", { class: "card", style: "padding:14px 18px;margin-top:8px" });
+      card.appendChild(h("div", { style: "display:flex;justify-content:space-between;align-items:center" },
+        h("div", { style: "font-weight:700;font-size:14px;color:#2E2A20;text-transform:capitalize" }, MOIS_NOMS_FR[parseInt(m, 10) - 1] + " " + y),
+        h("div", { style: "font-size:12px;color:#5A5648" }, data.seances + " séance" + (data.seances > 1 ? "s" : ""))));
+      card.appendChild(h("div", { style: "display:flex;gap:20px;margin-top:8px" },
+        h("div", {}, h("div", { style: "font-size:12px;color:#5A5648" }, "ENCAISSÉ"), h("div", { style: "font-size:16px;font-weight:700;color:#4a9e6a" }, data.reel.toFixed(0) + " €")),
+        h("div", {}, h("div", { style: "font-size:12px;color:#5A5648" }, "PROGRAMMÉ (total)"), h("div", { style: "font-size:16px;font-weight:700;color:#9C7A2E" }, data.prevu.toFixed(0) + " €"))));
+      details.appendChild(card);
+    });
+    wrap.appendChild(details);
   }
 
-  moisTries.forEach(mk => {
-    const [y,m] = mk.split("-");
-    const label = MOIS_NOMS_FR[parseInt(m,10)-1] + " " + y;
-    const data = parMois[mk];
-    const card = h("div",{class:"card",style:"padding:16px 20px;margin-bottom:10px"});
-    card.appendChild(h("div",{style:"display:flex;justify-content:space-between;align-items:center"},
-      h("div",{style:"font-weight:700;font-size:14px;color:#2E2A20;text-transform:capitalize"}, label),
-      h("div",{style:"font-size:12px;color:#5A5648"}, data.seances + " séance" + (data.seances>1?"s":""))
-    ));
-    const bar = h("div",{style:"display:flex;gap:20px;margin-top:8px"});
-    bar.appendChild(h("div",{},
-      h("div",{style:"font-size:12px;color:#5A5648"},"ENCAISSÉ"),
-      h("div",{style:"font-size:16px;font-weight:700;color:#4a9e6a"}, data.reel.toFixed(0)+" €")
-    ));
-    bar.appendChild(h("div",{},
-      h("div",{style:"font-size:12px;color:#5A5648"},"PROGRAMMÉ (total)"),
-      h("div",{style:"font-size:16px;font-weight:700;color:#9C7A2E"}, data.prevu.toFixed(0)+" €")
-    ));
-    card.appendChild(bar);
-    wrap.appendChild(card);
-  });
-
-  wrap.appendChild(h("p",{style:"font-size:13.5px;color:#6B6355;margin-top:16px"},
-    "« Encaissé » = paiements marqués « payé » sur les fiches clients. « Programmé » = tous les paiements enregistrés, quel que soit leur statut."));
-
+  wrap.appendChild(h("p", { style: "color:#6B6355;font-size:12px;line-height:1.5;margin:18px 0 0" },
+    "Comment c'est calculé : « encaissé » = paiements au statut payé sur les fiches clients ; « programmé » = tous les paiements enregistrés, quel que soit leur statut. « Nouveaux clients » = premier rendez-vous ou paiement enregistré ce mois-ci. « Conversion » = clients ayant eu une séance découverte puis un autre rendez-vous ou un paiement. Plus tes paiements et motifs de rendez-vous sont renseignés, plus ces chiffres sont fiables."));
   return wrap;
 }
+
 
 function renderRdvTab() {
   const wrap = h("div",{});
@@ -6329,6 +6282,7 @@ const TABS = [
 
   // ── PÔLE : SUIVI CLIENTS ──
   {id:"clients",      icon:"◉", label:"Mes clients",              pole:"Suivi clients", cat:"Clients"},
+  {id:"pipeline",     icon:"🧲", label:"Pipeline commercial",      pole:"Suivi clients", cat:"Clients"},
   {id:"clairiere",    icon:"🧭", label:"La Clairière",             pole:"Suivi clients", cat:"Clients"},
   {id:"deroules",     icon:"📖", label:"Déroulés de séance",       pole:"Suivi clients", cat:"Préparer une séance"},
   {id:"bibliotheque", icon:"▣", label:"Bibliothèque coach",        pole:"Suivi clients", cat:"Préparer une séance"},
@@ -6338,8 +6292,7 @@ const TABS = [
   {id:"outils",       icon:"🛠️", label:"Outils Coaching",        pole:"Gestion", cat:"Coaching"},
   {id:"agenda",       icon:"🗓️", label:"Agenda",                  pole:"Gestion", cat:"Planning"},
   {id:"rdv",          icon:"📅", label:"Demandes RDV",             pole:"Gestion", cat:"Planning"},
-  {id:"finances",     icon:"💰", label:"Finances",                 pole:"Gestion", cat:"Finances"},
-  {id:"business",     icon:"📈", label:"Tableau de bord business", pole:"Gestion", cat:"Finances"},
+  {id:"finances",     icon:"💰", label:"Finances & Business",                 pole:"Gestion", cat:"Finances"},
   {id:"statistiques", icon:"📊", label:"Statistiques",             pole:"Gestion", cat:"Statistiques"},
   {id:"reglages",     icon:"⚙️", label:"Site internet & réglages", pole:"Gestion", cat:"Site internet"},
   {id:"notes",        icon:"◻", label:"Journal de bord",           pole:"Gestion", cat:"Administratif"},
@@ -7722,12 +7675,189 @@ function renderDashboard() {
   wrap.insertBefore(buildListeCoaches(), wrap.children[3] || null);
   wrap.appendChild(buildDiagnosticCard());
 wrap.appendChild(buildNettoyageCard());
+wrap.appendChild(buildSauvegardeCard());
   return wrap;
 }
 
 // ══════════════════════════════════════════
 //  CLIENTS
 // ══════════════════════════════════════════
+// ===== PIPELINE COMMERCIAL (brouillon hub) =====
+// Étapes : prospect -> découverte -> client -> terminé. Chaque étape correspond à un statut existant de l'app
+// (prospect/découverte = "prospect", client = "actif", terminé = "terminé") : aucune autre fonction n'est perturbée.
+const PIPELINE_ETAPES = [
+  { id: "prospect",   label: "Prospects",   emoji: "🌱", aide: "premier contact, pas encore de rendez-vous", status: "prospect" },
+  { id: "decouverte", label: "Découverte",  emoji: "☕", aide: "séance découverte planifiée ou faite",       status: "prospect" },
+  { id: "client",     label: "Clients",     emoji: "🤝", aide: "accompagnement en cours",                    status: "actif" },
+  { id: "termine",    label: "Terminés",    emoji: "✅", aide: "parcours terminé",                           status: "terminé" }
+];
+const PIPELINE_SOURCES = ["Google / recherche", "Bouche-à-oreille", "Réseaux sociaux", "Partenaire / prescripteur", "Site web", "Autre"];
+
+function pipelineEtape(c) {
+  if (c.status === "terminé") return "termine";
+  if (c.status === "prospect") return c.etape === "decouverte" ? "decouverte" : "prospect";
+  return "client";
+}
+
+function pipelineCalculer(clients) {
+  clients = clients || [];
+  const etapes = { prospect: [], decouverte: [], client: [], termine: [] };
+  const parSource = {};
+  clients.forEach(c => {
+    const e = pipelineEtape(c);
+    etapes[e].push(c);
+    const src = c.source || "Non renseignée";
+    const s = parSource[src] || (parSource[src] = { source: src, total: 0, clients: 0, ca: 0 });
+    s.total++;
+    if (e === "client" || e === "termine") s.clients++;
+    (c.paiements || []).forEach(p => { if (p && p.statut === "payé") s.ca += Number(p.montant) || 0; });
+  });
+  const sources = Object.values(parSource).sort((a, b) => b.ca - a.ca || b.total - a.total);
+  const devenus = etapes.client.length + etapes.termine.length;
+  return { etapes, sources, total: clients.length, devenusClients: devenus, conversionGlobale: clients.length ? Math.round(devenus / clients.length * 100) : null };
+}
+
+function pipelineDeplacer(c, etapeId) {
+  const e = PIPELINE_ETAPES.find(x => x.id === etapeId);
+  if (!e) return;
+  c.etape = etapeId; c.status = e.status;
+  try { save(); } catch (err) {}
+  ClientsManager.saveClient(c.id, { etape: c.etape, status: c.status });
+}
+
+function renderPipelineTab() {
+  const wrap = h("div", { class: "page-wrap" });
+  const k = pipelineCalculer(state.clients);
+  const eur = n => Math.round(n).toLocaleString("fr-FR") + " €";
+  const ouvrir = id => setState({ tab: "clients", selClientId: id, subTab: "fiche" });
+  const styleChamp = "width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid #E4DAC0;border-radius:8px;font-size:16px;background:#fff";
+
+  wrap.appendChild(h("h3", { style: "font-size:20px;color:#2E2A20;font-weight:600;margin:0 0 4px;font-style:italic" }, "Pipeline commercial"));
+  wrap.appendChild(h("p", { style: "color:#6B6355;font-size:13px;margin:0 0 14px;line-height:1.45" }, "Suis chaque personne de son premier contact jusqu'à la fin de son parcours, et vois d'où viennent tes clients."));
+
+  // Entonnoir
+  const entonnoir = h("div", { style: "display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px" });
+  PIPELINE_ETAPES.forEach(e => entonnoir.appendChild(h("div", { class: "card", style: "padding:12px 8px;text-align:center" },
+    h("div", { style: "font-size:20px" }, e.emoji),
+    h("div", { style: "font-size:24px;font-weight:800;color:#9C7A2E" }, String(k.etapes[e.id].length)),
+    h("div", { style: "font-size:12px;color:#5A5648" }, e.label))));
+  wrap.appendChild(entonnoir);
+  if (k.conversionGlobale !== null) wrap.appendChild(h("div", { style: "font-size:12.5px;color:#5A5648;margin-top:8px" }, k.devenusClients + " contact(s) sur " + k.total + " sont devenus clients (" + k.conversionGlobale + " %)."));
+
+  // Nouveau prospect
+  const formZone = h("div", { style: "margin-top:14px" });
+  const btnAjout = h("button", { class: "btn" }, "+ Nouveau prospect");
+  let formOuvert = false;
+  btnAjout.addEventListener("click", () => {
+    formOuvert = !formOuvert; formZone.innerHTML = "";
+    btnAjout.textContent = formOuvert ? "✕ Fermer" : "+ Nouveau prospect";
+    if (!formOuvert) return;
+    const f = h("div", { class: "card", style: "padding:14px 16px;margin-top:10px;display:grid;gap:10px" });
+    const nom = h("input", { type: "text", placeholder: "Prénom et nom *", style: styleChamp });
+    const contact = h("input", { type: "text", placeholder: "E-mail ou téléphone (facultatif)", style: styleChamp });
+    const objectif = h("input", { type: "text", placeholder: "Besoin exprimé (facultatif)", style: styleChamp });
+    const source = h("select", { style: styleChamp }, h("option", { value: "" }, "Source : comment t'a-t-il/elle connu ?"), ...PIPELINE_SOURCES.map(s => h("option", { value: s }, s)));
+    const ok = h("button", { class: "btn" }, "Ajouter au pipeline");
+    ok.addEventListener("click", () => {
+      const n = nom.value.trim();
+      if (!n) { alert("Indique au moins un nom."); return; }
+      const ct = contact.value.trim();
+      const c = { id: Date.now() + "", name: n, profile: "À définir", age: "", objective: objectif.value.trim(), nextSession: "", notes: "",
+        status: "prospect", etape: "prospect", source: source.value, email: ct.indexOf("@") > -1 ? ct : "", tel: ct && ct.indexOf("@") === -1 ? ct : "",
+        sessions: 0, sessionHistory: [], objectifs: [], entretiens: [] };
+      state.clients.push(c);
+      try { save(); } catch (err) {}
+      ClientsManager.saveClient(c.id, c);
+      notifCoach("🌱 Prospect ajouté : " + n);
+      setState({ tab: "pipeline" });
+    });
+    f.appendChild(nom); f.appendChild(contact); f.appendChild(objectif); f.appendChild(source); f.appendChild(ok);
+    formZone.appendChild(f);
+  });
+  wrap.appendChild(h("div", { style: "margin-top:14px" }, btnAjout));
+  wrap.appendChild(formZone);
+
+  // Colonnes (prospects et découverte ouverts ; clients et terminés repliés)
+  const carte = (c, idx) => {
+    const e = pipelineEtape(c);
+    const card = h("div", { class: "card", style: "padding:12px 14px;margin-top:8px" });
+    const nomEl = h("div", { style: "font-size:14px;font-weight:700;color:#2E2A20;cursor:pointer" }, c.name);
+    nomEl.addEventListener("click", () => ouvrir(c.id));
+    card.appendChild(nomEl);
+    const info = c.objective || c.email || c.tel || "";
+    if (info) card.appendChild(h("div", { style: "font-size:12.5px;color:#5A5648;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" }, info));
+    if (c.nextSession) card.appendChild(h("div", { style: "font-size:12px;color:#9C7A2E;margin-top:2px" }, "Prochain RDV : " + c.nextSession));
+    const src = h("select", { style: "margin-top:8px;padding:6px 8px;border:1px solid #E4DAC0;border-radius:8px;font-size:14px;background:#fff;max-width:100%" },
+      h("option", { value: "" }, "Source : non renseignée"), ...PIPELINE_SOURCES.map(s => h("option", { value: s }, s)));
+    src.value = c.source || "";
+    src.addEventListener("change", () => {
+      c.source = src.value;
+      try { save(); } catch (err) {}
+      ClientsManager.saveClient(c.id, { source: c.source });
+    });
+    card.appendChild(src);
+    const actions = h("div", { style: "display:flex;gap:6px;flex-wrap:wrap;margin-top:8px" });
+    const i = PIPELINE_ETAPES.findIndex(x => x.id === e);
+    const bouton = (lib, cible) => { const b = h("button", { class: "btn-g", style: "font-size:12.5px;padding:6px 10px" }, lib); b.addEventListener("click", () => { pipelineDeplacer(c, cible); setState({ tab: "pipeline" }); }); return b; };
+    if (e === "termine") actions.appendChild(bouton("↩ Réactiver", "client"));
+    else {
+      if (i > 0) actions.appendChild(bouton("← " + PIPELINE_ETAPES[i - 1].label, PIPELINE_ETAPES[i - 1].id));
+      actions.appendChild(bouton("→ " + PIPELINE_ETAPES[i + 1].label, PIPELINE_ETAPES[i + 1].id));
+    }
+    card.appendChild(actions);
+    return card;
+  };
+  PIPELINE_ETAPES.forEach(e => {
+    const liste = k.etapes[e.id];
+    const ouvertParDefaut = e.id === "prospect" || e.id === "decouverte";
+    const bloc = h("details", { style: "margin-top:18px" });
+    if (ouvertParDefaut) bloc.setAttribute("open", "");
+    bloc.appendChild(h("summary", { style: "cursor:pointer;font-weight:700;font-size:15px;color:#2E2A20;padding:4px 0" }, e.emoji + " " + e.label + " (" + liste.length + ")", h("span", { style: "font-weight:400;font-size:12px;color:#6B6355;margin-left:8px" }, e.aide)));
+    if (!liste.length) bloc.appendChild(h("div", { style: "font-size:13px;color:#5A5648;padding:6px 0" }, e.id === "prospect" ? "Aucun prospect pour l'instant. Ajoute le premier ci-dessus." : "Personne à cette étape."));
+    liste.forEach(c => bloc.appendChild(carte(c)));
+    wrap.appendChild(bloc);
+  });
+
+  // D'où viennent les clients
+  const sc = h("div", { class: "card", style: "padding:14px 16px;margin-top:22px" });
+  sc.appendChild(h("div", { style: "font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:8px" }, "🧭 D'où viennent tes clients ?"));
+  const maxCa = Math.max.apply(null, k.sources.map(s => s.ca).concat([1]));
+  if (!k.sources.length) sc.appendChild(h("div", { style: "font-size:13px;color:#5A5648" }, "Pas encore de données."));
+  k.sources.forEach(s => {
+    const bg = h("div", { style: "background:#E4DAC0;border-radius:5px;height:7px;overflow:hidden;margin-top:4px" });
+    bg.appendChild(h("div", { style: "background:#9C7A2E;height:100%;width:" + Math.round(s.ca / maxCa * 100) + "%" }));
+    sc.appendChild(h("div", { style: "padding:7px 0;border-top:1px solid #EFE7D2" },
+      h("div", { style: "display:flex;justify-content:space-between;gap:10px;font-size:13.5px;color:#2E2A20" }, h("span", { style: "font-weight:600" }, s.source), h("span", {}, eur(s.ca) + " encaissés")),
+      h("div", { style: "font-size:12px;color:#5A5648" }, s.total + " contact(s) · " + s.clients + " devenu(s) client(s)"), bg));
+  });
+  wrap.appendChild(sc);
+  wrap.appendChild(h("p", { style: "color:#6B6355;font-size:12px;line-height:1.5;margin:14px 0 0" }, "Prospect et découverte = statut « prospect » (ils ne comptent pas dans les clients actifs). Passer à « Clients » les rend actifs ; « Terminés » les archive. Les nouvelles demandes de rendez-vous du site sont marquées « Site web »."));
+  return wrap;
+}
+
+// ===== SAUVEGARDE COMPLÈTE (protection des données) =====
+function sauvegardeContenu(etat, reglages) {
+  const copie = x => x === undefined ? null : JSON.parse(JSON.stringify(x));
+  return { type: "sauvegarde-coachingstudio", version: 1, date: new Date().toISOString(), clients: copie(etat.clients) || [], rendezVous: copie(etat.appointments) || [], reglages: copie(reglages) };
+}
+
+function buildSauvegardeCard() {
+  const card = h("div", { style: "border:1px solid #E4DAC0;border-radius:12px;padding:14px 16px;margin-top:14px;background:#FFFDF7" });
+  card.appendChild(h("div", { style: "font-weight:700;color:#2E2A20;font-size:14px" }, "💾 Sauvegarde complète"));
+  card.appendChild(h("div", { style: "font-size:13.5px;color:#5A5648;margin:6px 0 10px;line-height:1.45" }, "Télécharge une copie de tous tes clients, paiements, notes et rendez-vous. ⚠️ Ce fichier contient des données personnelles sensibles : range-le dans un endroit sûr et ne l'envoie à personne."));
+  const b = h("button", { class: "btn" }, "Télécharger la sauvegarde (JSON)");
+  b.addEventListener("click", () => {
+    const blob = new Blob([JSON.stringify(sauvegardeContenu(state, CoachSettings.data), null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "sauvegarde-coachingstudio-" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+  card.appendChild(b);
+  return card;
+}
+
 function renderClients() {
   if (state.selClientId) return renderClientDetail();
   return renderClientList();
@@ -7757,12 +7887,26 @@ function renderClientList() {
   hdr.appendChild(addBtn);
   wrap.appendChild(hdr);
 
-  // Liste
-  const list = h("div",{style:"display:grid;gap:10px"});
-  if (!state.clients.length) {
-    list.appendChild(h("div",{class:"card",style:"padding:48px;text-align:center;color:#6B6355;font-size:14px"},"Aucun client. Ajoutez le premier ci-dessus."));
-  } else {
-    state.clients.forEach(c => {
+  // Recherche + filtres
+  const norm = t => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const FILTRES = [["actuels", "Actuels"], ["prospect", "Prospects"], ["actif", "En cours"], ["pause", "En pause"], ["terminé", "Terminés"], ["tous", "Tous"]];
+  const correspond = (c, f) => f === "tous" ? true : f === "actuels" ? c.status !== "terminé" : c.status === f;
+  let recherche = "", filtre = "actuels";
+  const champ = h("input", { type: "search", placeholder: "🔎 Rechercher un nom, un objectif, un e-mail…", style: "width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #E4DAC0;border-radius:10px;font-size:16px;margin-bottom:10px" });
+  const barre = h("div", { style: "display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px" });
+  const list = h("div", { style: "display:grid;gap:10px" });
+  function dessiner() {
+    barre.innerHTML = ""; list.innerHTML = "";
+    FILTRES.forEach(([id, lib]) => {
+      const n = state.clients.filter(c => correspond(c, id)).length;
+      const b = h("button", { class: id === filtre ? "btn" : "btn-g", style: "font-size:12.5px;padding:6px 11px" }, lib + " (" + n + ")");
+      b.addEventListener("click", () => { filtre = id; dessiner(); });
+      barre.appendChild(b);
+    });
+    const q = norm(recherche).trim();
+    const vus = state.clients.filter(c => correspond(c, filtre) && (!q || norm([c.name, c.objective, c.email, c.tel, c.profile].join(" ")).indexOf(q) > -1));
+    if (!vus.length) list.appendChild(h("div", { class: "card", style: "padding:28px;text-align:center;color:#6B6355;font-size:14px" }, "Aucun client ne correspond."));
+    vus.forEach(c => {
       const row = h("div",{class:"card client-row"},
         avatar(c.name,c.profile),
         h("div",{style:"flex:1;min-width:0"},
@@ -7782,6 +7926,13 @@ function renderClientList() {
       row.addEventListener("click",()=>setState({selClientId:c.id,subTab:"fiche"}));
       list.appendChild(row);
     });
+  }
+  if (!state.clients.length) {
+    list.appendChild(h("div",{class:"card",style:"padding:48px;text-align:center;color:#6B6355;font-size:14px"},"Aucun client. Ajoutez le premier ci-dessus."));
+  } else {
+    champ.addEventListener("input", () => { recherche = champ.value; dessiner(); });
+    wrap.appendChild(champ); wrap.appendChild(barre);
+    dessiner();
   }
   wrap.appendChild(list);
   return wrap;
@@ -9422,9 +9573,9 @@ function renderNow() {
   let content;
   if (state.tab==="dashboard")    content = renderDashboard();
   else if (state.tab==="clients") content = renderClients();
+  else if (state.tab==="pipeline") content = renderPipelineTab();
   else if (state.tab==="agenda") content = renderAgendaTab();
   else if (state.tab==="finances") content = renderFinancesTab();
-  else if (state.tab==="business") content = renderBusinessTab();
   else if (state.tab==="exercices") content = renderExercicesTab();
   else if (state.tab==="statistiques") content = renderStatistiquesTab();
   else if (state.tab==="clairiere") content = renderClairiereTab();
