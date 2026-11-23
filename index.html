@@ -8054,7 +8054,7 @@ function renderClientDetail() {
 
   // Subtabs
   const stabs = h("div",{class:"subtabs"});
-  [["fiche","◈ Fiche"],["temps","🕒 Fil du temps"],["protocole","🧭 Protocole"],["parcours","🧗 Parcours"],["paiements","€ Paiements"],["notes-c","◻ Notes"]].forEach(([id,lbl])=>{
+  [["fiche","◈ Fiche"],["temps","🕒 Fil du temps"],["protocole","🧭 Protocole"],["parcours","🧗 Parcours"],["bilan","📈 Bilan"],["paiements","€ Paiements"],["notes-c","◻ Notes"]].forEach(([id,lbl])=>{
     const b = h("button",{class:"subtab"+(state.subTab===id?" active":"")},lbl);
     b.addEventListener("click",()=>{ state.subTab=id; render(); });
     stabs.appendChild(b);
@@ -8067,6 +8067,7 @@ function renderClientDetail() {
   if (state.subTab==="temps")     content.appendChild(buildTimelineClient(c));
   if (state.subTab==="protocole") content.appendChild(buildProtocole(c));
   if (state.subTab==="parcours")  content.appendChild(buildParcours(c));
+  if (state.subTab==="bilan")     content.appendChild(buildBilan(c));
   if (state.subTab==="paiements") content.appendChild(buildPaiements(c));
   if (state.subTab==="notes-c")   content.appendChild(buildNotesClient(c));
   box.appendChild(content);
@@ -8809,6 +8810,196 @@ function buildEchangesThread(c, author) {
   wrap.appendChild(inputRow);
   return wrap;
 }
+
+// ===== BILAN DE PROGRESSION : éléments communs (coach + portail) =====
+const BILAN_TYPES = { "mi-parcours": "Bilan de mi-parcours", "final": "Bilan final", "point": "Point d'étape" };
+const BILAN_RECO = { "poursuivre": "Poursuivre le parcours", "ajuster": "Ajuster les objectifs", "cloturer": "Clôturer : objectifs atteints", "pause": "Faire une pause" };
+function bilanEsc(s) { return String(s === undefined || s === null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
+function bilanDateFr(iso) { try { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }); } catch (e) { return ""; } }
+function bilanNombre(n) { return n === null || n === undefined ? "—" : String(n).replace(".", ","); }
+
+// Courbe énergie / charge mentale (1 à 5). Couleurs passées en paramètre (valeurs ou variables CSS).
+function bilanGraphiqueSvg(serie, couleurs) {
+  serie = (serie || []).filter(x => x && (x.energie || x.charge));
+  if (serie.length < 2) return "";
+  const c = couleurs || { energie: "#2F7D3B", charge: "#B8651B" }, W = 320, H = 120, P = 12;
+  const x = i => P + i * (W - 2 * P) / (serie.length - 1), y = v => H - P - (Math.min(5, Math.max(1, v)) - 1) / 4 * (H - 2 * P);
+  const ligne = (cle, couleur) => {
+    const pts = serie.map((s, i) => s[cle] ? [x(i), y(Number(s[cle]))] : null).filter(Boolean);
+    if (pts.length < 2) return "";
+    return '<polyline points="' + pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ") + '" style="fill:none;stroke:' + couleur + ';stroke-width:2.5;stroke-linejoin:round"/>'
+      + pts.map(p => '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="3" style="fill:' + couleur + '"/>').join("");
+  };
+  const grille = [1, 3, 5].map(v => '<line x1="' + P + '" x2="' + (W - P) + '" y1="' + y(v).toFixed(1) + '" y2="' + y(v).toFixed(1) + '" style="stroke:' + (couleurs && couleurs.grille || "#D8CBA8") + ';stroke-width:1;stroke-dasharray:3 3"/>').join("");
+  return '<svg viewBox="0 0 ' + W + " " + H + '" width="100%" role="img" aria-label="Évolution de l\'énergie et de la charge mentale, de 1 à 5" style="max-width:420px">' + grille + ligne("charge", c.charge) + ligne("energie", c.energie) + "</svg>"
+    + '<div style="font-size:12.5px;margin-top:2px"><span style="color:' + c.energie + ';font-weight:700">● Énergie</span> &nbsp; <span style="color:' + c.charge + ';font-weight:700">● Charge mentale</span> &nbsp; <span style="opacity:.75">(échelle de 1 à 5)</span></div>';
+}
+
+// Document imprimable / enregistrable en PDF (mêmes contenus côté coach et côté coaché).
+function bilanHtmlImprimable(nom, b) {
+  const m = b.mesures || {}, ck = m.checkins || {}, obj = m.objectifs || [];
+  const bloc = (titre, texte) => texte && String(texte).trim() ? "<h2>" + bilanEsc(titre) + "</h2><p>" + bilanEsc(texte).replace(/\n/g, "<br>") + "</p>" : "";
+  const chiffre = (lib, val) => '<div class="k"><div class="kl">' + bilanEsc(lib) + '</div><div class="kv">' + val + "</div></div>";
+  const evo = (a, z) => a === null || a === undefined || z === null || z === undefined ? "" : bilanNombre(a) + " → " + bilanNombre(z);
+  const kpis = [chiffre("Séances suivies", bilanEsc(m.seances === undefined ? "—" : m.seances)),
+    m.exercices && m.exercices.total ? chiffre("Exercices réalisés", bilanEsc(m.exercices.faits) + " / " + bilanEsc(m.exercices.total)) : "",
+    m.phases && m.phases.total ? chiffre("Étapes du parcours", bilanEsc(m.phases.faites) + " / " + bilanEsc(m.phases.total)) : "",
+    m.progressionMoyenne !== null && m.progressionMoyenne !== undefined ? chiffre("Progression des objectifs", bilanEsc(m.progressionMoyenne) + " %") : "",
+    evo(ck.energieDebut, ck.energieRecent) ? chiffre("Énergie (début → récent)", bilanEsc(evo(ck.energieDebut, ck.energieRecent)) + " / 5") : "",
+    evo(ck.chargeDebut, ck.chargeRecent) ? chiffre("Charge mentale (début → récent)", bilanEsc(evo(ck.chargeDebut, ck.chargeRecent)) + " / 5") : ""].join("");
+  const objectifs = obj.length ? "<h2>Objectifs</h2>" + obj.map(o => '<div class="o"><div>' + bilanEsc(o.titre) + ' <b>' + bilanEsc(o.progression) + ' %</b></div><div class="bar"><div style="width:' + Math.max(0, Math.min(100, Number(o.progression) || 0)) + '%"></div></div></div>').join("") : "";
+  const graph = bilanGraphiqueSvg(ck.serie, { energie: "#2F7D3B", charge: "#B8651B", grille: "#D8CBA8" });
+  const periode = m.debut ? "Suivi depuis le " + bilanDateFr(m.debut) + (m.jours ? " (" + m.jours + " jours)" : "") : "";
+  return '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + bilanEsc((BILAN_TYPES[b.type] || "Bilan") + " – " + nom) + "</title><style>"
+    + "body{font-family:Georgia,'Times New Roman',serif;color:#2E2A20;background:#fff;max-width:760px;margin:0 auto;padding:24px 18px 40px;line-height:1.6;font-size:16px}"
+    + "h1{font-size:24px;margin:0 0 4px}h2{font-size:17px;margin:24px 0 6px;color:#7A5C1A;border-bottom:1px solid #D8CBA8;padding-bottom:4px}p{margin:6px 0}"
+    + ".sub{color:#5A5648;font-size:14px}.ks{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.k{border:1px solid #D8CBA8;border-radius:10px;padding:8px 12px;min-width:130px}.kl{font-size:12.5px;color:#5A5648}.kv{font-size:20px;font-weight:700;color:#7A5C1A}"
+    + ".o{margin:8px 0;font-size:15px}.bar{background:#E4DAC0;border-radius:6px;height:9px;overflow:hidden;margin-top:3px}.bar div{background:#7A5C1A;height:100%}"
+    + ".pied{margin-top:34px;padding-top:10px;border-top:1px solid #D8CBA8;font-size:12.5px;color:#5A5648}.imp{margin:0 0 16px}"
+    + "@media print{.imp{display:none}body{padding:0}h2{break-after:avoid}.o,.k{break-inside:avoid}}</style></head><body>"
+    + '<div class="imp"><button onclick="window.print()" style="font-size:16px;padding:10px 16px;border-radius:10px;border:1px solid #7A5C1A;background:#7A5C1A;color:#fff;cursor:pointer">🖨️ Imprimer / enregistrer en PDF</button></div>'
+    + "<h1>" + bilanEsc(BILAN_TYPES[b.type] || "Bilan de progression") + "</h1><div class=\"sub\">" + bilanEsc(nom) + " · " + bilanEsc(bilanDateFr(b.date)) + (periode ? " · " + bilanEsc(periode) : "") + "</div>"
+    + '<div class="ks">' + kpis + "</div>" + (graph ? "<h2>Énergie et charge mentale</h2>" + graph : "") + objectifs
+    + bloc("Ce qui a changé", b.constats) + bloc("Points forts", b.pointsForts) + bloc("Axes de travail et prochaines étapes", b.axes)
+    + (b.recommandation && BILAN_RECO[b.recommandation] ? "<h2>Recommandation</h2><p>" + bilanEsc(BILAN_RECO[b.recommandation]) + "</p>" : "")
+    + (b.citation && String(b.citation).trim() && b.citationAutorisee ? "<h2>Parole du coaché</h2><p><i>« " + bilanEsc(b.citation) + " »</i></p>" : "")
+    + '<div class="pied">Document confidentiel établi dans le cadre d\'un accompagnement de coaching professionnel. Il ne constitue ni un diagnostic ni un avis médical ou psychologique.</div></body></html>';
+}
+function bilanOuvrirImpression(nom, b) {
+  const w = window.open("", "_blank");
+  if (!w) { alert("Ton navigateur a bloqué la fenêtre. Autorise les pop-ups pour ce site, puis réessaie."); return false; }
+  w.document.open(); w.document.write(bilanHtmlImprimable(nom, b)); w.document.close();
+  setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 500);
+  return true;
+}
+// ===== FIN BILAN COMMUN =====
+
+// ===== BILAN DE PROGRESSION : côté coach =====
+// Les mesures sont calculées à partir de ce qui existe déjà (check-ins, parcours, exercices, séances) : aucune ressaisie.
+function bilanMesures(c, rdvs, maintenant) {
+  maintenant = maintenant || new Date();
+  const jour = x => String(x).slice(0, 10), auj = jour(maintenant.toISOString());
+  const dates = [];
+  (rdvs || []).forEach(r => { if (r && r.clientId === c.id && r.date) dates.push(jour(r.date)); });
+  (c.paiements || []).forEach(p => { if (p && p.date) dates.push(jour(p.date)); });
+  dates.sort();
+  const debut = dates[0] || null;
+  const jours = debut ? Math.max(0, Math.floor((new Date(auj + "T00:00:00") - new Date(debut + "T00:00:00")) / 86400000)) : null;
+  const ex = c.exercices || [], par = c.parcours || {}, ph = par.phases || [];
+  const objectifs = (par.objectifs || []).map(o => ({ titre: o.titre || "", progression: Math.max(0, Math.min(100, Math.round(Number(o.progression) || 0))) }));
+  const ck = (c.checkins || []).filter(x => x && x.date).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const moy = (arr, cle) => { const v = arr.map(x => Number(x[cle])).filter(n => n >= 1 && n <= 5); return v.length ? Math.round(v.reduce((a, n) => a + n, 0) / v.length * 10) / 10 : null; };
+  const k = ck.length >= 2 ? Math.min(3, Math.floor(ck.length / 2)) : 0;
+  const premiers = k ? ck.slice(0, k) : [], recents = k ? ck.slice(-k) : [];
+  return {
+    date: maintenant.toISOString(), debut, jours, seances: Number(c.sessions) || 0,
+    exercices: { faits: ex.filter(e => e && e.done).length, total: ex.length },
+    phases: { faites: ph.filter(p => p && p.done).length, total: ph.length },
+    objectifs, progressionMoyenne: objectifs.length ? Math.round(objectifs.reduce((a, o) => a + o.progression, 0) / objectifs.length) : null,
+    checkins: { n: ck.length, energieDebut: moy(premiers, "energie"), energieRecent: moy(recents, "energie"), chargeDebut: moy(premiers, "charge"), chargeRecent: moy(recents, "charge"),
+      serie: ck.slice(-30).map(x => ({ energie: Number(x.energie) || null, charge: Number(x.charge) || null })) }
+  };
+}
+function bilanEvolution(prec, m) {
+  if (!prec || !m) return [];
+  const sg = n => (n > 0 ? "+" : "") + String(n).replace(".", ",");
+  const out = [];
+  if (m.progressionMoyenne !== null && prec.progressionMoyenne !== null && prec.progressionMoyenne !== undefined) out.push("Objectifs : " + sg(m.progressionMoyenne - prec.progressionMoyenne) + " points");
+  if (m.seances !== undefined && prec.seances !== undefined) out.push("Séances : " + sg(m.seances - prec.seances));
+  if (m.exercices && prec.exercices) out.push("Exercices réalisés : " + sg(m.exercices.faits - prec.exercices.faits));
+  const e1 = m.checkins && m.checkins.energieRecent, e0 = prec.checkins && prec.checkins.energieRecent;
+  if (e1 !== null && e1 !== undefined && e0 !== null && e0 !== undefined) out.push("Énergie : " + sg(Math.round((e1 - e0) * 10) / 10));
+  return out;
+}
+
+const _bilanBrouillons = {};   // le brouillon survit aux rafraîchissements automatiques de l'écran
+function buildBilan(c) {
+  const wrap = h("div", {});
+  const brouillon = _bilanBrouillons[c.id] || (_bilanBrouillons[c.id] = { type: "mi-parcours", constats: "", pointsForts: "", axes: "", recommandation: "poursuivre", citation: "", citationAutorisee: false, partage: false });
+  const m = bilanMesures(c, state.appointments, new Date()), ck = m.checkins;
+  const liste = (c.bilans || []).slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+  const carte = (extra) => h("div", { class: "card", style: "padding:16px 18px;margin-bottom:14px;" + (extra || "") });
+  const styleChamp = "width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #E4DAC0;border-radius:10px;font-size:16px;font-family:inherit;line-height:1.45";
+
+  wrap.appendChild(h("p", { style: "color:#6B6355;font-size:13px;line-height:1.5;margin:0 0 14px" }, "Un bilan résume l'évolution de " + c.name + " à partir de ce qui est déjà dans l'app. Tu ajoutes ton regard de coach, tu l'enregistres, puis tu peux l'imprimer en PDF ou le partager dans son espace."));
+
+  // Mesures du moment
+  const mes = carte();
+  mes.appendChild(h("div", { style: "font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:8px" }, "📊 Où en est " + c.name + " aujourd'hui"));
+  const grille = h("div", { style: "display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px" });
+  const k = (lib, val, sous) => h("div", { style: "border:1px solid #E4DAC0;border-radius:10px;padding:9px 11px" }, h("div", { style: "font-size:11.5px;color:#5A5648;text-transform:uppercase;letter-spacing:.03em" }, lib), h("div", { style: "font-size:19px;font-weight:700;color:#7A5C1A" }, val), sous ? h("div", { style: "font-size:12px;color:#6B6355" }, sous) : null);
+  grille.appendChild(k("Séances suivies", String(m.seances), m.debut ? "depuis le " + bilanDateFr(m.debut) : ""));
+  grille.appendChild(k("Exercices", m.exercices.faits + " / " + m.exercices.total, "réalisés / envoyés"));
+  grille.appendChild(k("Étapes du parcours", m.phases.faites + " / " + m.phases.total, ""));
+  grille.appendChild(k("Objectifs", m.progressionMoyenne === null ? "—" : m.progressionMoyenne + " %", m.objectifs.length + " objectif(s)"));
+  grille.appendChild(k("Énergie", ck.energieRecent === null ? "—" : bilanNombre(ck.energieDebut) + " → " + bilanNombre(ck.energieRecent), ck.n + " check-in(s)"));
+  grille.appendChild(k("Charge mentale", ck.chargeRecent === null ? "—" : bilanNombre(ck.chargeDebut) + " → " + bilanNombre(ck.chargeRecent), "échelle de 1 à 5"));
+  mes.appendChild(grille);
+  const svg = bilanGraphiqueSvg(ck.serie, { energie: "#2F7D3B", charge: "#B8651B", grille: "#D8CBA8" });
+  if (svg) { const g = h("div", { style: "margin-top:12px" }); g.innerHTML = svg; mes.appendChild(g); }
+  else mes.appendChild(h("div", { style: "font-size:12.5px;color:#6B6355;margin-top:10px" }, "La courbe apparaîtra dès que le coaché aura rempli au moins 2 check-ins dans son espace."));
+  m.objectifs.forEach(o => {
+    const bg = h("div", { style: "background:#E4DAC0;border-radius:6px;height:8px;overflow:hidden;margin-top:3px" });
+    bg.appendChild(h("div", { style: "background:#7A5C1A;height:100%;width:" + o.progression + "%" }));
+    mes.appendChild(h("div", { style: "margin-top:10px;font-size:13.5px;color:#2E2A20" }, o.titre + " — " + o.progression + " %", bg));
+  });
+  if (m.objectifs.length) mes.appendChild(h("div", { style: "font-size:12px;color:#6B6355;margin-top:8px" }, "Ajuste la progression de chaque objectif dans l'onglet « Parcours » avant d'enregistrer le bilan."));
+  const prec = liste[0];
+  if (prec && prec.mesures) { const evo = bilanEvolution(prec.mesures, m); if (evo.length) mes.appendChild(h("div", { style: "margin-top:12px;padding:9px 12px;background:#9C7A2E14;border-radius:10px;font-size:13px;color:#2E2A20" }, "Depuis le dernier bilan (" + bilanDateFr(prec.date) + ") : " + evo.join(" · "))); }
+  wrap.appendChild(mes);
+
+  // Regard du coach
+  const form = carte();
+  form.appendChild(h("div", { style: "font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:10px" }, "✍️ Ton regard de coach"));
+  const sel = h("select", { style: styleChamp }, ...Object.keys(BILAN_TYPES).map(id => h("option", { value: id }, BILAN_TYPES[id])));
+  sel.value = brouillon.type; sel.addEventListener("change", () => { brouillon.type = sel.value; });
+  form.appendChild(lbl("TYPE DE BILAN")); form.appendChild(sel);
+  const zone = (cle, etiquette, aide) => { const t = h("textarea", { rows: "4", placeholder: aide, style: styleChamp + ";margin-top:4px" }); t.value = brouillon[cle]; t.addEventListener("input", () => { brouillon[cle] = t.value; }); form.appendChild(h("div", { style: "margin-top:12px" }, lbl(etiquette), t)); };
+  zone("constats", "CE QUI A CHANGÉ DEPUIS LE DÉBUT", "Les évolutions observées, concrètes et factuelles…");
+  zone("pointsForts", "POINTS FORTS OBSERVÉS", "Ressources, réussites, ce qui fonctionne bien…");
+  zone("axes", "AXES DE TRAVAIL ET PROCHAINES ÉTAPES", "Ce qu'il reste à explorer, les prochains pas…");
+  const reco = h("select", { style: styleChamp }, ...Object.keys(BILAN_RECO).map(id => h("option", { value: id }, BILAN_RECO[id])));
+  reco.value = brouillon.recommandation; reco.addEventListener("change", () => { brouillon.recommandation = reco.value; });
+  form.appendChild(h("div", { style: "margin-top:12px" }, lbl("RECOMMANDATION"), reco));
+  const cit = h("textarea", { rows: "2", placeholder: "Une phrase du coaché, avec ses mots (facultatif)…", style: styleChamp + ";margin-top:4px" }); cit.value = brouillon.citation; cit.addEventListener("input", () => { brouillon.citation = cit.value; });
+  const cbCit = h("input", { type: "checkbox" }); cbCit.checked = brouillon.citationAutorisee; cbCit.addEventListener("change", () => { brouillon.citationAutorisee = cbCit.checked; });
+  form.appendChild(h("div", { style: "margin-top:12px" }, lbl("PAROLE DU COACHÉ (FACULTATIF)"), cit, h("label", { style: "display:flex;gap:8px;align-items:flex-start;margin-top:6px;font-size:13px;color:#5A5648;cursor:pointer" }, cbCit, "Le coaché m'a autorisé à reprendre cette phrase dans son bilan. Sans cette case, elle n'apparaît pas.")));
+  const cbPart = h("input", { type: "checkbox" }); cbPart.checked = brouillon.partage; cbPart.addEventListener("change", () => { brouillon.partage = cbPart.checked; });
+  form.appendChild(h("label", { style: "display:flex;gap:8px;align-items:flex-start;margin-top:14px;font-size:14px;color:#2E2A20;cursor:pointer" }, cbPart, "Rendre ce bilan visible dans l'espace du coaché"));
+  const actions = h("div", { style: "display:flex;gap:8px;flex-wrap:wrap;margin-top:14px" });
+  const brut = () => Object.assign({}, brouillon, { id: "b_" + Date.now(), date: new Date().toISOString(), mesures: bilanMesures(c, state.appointments, new Date()) });
+  const bSave = h("button", { class: "btn" }, "💾 Enregistrer le bilan");
+  bSave.addEventListener("click", () => {
+    if (!String(brouillon.constats).trim() && !String(brouillon.pointsForts).trim() && !String(brouillon.axes).trim() && !confirm("Aucun texte n'est rempli : enregistrer un bilan avec les seuls chiffres ?")) return;
+    c.bilans = (c.bilans || []).concat([brut()]);
+    try { save(); } catch (e) {}
+    ClientsManager.saveClient(c.id, { bilans: c.bilans });
+    delete _bilanBrouillons[c.id]; notifCoach("📈 Bilan enregistré"); render();
+  });
+  const bPrev = h("button", { class: "btn-g" }, "🖨️ Aperçu / PDF"); bPrev.addEventListener("click", () => bilanOuvrirImpression(c.name, brut()));
+  actions.appendChild(bSave); actions.appendChild(bPrev); form.appendChild(actions);
+  wrap.appendChild(form);
+
+  // Historique
+  const histo = carte();
+  histo.appendChild(h("div", { style: "font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:6px" }, "🗂️ Bilans enregistrés (" + liste.length + ")"));
+  if (!liste.length) histo.appendChild(h("div", { style: "font-size:13px;color:#5A5648" }, "Aucun bilan pour l'instant."));
+  liste.forEach(b => {
+    const ligne = h("div", { style: "display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 0;border-top:1px solid #EFE7D2" },
+      h("div", { style: "min-width:0" }, h("div", { style: "font-size:14px;font-weight:600;color:#2E2A20" }, (BILAN_TYPES[b.type] || "Bilan") + " · " + bilanDateFr(b.date)), h("div", { style: "font-size:12.5px;color:" + (b.partage ? "#2F7D3B" : "#6B6355") }, b.partage ? "✓ Visible par le coaché" : "Non partagé")));
+    const bt = h("div", { style: "display:flex;gap:6px;flex-wrap:wrap" });
+    const bP = h("button", { class: "btn-g", style: "font-size:12.5px;padding:6px 10px" }, b.partage ? "Retirer du partage" : "Partager");
+    bP.addEventListener("click", () => { b.partage = !b.partage; try { save(); } catch (e) {} ClientsManager.saveClient(c.id, { bilans: c.bilans }); render(); });
+    const bI = h("button", { class: "btn-g", style: "font-size:12.5px;padding:6px 10px" }, "🖨️ PDF"); bI.addEventListener("click", () => bilanOuvrirImpression(c.name, b));
+    const bD = h("button", { class: "btn-g", style: "font-size:12.5px;padding:6px 10px" }, "✕");
+    bD.setAttribute("aria-label", "Supprimer ce bilan");
+    bD.addEventListener("click", () => { if (!confirm("Supprimer définitivement ce bilan ?")) return; c.bilans = c.bilans.filter(x => x.id !== b.id); try { save(); } catch (e) {} ClientsManager.saveClient(c.id, { bilans: c.bilans }); render(); });
+    bt.appendChild(bP); bt.appendChild(bI); bt.appendChild(bD); ligne.appendChild(bt); histo.appendChild(ligne);
+  });
+  wrap.appendChild(histo);
+  return wrap;
+}
+// ===== FIN BILAN COACH =====
 
 function buildParcours(c) {
   const wrap = h("div",{});
