@@ -735,6 +735,61 @@ function envoyerQuestionnaire() {
     .catch(e => { console.error("questionnaire:", e); btn.disabled = false; btn.textContent = "Envoyer mes réponses"; msg.textContent = "⚠️ Non envoyé, vérifie ta connexion et réessaie. Tes réponses sont toujours là."; });
 }
 
+// ═════════ Consentement et accès à l'espace ═════════
+const CONSENT_VERSION = 1;
+function consentementValide(c) { const k = c && c.consentementPortail; return !!(k && !k.retire && Number(k.version) >= CONSENT_VERSION); }
+// Un lien renouvelé ou désactivé par le coach ne donne plus accès (un lien ancien sans marque de renouvellement reste valable).
+function lienInactif(c, token) {
+  if (!c) return false;
+  if (typeof c.portalToken === "string" && c.portalToken !== "" && c.portalToken !== token) return true;
+  if (c.lienRevoqueLe && !c.portalToken) return true;
+  return false;
+}
+function messagePortail(html) { document.getElementById("app").innerHTML = '<div class="empty">' + html + "</div>"; }
+function afficherConsentement(etat) {
+  const retire = etat === "retire";
+  document.getElementById("app").innerHTML = `<div class="card" id="consentZone">
+    <h1>🔒 ${retire ? "Ton accord a été retiré" : "Avant d'ouvrir ton espace"}</h1>
+    ${retire ? `<p>Ton coach n'utilisera plus cet espace avec toi tant que tu n'auras pas redonné ton accord. Pour faire supprimer tes données, demande-le-lui directement.</p>` : `
+    <p>Cet espace te permet de retrouver tes exercices, tes rendez-vous, ton contrat et ton suivi avec ton coach.</p>
+    <p><b>Quelles informations ?</b> Celles que tu saisis ici (réponses aux exercices, check-ins d'énergie, évaluations, échanges) et celles de ton accompagnement (rendez-vous, notes de séance, contrat). Certaines peuvent concerner ton bien-être ou ta santé.</p>
+    <p><b>Pour quoi faire ?</b> Uniquement ton accompagnement de coaching. Elles ne servent jamais à poser un diagnostic médical ou psychologique.</p>
+    <p><b>Qui y accède ?</b> Ton coach. Elles sont hébergées via les services Google Firebase.</p>
+    <p><b>Combien de temps ?</b> Le temps de ton accompagnement, puis selon la durée indiquée par ton coach dans ton contrat.</p>
+    <p><b>Tes droits.</b> Tu peux à tout moment demander à ton coach d'accéder à tes données, de les corriger, de les supprimer ou de les récupérer, et retirer cet accord (bouton en bas de ton espace). Tu peux aussi saisir la CNIL : <a href="https://www.cnil.fr/" target="_blank" rel="noopener noreferrer">cnil.fr</a>.</p>`}
+    <div id="consentMsg" style="color:var(--alertLine);font-size:14.5px;margin:10px 0;min-height:20px" role="alert"></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button type="button" class="btn" id="consentOk" onclick="accepterConsentement()">${retire ? "Redonner mon accord" : "J'ai compris et j'accepte"}</button>
+      ${retire ? "" : '<button type="button" class="theme-btn" onclick="refuserConsentement()">Je préfère ne pas accepter</button>'}
+    </div></div>`;
+}
+function accepterConsentement() {
+  const b = document.getElementById("consentOk"), m = document.getElementById("consentMsg"); if (!b || b.disabled) return;
+  b.disabled = true; m.textContent = "";
+  const rec = { version: CONSENT_VERSION, date: new Date().toISOString() };
+  firebase.firestore().collection("clients").doc(PORTAL.clientId).update({ consentementPortail: rec }).then(function () {
+    PORTAL.client.consentementPortail = rec; renderPortal();
+  }).catch(function (e) {
+    console.error("consentement:", e); b.disabled = false;
+    m.textContent = "Ton accord n'a pas pu être enregistré. Vérifie ta connexion et réessaie (code : " + ((e && (e.code || e.name)) || "erreur") + ").";
+  });
+}
+function refuserConsentement() { messagePortail("Sans ton accord, ton espace ne peut pas s'ouvrir.<br>Tu peux en parler avec ton coach, puis revenir sur ce lien quand tu le souhaites."); }
+function retirerConsentement() {
+  if (!confirm("Retirer ton accord ?\n\nTon espace se fermera. Tu pourras redonner ton accord plus tard.")) return;
+  const ancien = PORTAL.client.consentementPortail || {};
+  const rec = { version: ancien.version || CONSENT_VERSION, date: ancien.date || null, retire: new Date().toISOString() };
+  firebase.firestore().collection("clients").doc(PORTAL.clientId).update({ consentementPortail: rec }).then(function () {
+    PORTAL.client.consentementPortail = rec; afficherConsentement("retire");
+  }).catch(function (e) { console.error("retrait:", e); alert("Ton accord n'a pas pu être retiré pour le moment (code : " + ((e && (e.code || e.name)) || "erreur") + "). Réessaie ou préviens ton coach."); });
+}
+function donneesFooterHtml() {
+  return `<div class="card" id="donneesZone"><div style="font-weight:700">🔒 Mes données</div>
+    <p class="muted" style="margin:6px 0 10px">Pour consulter, corriger, récupérer ou faire supprimer tes données, écris à ton coach. Tu peux aussi saisir la CNIL (<a href="https://www.cnil.fr/" target="_blank" rel="noopener noreferrer">cnil.fr</a>).</p>
+    <button type="button" class="theme-btn" onclick="retirerConsentement()">Retirer mon accord</button></div>`;
+}
+function demarrerPortail() { if (PORTAL.clientExiste && !consentementValide(PORTAL.client)) afficherConsentement(); else renderPortal(); }
+
 // ═════════ Affichage : thème clair / sombre et confort de lecture du contrat ═════════
 function stockage(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} return null; }
 const zoomParDefaut = () => (window.innerWidth <= 560 ? 1.35 : 1.2);
@@ -1125,6 +1180,7 @@ function renderPortal(){
     ${exercicesHtml(PORTAL.client)}
     ${outilsCardHtml(PORTAL.client)}
     <div class="card" id="echangeZone">${echangesHtml(PORTAL.client)}</div>
+    ${donneesFooterHtml()}
   `;
   renderContractButton(); demarrerLive();
   document.getElementById("echangeSend").addEventListener("click", sendEchange);
@@ -1146,16 +1202,18 @@ function renderPortal(){
     PORTAL.sid = clientId + "_current";
     return firebase.firestore().collection("clients").doc(clientId).get().then(function(csnap){
       PORTAL.client = csnap.exists ? csnap.data() : {};
-      return firebase.firestore().collection("outils").doc(PORTAL.sid).get();
-    }).then(function(osnap){
-      if (osnap.exists){
-        const data = osnap.data();
-        if (data.ikigai) PORTAL.outils.ikigai = Object.assign({q:{},note:{},scores:{}}, data.ikigai);
-        if (data.arbre) PORTAL.outils.arbre = Object.assign({q:{},note:{},scores:{}}, data.arbre);
-      }
-      recalc(OUTILS_DEF.ikigai, PORTAL.outils.ikigai);
-      recalc(OUTILS_DEF.arbre, PORTAL.outils.arbre);
-      renderPortal();
+      PORTAL.clientExiste = !!csnap.exists;
+      if (lienInactif(PORTAL.client, token)) { PORTAL.client = {}; messagePortail("Ce lien n'est plus actif.<br>Demande le nouveau lien à ton coach."); return null; }
+      return firebase.firestore().collection("outils").doc(PORTAL.sid).get().then(function(osnap){
+        if (osnap.exists){
+          const data = osnap.data();
+          if (data.ikigai) PORTAL.outils.ikigai = Object.assign({q:{},note:{},scores:{}}, data.ikigai);
+          if (data.arbre) PORTAL.outils.arbre = Object.assign({q:{},note:{},scores:{}}, data.arbre);
+        }
+        recalc(OUTILS_DEF.ikigai, PORTAL.outils.ikigai);
+        recalc(OUTILS_DEF.arbre, PORTAL.outils.arbre);
+        demarrerPortail();
+      });
     });
   }).catch(function(e){
     console.error("portail:", e);
