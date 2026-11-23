@@ -7532,10 +7532,34 @@ async function creerLienPermanent(c) {
   c.portalToken = token; try { save(); } catch (e) {} ClientsManager.saveClient(c.id, { portalToken: token });
   return token;
 }
+// ── Sécurité du lien : consentement visible, renouvellement et désactivation ──
+function statutConsentement(c) {
+  const k = c && c.consentementPortail;
+  if (!k) return { texte: "⬜ Consentement aux données : pas encore donné (demandé à la prochaine ouverture de l'espace)", couleur: "#6B6355" };
+  if (k.retire) return { texte: "⛔ Consentement retiré le " + bilanDateFr(k.retire), couleur: "#B0413E" };
+  return { texte: "✅ Consentement aux données donné le " + bilanDateFr(k.date) + " (version " + (k.version || 1) + ")", couleur: "#2F7D3B" };
+}
+// Renouveler = nouveau lien, l'ancien cesse de fonctionner. Désactiver = plus aucun lien actif.
+// Écriture directe (et non ClientsManager, qui masque les erreurs) : on n'annonce jamais un succès qui n'en est pas un.
+async function revoquerLienPortail(c, renouveler) {
+  const ancien = c.portalToken; if (!ancien) return null;
+  const db = firebase.firestore();
+  let nouveau = "";
+  if (renouveler) {
+    const car = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", a = new Uint8Array(24); (window.crypto || window.msCrypto).getRandomValues(a);
+    nouveau = Array.from(a).map(x => car[x % car.length]).join("");
+    await db.collection("portalLinks").doc(nouveau).set({ clientId: c.id, createdAt: new Date().toISOString() });
+  }
+  const quand = new Date().toISOString();
+  await db.collection("clients").doc(c.id).set({ portalToken: nouveau, lienRevoqueLe: quand }, { merge: true });
+  c.portalToken = nouveau; c.lienRevoqueLe = quand; try { save(); } catch (e) {}
+  try { await db.collection("portalLinks").doc(ancien).delete(); } catch (e) { console.warn("ancien jeton conservé en base (suppression refusée) : le portail ne le reconnaît plus quand même.", e); }
+  return nouveau;
+}
 function buildLienPermanent(c) {
   const box = h("div",{style:"border:1px solid #E4DAC0;border-radius:12px;padding:10px 14px;margin-bottom:14px;background:#FFFDF7"}), prenom = prenomVisio(c) || "la personne";
   const bouton = (lib, cls, fn) => { const b = h("button",{class: cls}, lib); b.addEventListener("click", fn); return b; };
-  function dessiner(msg) {
+  function dessiner(msg, bon) {
     box.innerHTML = ""; const lien = lienPortailDe(c);
     const tete = h("div",{style:"display:flex;align-items:center;gap:10px;flex-wrap:wrap"}); tete.appendChild(h("span",{style:"font-weight:700;color:#2E2A20"}, "🔗 Espace de " + prenom + " · lien permanent"));
     const [lib, coul] = lien ? ["Lien prêt", "#2F7D3B"] : ["Pas encore créé", "#6B6355"];
@@ -7543,7 +7567,7 @@ function buildLienPermanent(c) {
     if (!lien) {
       box.appendChild(h("div",{style:"font-size:12.5px;color:#5A5648;margin-top:8px"}, "Crée le lien une seule fois : il ne changera jamais. " + prenom + " y retrouve ses exercices, ses rendez-vous et sa visio."));
       box.appendChild(h("div",{style:"margin-top:8px"}, bouton("🔗 Créer le lien permanent", "btn", async () => { try { await creerLienPermanent(c); dessiner(); } catch (e) { console.error("lien:", e); dessiner("Le lien n'a pas pu être créé. Réessaie dans un instant."); } })));
-      if (msg) box.appendChild(h("div",{style:"font-size:12.5px;color:#B0413E;margin-top:6px"}, msg));
+      if (msg) box.appendChild(h("div",{style:"font-size:12.5px;margin-top:6px;color:" + (bon ? "#2F7D3B" : "#B0413E")}, msg));
       return;
     }
     const num = numeroInternational(c.tel), mail = String(c.email || "").trim();
@@ -7556,6 +7580,21 @@ function buildLienPermanent(c) {
     envoi.appendChild(la("📧 Email", /^[^\s@<>"'(),;:\\]+@[^\s@<>"'(),;:\\]+\.[^\s@<>"'(),;:\\]{2,}$/.test(mail) ? "mailto:" + encodeURIComponent(mail) + "?subject=" + encodeURIComponent("Ton espace de coaching") + "&body=" + encodeURIComponent(texte) : null));
     box.appendChild(envoi);
     box.appendChild(h("div",{style:"font-size:11.5px;color:#6B6355;margin-top:8px"}, "Ce lien ne change jamais : tu peux le renvoyer quand tu veux. Il donne accès à l'espace personnel de " + prenom + " : ne le partage qu'avec lui ou elle."));
+    const sc = statutConsentement(c);
+    box.appendChild(h("div",{style:"font-size:12.5px;font-weight:600;margin-top:10px;color:" + sc.couleur}, sc.texte));
+    if (msg) box.appendChild(h("div",{style:"font-size:12.5px;margin-top:6px;color:" + (bon ? "#2F7D3B" : "#B0413E")}, msg));
+    const secu = h("div",{style:"display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"});
+    secu.appendChild(bouton("🔄 Renouveler le lien", "btn-sm", async () => {
+      if (!confirm("Créer un nouveau lien pour " + prenom + " ?\n\nL'ancien lien cessera de fonctionner : il faudra lui envoyer le nouveau.")) return;
+      try { await revoquerLienPortail(c, true); dessiner("Nouveau lien créé. L'ancien ne fonctionne plus : envoie le nouveau.", true); }
+      catch (e) { console.error("renouvellement:", e); dessiner("Le lien n'a pas pu être renouvelé (" + (e.code || e.message) + "). L'ancien reste actif.", false); }
+    }));
+    secu.appendChild(bouton("⛔ Désactiver l'accès", "btn-g", async () => {
+      if (!confirm("Désactiver l'accès de " + prenom + " à son espace ?\n\nSon lien cessera de fonctionner. Tu pourras en recréer un plus tard.")) return;
+      try { await revoquerLienPortail(c, false); dessiner("Accès désactivé : le lien ne fonctionne plus.", true); }
+      catch (e) { console.error("désactivation:", e); dessiner("L'accès n'a pas pu être désactivé (" + (e.code || e.message) + "). Le lien reste actif.", false); }
+    }));
+    box.appendChild(secu);
   }
   dessiner(); return box;
 }
