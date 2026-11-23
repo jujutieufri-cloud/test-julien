@@ -917,6 +917,19 @@ function contratRelaisHtml(d, r) {
     <p style="margin:6px 0;color:var(--ok);font-weight:600">✓ Ta signature a bien été reçue le ${escC(quand.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }))}. Ton coach la valide : le contrat apparaîtra ici comme « signé » très bientôt.</p>
     <details style="margin-top:10px"><summary style="cursor:pointer">Relire le contrat</summary>${lectureContratHtml(contratHtml(d.params, { coach: d.coachSignature, client: r.clientSignature, mention: r.mention, signeLe: r.signedAt, ip: r.signerIp, empreinte: r.contentHash }))}</details></div>`;
 }
+// Comparaison robuste : l'ordre des champs ne compte pas (deux lectures du même contrat peuvent les renvoyer dans un ordre différent).
+function canonValeur(v) {
+  if (v === undefined || v === null) return "null";
+  if (typeof v !== "object") return JSON.stringify(v);
+  if (typeof v.toMillis === "function") return "T" + v.toMillis();
+  if (Array.isArray(v)) return "[" + v.map(canonValeur).join(",") + "]";
+  return "{" + Object.keys(v).sort().map(k => JSON.stringify(k) + ":" + canonValeur(v[k])).join(",") + "}";
+}
+function champsDifferents(a, b) {
+  a = a || {}; b = b || {};
+  return Array.from(new Set(Object.keys(a).concat(Object.keys(b)))).filter(k => canonValeur(a[k]) !== canonValeur(b[k]));
+}
+function afficherMessageSignature(t) { const m = document.getElementById("ct_msg"); if (m) m.textContent = t; }
 async function signerContratV2() {
   const btn = document.getElementById("ct_btn"), msg = document.getElementById("ct_msg"); if (!btn || btn.disabled || !PORTAL.contrat) return;
   const mention = document.getElementById("ct_mention").value.trim(), signature = _ctPad && _ctPad.dataUrl();
@@ -924,23 +937,34 @@ async function signerContratV2() {
   if (signature.length > 400000) { msg.textContent = "Ta signature est trop détaillée pour être enregistrée : efface-la et signe plus simplement."; return; }
   btn.disabled = true; btn.textContent = "Signature en cours…"; msg.textContent = "";
   const remettre = () => { btn.disabled = false; btn.textContent = "✍️ Signer le contrat"; };
+  const recharger = async texte => { try { await chargerContratV2(); } catch (e) { console.error(e); } afficherMessageSignature(texte); };
   let d = null, ip = null, empreinte = null; const maintenant = new Date().toISOString();
   try {
     const db = firebase.firestore();
     const ref = db.collection("clients").doc(PORTAL.clientId).collection("contracts").doc(PORTAL.contrat.id);
     const frais = await ref.get();
-    if (!frais.exists || frais.data().status !== "pending_signature") { msg.textContent = "Ce contrat vient d'être modifié par ton coach. Recharge la page pour voir la dernière version."; remettre(); return; }
-    d = frais.data(); ip = await adresseIp(); empreinte = await contratEmpreinte(d.params, "Lu et approuvé");
+    if (!frais.exists) { remettre(); msg.textContent = "Ce contrat est introuvable (code : introuvable). Recharge la page ; si cela continue, préviens ton coach."; return; }
+    d = frais.data();
+    if (d.status === "signed") { PORTAL.contrat = { id: PORTAL.contrat.id, data: d }; document.getElementById("contractZone").innerHTML = contratSigneHtml(d); return; }
+    if (d.status !== "pending_signature") { remettre(); msg.textContent = "Ton coach a repris ce contrat pour le modifier (code : statut " + d.status + "). Recharge la page dans un instant pour voir la nouvelle version."; return; }
+    const diff = champsDifferents(PORTAL.contrat.data.params, d.params);
+    if (diff.length) { await recharger("Ton coach a modifié le contrat depuis ton affichage (code : champs " + diff.join(", ") + "). J'ai chargé la dernière version : relis-la puis signe."); return; }
+    ip = await adresseIp(); empreinte = await contratEmpreinte(d.params, "Lu et approuvé");
     const sig = { coach: d.coachSignature, client: signature, mention: "Lu et approuvé", signeLe: maintenant, ip, empreinte };
     const charge = { status: "signed", clientSignature: signature, mention: "Lu et approuvé", signedAt: maintenant, signedAtServer: firebase.firestore.FieldValue.serverTimestamp(), signerIp: ip, ipStatus: ip ? "ok" : "indisponible", signerUserAgent: String(navigator.userAgent || "").slice(0, 300), contentHash: empreinte, htmlContent: contratHtml(d.params, sig) };
-    if (typeof db.runTransaction === "function") { await db.runTransaction(async tx => { const s = await tx.get(ref); if (!s.exists || s.data().status !== "pending_signature" || JSON.stringify(s.data().params) !== JSON.stringify(d.params)) throw new Error("MODIFIE"); tx.update(ref, charge); }); } else { await ref.update(charge); }
+    const verifier = s => {
+      if (!s.exists) throw Object.assign(new Error("introuvable"), { code: "introuvable" });
+      const sd = s.data(); if (sd.status !== "pending_signature") throw Object.assign(new Error("statut"), { code: "statut " + sd.status, modifie: true });
+      const dx = champsDifferents(d.params, sd.params); if (dx.length) throw Object.assign(new Error("champs"), { code: "champs " + dx.join(", "), modifie: true });
+    };
+    if (typeof db.runTransaction === "function") { await db.runTransaction(async tx => { const s = await tx.get(ref); verifier(s); tx.update(ref, charge); }); } else { await ref.update(charge); }
     try { await firebase.firestore().collection("clients").doc(PORTAL.clientId).update({ contractStatus: "signed" }); } catch (e) { console.error("statut client:", e); }
     PORTAL.contrat = { id: PORTAL.contrat.id, data: Object.assign({}, d, { status: "signed", clientSignature: signature, mention: "Lu et approuvé", signedAt: maintenant, signerIp: ip, contentHash: empreinte }) };
     document.getElementById("contractZone").innerHTML = contratSigneHtml(PORTAL.contrat.data);
   } catch (e) {
-    if (e && e.message === "MODIFIE") { msg.textContent = "Ce contrat vient d'être modifié par ton coach. Recharge la page pour voir la dernière version."; remettre(); return; }
     console.error("signature:", e);
     const code = (e && (e.code || e.name)) || "erreur inconnue";
+    if (e && e.modifie) { await recharger("Le contrat a changé pendant la signature (code : " + code + "). J'ai chargé la dernière version : relis-la puis signe."); return; }
     const dd = d || (PORTAL.contrat && PORTAL.contrat.data);
     if (dd && (code === "permission-denied" || /permission/i.test(String(e && e.message)))) {
       try { await deposerSignatureRelais(dd, signature, maintenant, ip, empreinte); return; } catch (e2) { console.error("relais signature:", e2); }
