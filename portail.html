@@ -974,6 +974,99 @@ async function signerContratV2() {
 }
 function telechargerContratClient() { const d = PORTAL.contrat && PORTAL.contrat.data; if (d) telechargerContratPDF(d.params, contratSigObj(d), "mon-contrat-de-coaching.pdf").catch(() => alert("Le PDF n'a pas pu être créé. Réessaie dans un instant.")); }
 
+// ===== BILAN DE PROGRESSION : éléments communs (coach + portail) =====
+const BILAN_TYPES = { "mi-parcours": "Bilan de mi-parcours", "final": "Bilan final", "point": "Point d'étape" };
+const BILAN_RECO = { "poursuivre": "Poursuivre le parcours", "ajuster": "Ajuster les objectifs", "cloturer": "Clôturer : objectifs atteints", "pause": "Faire une pause" };
+function bilanEsc(s) { return String(s === undefined || s === null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
+function bilanDateFr(iso) { try { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }); } catch (e) { return ""; } }
+function bilanNombre(n) { return n === null || n === undefined ? "—" : String(n).replace(".", ","); }
+
+// Courbe énergie / charge mentale (1 à 5). Couleurs passées en paramètre (valeurs ou variables CSS).
+function bilanGraphiqueSvg(serie, couleurs) {
+  serie = (serie || []).filter(x => x && (x.energie || x.charge));
+  if (serie.length < 2) return "";
+  const c = couleurs || { energie: "#2F7D3B", charge: "#B8651B" }, W = 320, H = 120, P = 12;
+  const x = i => P + i * (W - 2 * P) / (serie.length - 1), y = v => H - P - (Math.min(5, Math.max(1, v)) - 1) / 4 * (H - 2 * P);
+  const ligne = (cle, couleur) => {
+    const pts = serie.map((s, i) => s[cle] ? [x(i), y(Number(s[cle]))] : null).filter(Boolean);
+    if (pts.length < 2) return "";
+    return '<polyline points="' + pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ") + '" style="fill:none;stroke:' + couleur + ';stroke-width:2.5;stroke-linejoin:round"/>'
+      + pts.map(p => '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="3" style="fill:' + couleur + '"/>').join("");
+  };
+  const grille = [1, 3, 5].map(v => '<line x1="' + P + '" x2="' + (W - P) + '" y1="' + y(v).toFixed(1) + '" y2="' + y(v).toFixed(1) + '" style="stroke:' + (couleurs && couleurs.grille || "#D8CBA8") + ';stroke-width:1;stroke-dasharray:3 3"/>').join("");
+  return '<svg viewBox="0 0 ' + W + " " + H + '" width="100%" role="img" aria-label="Évolution de l\'énergie et de la charge mentale, de 1 à 5" style="max-width:420px">' + grille + ligne("charge", c.charge) + ligne("energie", c.energie) + "</svg>"
+    + '<div style="font-size:12.5px;margin-top:2px"><span style="color:' + c.energie + ';font-weight:700">● Énergie</span> &nbsp; <span style="color:' + c.charge + ';font-weight:700">● Charge mentale</span> &nbsp; <span style="opacity:.75">(échelle de 1 à 5)</span></div>';
+}
+
+// Document imprimable / enregistrable en PDF (mêmes contenus côté coach et côté coaché).
+function bilanHtmlImprimable(nom, b) {
+  const m = b.mesures || {}, ck = m.checkins || {}, obj = m.objectifs || [];
+  const bloc = (titre, texte) => texte && String(texte).trim() ? "<h2>" + bilanEsc(titre) + "</h2><p>" + bilanEsc(texte).replace(/\n/g, "<br>") + "</p>" : "";
+  const chiffre = (lib, val) => '<div class="k"><div class="kl">' + bilanEsc(lib) + '</div><div class="kv">' + val + "</div></div>";
+  const evo = (a, z) => a === null || a === undefined || z === null || z === undefined ? "" : bilanNombre(a) + " → " + bilanNombre(z);
+  const kpis = [chiffre("Séances suivies", bilanEsc(m.seances === undefined ? "—" : m.seances)),
+    m.exercices && m.exercices.total ? chiffre("Exercices réalisés", bilanEsc(m.exercices.faits) + " / " + bilanEsc(m.exercices.total)) : "",
+    m.phases && m.phases.total ? chiffre("Étapes du parcours", bilanEsc(m.phases.faites) + " / " + bilanEsc(m.phases.total)) : "",
+    m.progressionMoyenne !== null && m.progressionMoyenne !== undefined ? chiffre("Progression des objectifs", bilanEsc(m.progressionMoyenne) + " %") : "",
+    evo(ck.energieDebut, ck.energieRecent) ? chiffre("Énergie (début → récent)", bilanEsc(evo(ck.energieDebut, ck.energieRecent)) + " / 5") : "",
+    evo(ck.chargeDebut, ck.chargeRecent) ? chiffre("Charge mentale (début → récent)", bilanEsc(evo(ck.chargeDebut, ck.chargeRecent)) + " / 5") : ""].join("");
+  const objectifs = obj.length ? "<h2>Objectifs</h2>" + obj.map(o => '<div class="o"><div>' + bilanEsc(o.titre) + ' <b>' + bilanEsc(o.progression) + ' %</b></div><div class="bar"><div style="width:' + Math.max(0, Math.min(100, Number(o.progression) || 0)) + '%"></div></div></div>').join("") : "";
+  const graph = bilanGraphiqueSvg(ck.serie, { energie: "#2F7D3B", charge: "#B8651B", grille: "#D8CBA8" });
+  const periode = m.debut ? "Suivi depuis le " + bilanDateFr(m.debut) + (m.jours ? " (" + m.jours + " jours)" : "") : "";
+  return '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + bilanEsc((BILAN_TYPES[b.type] || "Bilan") + " – " + nom) + "</title><style>"
+    + "body{font-family:Georgia,'Times New Roman',serif;color:#2E2A20;background:#fff;max-width:760px;margin:0 auto;padding:24px 18px 40px;line-height:1.6;font-size:16px}"
+    + "h1{font-size:24px;margin:0 0 4px}h2{font-size:17px;margin:24px 0 6px;color:#7A5C1A;border-bottom:1px solid #D8CBA8;padding-bottom:4px}p{margin:6px 0}"
+    + ".sub{color:#5A5648;font-size:14px}.ks{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.k{border:1px solid #D8CBA8;border-radius:10px;padding:8px 12px;min-width:130px}.kl{font-size:12.5px;color:#5A5648}.kv{font-size:20px;font-weight:700;color:#7A5C1A}"
+    + ".o{margin:8px 0;font-size:15px}.bar{background:#E4DAC0;border-radius:6px;height:9px;overflow:hidden;margin-top:3px}.bar div{background:#7A5C1A;height:100%}"
+    + ".pied{margin-top:34px;padding-top:10px;border-top:1px solid #D8CBA8;font-size:12.5px;color:#5A5648}.imp{margin:0 0 16px}"
+    + "@media print{.imp{display:none}body{padding:0}h2{break-after:avoid}.o,.k{break-inside:avoid}}</style></head><body>"
+    + '<div class="imp"><button onclick="window.print()" style="font-size:16px;padding:10px 16px;border-radius:10px;border:1px solid #7A5C1A;background:#7A5C1A;color:#fff;cursor:pointer">🖨️ Imprimer / enregistrer en PDF</button></div>'
+    + "<h1>" + bilanEsc(BILAN_TYPES[b.type] || "Bilan de progression") + "</h1><div class=\"sub\">" + bilanEsc(nom) + " · " + bilanEsc(bilanDateFr(b.date)) + (periode ? " · " + bilanEsc(periode) : "") + "</div>"
+    + '<div class="ks">' + kpis + "</div>" + (graph ? "<h2>Énergie et charge mentale</h2>" + graph : "") + objectifs
+    + bloc("Ce qui a changé", b.constats) + bloc("Points forts", b.pointsForts) + bloc("Axes de travail et prochaines étapes", b.axes)
+    + (b.recommandation && BILAN_RECO[b.recommandation] ? "<h2>Recommandation</h2><p>" + bilanEsc(BILAN_RECO[b.recommandation]) + "</p>" : "")
+    + (b.citation && String(b.citation).trim() && b.citationAutorisee ? "<h2>Parole du coaché</h2><p><i>« " + bilanEsc(b.citation) + " »</i></p>" : "")
+    + '<div class="pied">Document confidentiel établi dans le cadre d\'un accompagnement de coaching professionnel. Il ne constitue ni un diagnostic ni un avis médical ou psychologique.</div></body></html>';
+}
+function bilanOuvrirImpression(nom, b) {
+  const w = window.open("", "_blank");
+  if (!w) { alert("Ton navigateur a bloqué la fenêtre. Autorise les pop-ups pour ce site, puis réessaie."); return false; }
+  w.document.open(); w.document.write(bilanHtmlImprimable(nom, b)); w.document.close();
+  setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 500);
+  return true;
+}
+// ===== FIN BILAN COMMUN =====
+
+// ===== BILAN DE PROGRESSION : côté coaché (uniquement les bilans que le coach a choisi de partager) =====
+function bilanPortailHtml(client) {
+  const l = (client.bilans || []).filter(b => b && b.partage).sort((a, b) => new Date(b.date) - new Date(a.date));
+  if (!l.length) return "";
+  const b = l[0], m = b.mesures || {}, ck = m.checkins || {}, obj = m.objectifs || [];
+  const bloc = (titre, texte) => texte && String(texte).trim() ? `<div style="margin-top:12px"><div style="font-weight:700;font-size:15px">${esc(titre)}</div><div style="font-size:15px;line-height:1.55;margin-top:2px">${esc(texte).replace(/\n/g, "<br>")}</div></div>` : "";
+  const chiffre = (lib, val) => `<div style="flex:1;min-width:120px;border:1px solid var(--line);border-radius:10px;padding:8px 11px"><div class="muted" style="font-size:13px">${esc(lib)}</div><div style="font-size:19px;font-weight:700;color:var(--accent)">${val}</div></div>`;
+  const evo = (a, z) => a === null || a === undefined || z === null || z === undefined ? "" : bilanNombre(a) + " → " + bilanNombre(z);
+  const chiffres = [chiffre("Séances suivies", esc(m.seances === undefined ? "—" : m.seances)),
+    m.exercices && m.exercices.total ? chiffre("Exercices réalisés", esc(m.exercices.faits) + " / " + esc(m.exercices.total)) : "",
+    m.progressionMoyenne !== null && m.progressionMoyenne !== undefined ? chiffre("Progression de tes objectifs", esc(m.progressionMoyenne) + " %") : "",
+    evo(ck.energieDebut, ck.energieRecent) ? chiffre("Ton énergie", esc(evo(ck.energieDebut, ck.energieRecent)) + " / 5") : ""].join("");
+  const objectifs = obj.map(o => `<div style="margin-top:10px;font-size:14.5px">${esc(o.titre)} <b>${esc(o.progression)} %</b><div style="background:var(--line);border-radius:6px;height:9px;overflow:hidden;margin-top:3px"><div style="background:var(--accent);height:100%;width:${Math.max(0, Math.min(100, Number(o.progression) || 0))}%"></div></div></div>`).join("");
+  const graph = bilanGraphiqueSvg(ck.serie, { energie: "var(--ok)", charge: "var(--accent)", grille: "var(--line)" });
+  const anciens = l.slice(1).map(x => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line)"><span style="font-size:14.5px">${esc(BILAN_TYPES[x.type] || "Bilan")} · ${esc(bilanDateFr(x.date))}</span><button type="button" class="theme-btn" onclick="imprimerBilan('${esc(x.id)}')">🖨️ PDF</button></div>`).join("");
+  return `<div class="card" id="bilanZone"><div style="font-weight:700;font-size:17px">📈 Mon bilan de progression</div>
+    <div class="muted" style="margin-top:2px">${esc(BILAN_TYPES[b.type] || "Bilan")} · ${esc(bilanDateFr(b.date))}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">${chiffres}</div>
+    ${graph ? `<div style="margin-top:12px">${graph}</div>` : ""}${objectifs}
+    ${bloc("Ce qui a changé", b.constats)}${bloc("Tes points forts", b.pointsForts)}${bloc("Prochaines étapes", b.axes)}
+    ${b.recommandation && BILAN_RECO[b.recommandation] ? bloc("Recommandation de ton coach", BILAN_RECO[b.recommandation]) : ""}
+    <div style="margin-top:14px"><button type="button" class="btn" onclick="imprimerBilan('${esc(b.id)}')">🖨️ Imprimer / enregistrer en PDF</button></div>
+    ${anciens ? `<details style="margin-top:12px"><summary style="cursor:pointer;font-size:14.5px">Mes bilans précédents</summary>${anciens}</details>` : ""}</div>`;
+}
+function imprimerBilan(id) {
+  const b = ((PORTAL.client && PORTAL.client.bilans) || []).find(x => x && x.id === id && x.partage);
+  if (b) bilanOuvrirImpression((PORTAL.client && PORTAL.client.name) || "", b);
+}
+// ===== FIN BILAN PORTAIL =====
+
 function renderContractButton(){ chargerContratV2().then(v2 => { if (!v2) renderContractButtonLegacy(); }).catch(() => renderContractButtonLegacy()); }
 function renderContractButtonLegacy(){
   const box = document.getElementById("contractZone");
@@ -1028,6 +1121,7 @@ function renderPortal(){
     ${checkinHtml(PORTAL.client)}
     ${planteHtml(PORTAL.client)}
     ${(PORTAL.client.parcours && (PORTAL.client.parcours.phases||[]).length) ? `<div class="card">${parcoursHtml(PORTAL.client.parcours)}</div>` : ""}
+    ${bilanPortailHtml(PORTAL.client)}
     ${exercicesHtml(PORTAL.client)}
     ${outilsCardHtml(PORTAL.client)}
     <div class="card" id="echangeZone">${echangesHtml(PORTAL.client)}</div>
