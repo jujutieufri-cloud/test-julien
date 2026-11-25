@@ -1066,6 +1066,8 @@ function bilanHtmlImprimable(nom, b) {
     evo(ck.energieDebut, ck.energieRecent) ? chiffre("Énergie (début → récent)", bilanEsc(evo(ck.energieDebut, ck.energieRecent)) + " / 5") : "",
     evo(ck.chargeDebut, ck.chargeRecent) ? chiffre("Charge mentale (début → récent)", bilanEsc(evo(ck.chargeDebut, ck.chargeRecent)) + " / 5") : ""].join("");
   const objectifs = obj.length ? "<h2>Objectifs</h2>" + obj.map(o => '<div class="o"><div>' + bilanEsc(o.titre) + ' <b>' + bilanEsc(o.progression) + ' %</b></div><div class="bar"><div style="width:' + Math.max(0, Math.min(100, Number(o.progression) || 0)) + '%"></div></div></div>').join("") : "";
+  const sg = n => (n > 0 ? "+" : "") + n;
+  const gasHtml = (m.gas || []).length ? "<h2>Atteinte des objectifs (échelle de −2 à +2)</h2>" + m.gas.map(g => '<div class="o">' + bilanEsc(g.titre) + " : <b>" + bilanEsc(sg(g.initial)) + " → " + bilanEsc(sg(g.actuel)) + "</b></div>").join("") : "";
   const graph = bilanGraphiqueSvg(ck.serie, { energie: "#2F7D3B", charge: "#B8651B", grille: "#D8CBA8" });
   const periode = m.debut ? "Suivi depuis le " + bilanDateFr(m.debut) + (m.jours ? " (" + m.jours + " jours)" : "") : "";
   return '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + bilanEsc((BILAN_TYPES[b.type] || "Bilan") + " – " + nom) + "</title><style>"
@@ -1077,7 +1079,7 @@ function bilanHtmlImprimable(nom, b) {
     + "@media print{.imp{display:none}body{padding:0}h2{break-after:avoid}.o,.k{break-inside:avoid}}</style></head><body>"
     + '<div class="imp"><button onclick="window.print()" style="font-size:16px;padding:10px 16px;border-radius:10px;border:1px solid #7A5C1A;background:#7A5C1A;color:#fff;cursor:pointer">🖨️ Imprimer / enregistrer en PDF</button></div>'
     + "<h1>" + bilanEsc(BILAN_TYPES[b.type] || "Bilan de progression") + "</h1><div class=\"sub\">" + bilanEsc(nom) + " · " + bilanEsc(bilanDateFr(b.date)) + (periode ? " · " + bilanEsc(periode) : "") + "</div>"
-    + '<div class="ks">' + kpis + "</div>" + (graph ? "<h2>Énergie et charge mentale</h2>" + graph : "") + objectifs
+    + '<div class="ks">' + kpis + "</div>" + (graph ? "<h2>Énergie et charge mentale</h2>" + graph : "") + objectifs + gasHtml
     + bloc("Ce qui a changé", b.constats) + bloc("Points forts", b.pointsForts) + bloc("Axes de travail et prochaines étapes", b.axes)
     + (b.recommandation && BILAN_RECO[b.recommandation] ? "<h2>Recommandation</h2><p>" + bilanEsc(BILAN_RECO[b.recommandation]) + "</p>" : "")
     + (b.citation && String(b.citation).trim() && b.citationAutorisee ? "<h2>Parole du coaché</h2><p><i>« " + bilanEsc(b.citation) + " »</i></p>" : "")
@@ -1121,6 +1123,60 @@ function imprimerBilan(id) {
   if (b) bilanOuvrirImpression((PORTAL.client && PORTAL.client.name) || "", b);
 }
 // ===== FIN BILAN PORTAIL =====
+
+// ===== SUIVI DE SÉANCE CÔTÉ COACHÉ : compte rendu, engagements, retour sur la séance, cadre =====
+const MENTION_CADRE = "Le coaching est un accompagnement vers des objectifs : ce n'est ni une thérapie, ni un soin, ni un diagnostic, et il ne remplace pas un suivi médical ou psychologique. Les outils utilisés (CNV, sophrologie, PNL, etc.) sont des outils d'accompagnement : leur niveau de preuve scientifique varie et aucun résultat n'est garanti.";
+const URGENCE_TEXTE = "3114 (numéro national de prévention du suicide, gratuit, 24 h/24 et 7 j/7) · 15 (SAMU) ou 112 en cas de risque imminent.";
+const ALLIANCE_ITEMS = [["lien", "Je me suis senti(e) écouté(e) et compris(e)"], ["objectifs", "Nous avons travaillé sur ce qui compte pour moi"], ["methode", "La façon de travailler me convient"], ["utilite", "Cette séance m'a été utile"]];
+function actionStatutDe(c, a) { const s = c.actionsStatut && c.actionsStatut[a.id]; return s && s.statut ? s : { statut: "a-faire" }; }
+function suiviDateFr(iso) { try { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }); } catch (e) { return ""; } }
+
+function compteRenduPortailHtml(client) {
+  const l = (client.comptesRendus || []).filter(x => x && x.partage).sort((a, b) => new Date(b.date) - new Date(a.date));
+  if (!l.length) return "";
+  const bloc = (t, x) => x && String(x).trim() ? `<div style="margin-top:10px"><div style="font-weight:700;font-size:15px">${esc(t)}</div><div style="font-size:15px;line-height:1.55;margin-top:2px">${esc(x).replace(/\n/g, "<br>")}</div></div>` : "";
+  const un = x => `${bloc("Ce qu'on a regardé", x.vu)}${bloc("Ce que tu retiens · ce que nous avons décidé", x.decisions)}${bloc("Prochain pas", x.prochain)}`;
+  const anciens = l.slice(1).map(x => `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:14.5px">Séance du ${esc(suiviDateFr(x.date))}</summary>${un(x)}</details>`).join("");
+  return `<div class="card" id="compteRenduZone"><div style="font-weight:700;font-size:17px">📝 Compte rendu de ma dernière séance</div><div class="muted" style="margin-top:2px">Séance du ${esc(suiviDateFr(l[0].date))}</div>${un(l[0])}${anciens ? `<div style="margin-top:12px;font-size:14.5px;font-weight:600">Séances précédentes</div>${anciens}` : ""}</div>`;
+}
+function engagementsPortailHtml(client) {
+  const acts = (client.actions || []).filter(a => a && a.texte); if (!acts.length) return "";
+  const ouvertes = acts.filter(a => actionStatutDe(client, a).statut !== "fait"), faites = acts.length - ouvertes.length;
+  const bouton = (id, st, lib) => `<button type="button" class="theme-btn" onclick="marquerEngagement('${esc(id)}','${st}')">${lib}</button>`;
+  const lignes = ouvertes.map(a => { const st = actionStatutDe(client, a).statut; return `<div style="padding:10px 0;border-top:1px solid var(--line)"><div style="font-size:15px">${esc(a.texte)}</div>${a.echeance ? `<div class="muted">pour le ${esc(suiviDateFr(a.echeance + "T12:00:00"))}</div>` : ""}${st === "partiel" ? `<div class="muted">Tu as indiqué : en partie fait</div>` : st === "non" ? `<div class="muted">Tu as indiqué : pas fait pour l'instant</div>` : ""}<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${bouton(a.id, "fait", "✓ Fait")}${bouton(a.id, "partiel", "En partie")}${bouton(a.id, "non", "Pas encore")}</div></div>`; }).join("");
+  return `<div class="card" id="engagementsZone"><div style="font-weight:700;font-size:17px">🎯 Mes engagements</div><div class="muted" style="margin-top:2px">${ouvertes.length ? ouvertes.length + " à faire d'ici la prochaine séance. Pas de jugement : on en parle ensemble." : "Tout est fait. Bravo !"}${faites ? " · " + faites + " déjà fait(s)" : ""}</div>${lignes}</div>`;
+}
+function rafraichirSuivi() { const z = document.getElementById("suiviWrap"); if (z) z.innerHTML = compteRenduPortailHtml(PORTAL.client) + engagementsPortailHtml(PORTAL.client) + alliancePortailHtml(PORTAL.client); }
+function marquerEngagement(id, statut) {
+  const v = { statut, date: new Date().toISOString(), par: "coache" };
+  firebase.firestore().collection("clients").doc(PORTAL.clientId).update({ ["actionsStatut." + id]: v }).then(function () {
+    PORTAL.client.actionsStatut = Object.assign({}, PORTAL.client.actionsStatut, { [id]: v }); rafraichirSuivi();
+  }).catch(function (e) { console.error("engagement:", e); alert("Ta réponse n'a pas pu être enregistrée (code : " + ((e && (e.code || e.name)) || "erreur") + "). Réessaie dans un instant."); });
+}
+function alliancePortailHtml(client) {
+  const d = client.allianceDemande; if (!d || !d.date || (client.alliance && client.alliance[d.date])) return "";
+  const q = ALLIANCE_ITEMS.map(i => `<div style="margin-top:14px"><div style="font-size:15px">${esc(i[1])}</div><input type="range" min="0" max="10" step="1" value="5" class="rv-slider untouched" data-item="${i[0]}" oninput="allianceMaj(this)" aria-label="${esc(i[1])}"><div class="rv-scale"><span>Pas du tout</span><b class="allianceVal">—</b><span>Tout à fait</span></div></div>`).join("");
+  return `<div class="card" id="allianceZone"><div style="font-weight:700;font-size:17px">🤝 Ton avis sur la séance du ${esc(suiviDateFr(d.date + "T12:00:00"))}</div><div class="muted" style="margin-top:2px">Une minute. Ça aide ton coach à s'ajuster : il n'y a pas de mauvaise réponse.</div>${q}
+    <textarea id="allianceCom" class="rv-note" rows="2" placeholder="Un mot de plus, si tu veux (facultatif)"></textarea>
+    <div id="allianceMsg" style="color:var(--alertLine);font-size:14.5px;min-height:20px;margin-top:6px" role="alert"></div>
+    <button type="button" class="btn" onclick="soumettreAlliance('${esc(d.date)}')">Envoyer mon avis</button></div>`;
+}
+function allianceMaj(el) { el.classList.remove("untouched"); el.setAttribute("data-t", "1"); const v = el.parentNode.querySelector(".allianceVal"); if (v) v.textContent = el.value; }
+function soumettreAlliance(date) {
+  const zone = document.getElementById("allianceZone"), msg = document.getElementById("allianceMsg"); if (!zone) return;
+  const sl = Array.from(zone.querySelectorAll("input[type=range]"));
+  if (sl.some(s => s.getAttribute("data-t") !== "1")) { msg.textContent = "Réponds aux quatre questions en déplaçant chaque curseur."; return; }
+  const v = { date: new Date().toISOString(), par: "coache" }; sl.forEach(s => { v[s.getAttribute("data-item")] = Number(s.value); });
+  const com = document.getElementById("allianceCom"); if (com && com.value.trim()) v.commentaire = com.value.trim().slice(0, 500);
+  firebase.firestore().collection("clients").doc(PORTAL.clientId).update({ ["alliance." + date]: v }).then(function () {
+    PORTAL.client.alliance = Object.assign({}, PORTAL.client.alliance, { [date]: v });
+    zone.innerHTML = '<div style="font-weight:700;font-size:17px">🤝 Merci pour ton avis !</div><div class="muted" style="margin-top:4px">Ton coach le lira avant votre prochaine séance.</div>';
+  }).catch(function (e) { console.error("alliance:", e); msg.textContent = "Ton avis n'a pas pu être envoyé (code : " + ((e && (e.code || e.name)) || "erreur") + "). Réessaie dans un instant."; });
+}
+function cadreFooterHtml() {
+  return `<div class="card" id="cadreZone"><div style="font-weight:700">ℹ️ Le cadre du coaching</div><p class="muted" style="margin:6px 0">${esc(MENTION_CADRE)}</p><p style="margin:8px 0 0;font-size:14.5px"><b>Si tu traverses un moment très difficile :</b> ${esc(URGENCE_TEXTE)}</p></div>`;
+}
+// ===== FIN SUIVI CÔTÉ COACHÉ =====
 
 function renderContractButton(){ chargerContratV2().then(v2 => { if (!v2) renderContractButtonLegacy(); }).catch(() => renderContractButtonLegacy()); }
 function renderContractButtonLegacy(){
@@ -1177,10 +1233,12 @@ function renderPortal(){
     ${planteHtml(PORTAL.client)}
     ${(PORTAL.client.parcours && (PORTAL.client.parcours.phases||[]).length) ? `<div class="card">${parcoursHtml(PORTAL.client.parcours)}</div>` : ""}
     ${bilanPortailHtml(PORTAL.client)}
+    <div id="suiviWrap">${compteRenduPortailHtml(PORTAL.client)}${engagementsPortailHtml(PORTAL.client)}${alliancePortailHtml(PORTAL.client)}</div>
     ${exercicesHtml(PORTAL.client)}
     ${outilsCardHtml(PORTAL.client)}
     <div class="card" id="echangeZone">${echangesHtml(PORTAL.client)}</div>
     ${donneesFooterHtml()}
+    ${cadreFooterHtml()}
   `;
   renderContractButton(); demarrerLive();
   document.getElementById("echangeSend").addEventListener("click", sendEchange);
