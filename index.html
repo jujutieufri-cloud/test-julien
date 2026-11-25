@@ -5860,25 +5860,43 @@ function marquerRappelFait(r) {
   faits[cleRappel(r)] = new Date().toISOString(); PrefsPrivees.ecrire({ rappelsFaits: faits });
 }
 function buildRappelsCard(maintenant) {
-  const liste = rappelsCalculer(state.appointments, state.clients, PrefsPrivees.lire().rappelsFaits, maintenant || new Date());
-  if (!liste.length) return null;
+  maintenant = maintenant || new Date();
+  const liste = rappelsCalculer(state.appointments, state.clients, PrefsPrivees.lire().rappelsFaits, maintenant);
+  const suivis = suivisAFaire(state.clients, state.appointments, maintenant);
+  if (!liste.length && !suivis.length) return null;
   const card = h("div", { class: "card", style: "padding:14px 16px;margin-bottom:16px;border-color:#9C7A2E66" });
-  card.appendChild(h("div", { style: "font-weight:700;font-size:15px;color:#2E2A20" }, "🔔 Rappels de rendez-vous à envoyer (" + liste.length + ")"));
-  card.appendChild(h("div", { style: "font-size:12.5px;color:#6B6355;margin:2px 0 8px" }, "Pour les 2 prochains jours. Le message s'ouvre prérempli : tu peux le modifier. Rien ne part tout seul."));
-  liste.forEach(({ rdv, client, jour }) => {
-    const texte = rappelTexteRdv(client, rdv), num = numeroInternational(client.tel), mail = String(client.email || "").trim();
-    const ligne = h("div", { style: "padding:10px 0;border-top:1px solid #EFE7D2" });
-    ligne.appendChild(h("div", { style: "font-size:14px;font-weight:600;color:#2E2A20" }, client.name + " · " + jour + (rdv.heure ? " à " + rdv.heure : "") + (rdv.motif ? " · " + rdv.motif : "")));
-    ligne.appendChild(h("div", { style: "font-size:12.5px;color:#5A5648;margin:3px 0 7px;white-space:pre-wrap" }, texte));
-    if (!num && !mail) ligne.appendChild(h("div", { style: "font-size:12.5px;color:#B26A00;margin-bottom:6px" }, "Ni numéro ni e-mail dans la fiche : ajoute un contact pour pouvoir envoyer ce rappel."));
-    const barre = h("div", { style: "display:flex;gap:6px;flex-wrap:wrap" });
-    const lien = (lib, href) => href ? h("a", { class: "btn-sm", href, target: "_blank", rel: "noopener", style: "text-decoration:none" }, lib) : h("span", { class: "btn-sm", style: "opacity:.4;cursor:not-allowed" }, lib);
+  card.appendChild(h("div", { style: "font-weight:700;font-size:15px;color:#2E2A20" }, liste.length ? "🔔 Rappels de rendez-vous à envoyer (" + liste.length + ")" : "🔔 Messages à envoyer"));
+  card.appendChild(h("div", { style: "font-size:12.5px;color:#6B6355;margin:2px 0 8px" }, "Le message s'ouvre prérempli : tu peux le modifier. Rien ne part tout seul."));
+  const lien = (lib, href) => href ? h("a", { class: "btn-sm", href, target: "_blank", rel: "noopener", style: "text-decoration:none" }, lib) : h("span", { class: "btn-sm", style: "opacity:.4;cursor:not-allowed" }, lib);
+  const envoi = (client, texte, sujet, onOk) => {
+    const num = numeroInternational(client.tel), mail = String(client.email || "").trim(), barre = h("div", { style: "display:flex;gap:6px;flex-wrap:wrap" });
     barre.appendChild(lien("💬 WhatsApp", num ? "https://wa.me/" + num + "?text=" + encodeURIComponent(texte) : null));
     barre.appendChild(lien("📱 SMS", num ? "sms:+" + num + "?&body=" + encodeURIComponent(texte) : null));
-    barre.appendChild(lien("✉️ E-mail", mail ? "mailto:" + encodeURIComponent(mail) + "?subject=" + encodeURIComponent("Rappel de notre prochaine séance") + "&body=" + encodeURIComponent(texte) : null));
-    const ok = h("button", { class: "btn-sm" }, "✓ Envoyé"); ok.addEventListener("click", () => { marquerRappelFait(rdv); render(); });
-    barre.appendChild(ok); ligne.appendChild(barre); card.appendChild(ligne);
+    barre.appendChild(lien("✉️ E-mail", mail ? "mailto:" + encodeURIComponent(mail) + "?subject=" + encodeURIComponent(sujet) + "&body=" + encodeURIComponent(texte) : null));
+    const ok = h("button", { class: "btn-sm" }, "✓ Envoyé"); ok.addEventListener("click", onOk); barre.appendChild(ok); return { barre, sansContact: !num && !mail };
+  };
+  const prefere = client => { const p = client.cadre && client.cadre.modeEmploi && client.cadre.modeEmploi.canal; return p ? h("div", { style: "font-size:12px;color:#7A5C1A;margin-bottom:4px" }, "Préfère : " + p) : null; };
+  liste.forEach(({ rdv, client, jour }) => {
+    const texte = rappelTexteRdv(client, rdv), e = envoi(client, texte, "Rappel de notre prochaine séance", () => { marquerRappelFait(rdv); render(); });
+    const ligne = h("div", { style: "padding:10px 0;border-top:1px solid #EFE7D2" });
+    ligne.appendChild(h("div", { style: "font-size:14px;font-weight:600;color:#2E2A20" }, client.name + " · " + jour + (rdv.heure ? " à " + rdv.heure : "") + (rdv.motif ? " · " + rdv.motif : "")));
+    const p = prefere(client); if (p) ligne.appendChild(p);
+    ligne.appendChild(h("div", { style: "font-size:12.5px;color:#5A5648;margin:3px 0 7px;white-space:pre-wrap" }, texte));
+    if (e.sansContact) ligne.appendChild(h("div", { style: "font-size:12.5px;color:#B26A00;margin-bottom:6px" }, "Ni numéro ni e-mail dans la fiche : ajoute un contact pour pouvoir envoyer ce rappel."));
+    ligne.appendChild(e.barre); card.appendChild(ligne);
   });
+  if (suivis.length) {
+    card.appendChild(h("div", { style: "font-weight:700;font-size:14px;color:#2E2A20;margin-top:12px" }, "📅 Prises de nouvelles à 3 mois (" + suivis.length + ")"));
+    suivis.forEach(({ client, jours }) => {
+      const texte = relanceTexte(client, RELANCES.find(m => m.id === "suivi3m")), e = envoi(client, texte, "Des nouvelles ?", () => { sauverChamps(client, { suivi3mois: { fait: new Date().toISOString() } }); render(); });
+      const ligne = h("div", { style: "padding:10px 0;border-top:1px solid #EFE7D2" });
+      ligne.appendChild(h("div", { style: "font-size:14px;font-weight:600;color:#2E2A20" }, client.name + " · accompagnement terminé depuis " + Math.round(jours / 30) + " mois"));
+      const p = prefere(client); if (p) ligne.appendChild(p);
+      ligne.appendChild(h("div", { style: "font-size:12.5px;color:#5A5648;margin:3px 0 7px;white-space:pre-wrap" }, texte));
+      if (e.sansContact) ligne.appendChild(h("div", { style: "font-size:12.5px;color:#B26A00;margin-bottom:6px" }, "Ni numéro ni e-mail dans la fiche."));
+      ligne.appendChild(e.barre); card.appendChild(ligne);
+    });
+  }
   return card;
 }
 
@@ -5985,6 +6003,313 @@ function renderHeuresTab() {
   ex.appendChild(bCsv); wrap.appendChild(ex);
   return wrap;
 }
+
+// ===== CADRE DE PRATIQUE, SUIVI DE SÉANCE, ALLIANCE, SUIVI À 3 MOIS =====
+const MENTION_CADRE = "Le coaching est un accompagnement vers des objectifs : ce n'est ni une thérapie, ni un soin, ni un diagnostic, et il ne remplace pas un suivi médical ou psychologique. Les outils utilisés (CNV, sophrologie, PNL, etc.) sont des outils d'accompagnement : leur niveau de preuve scientifique varie et aucun résultat n'est garanti.";
+const URGENCE_TEXTE = "3114 (numéro national de prévention du suicide, gratuit, 24 h/24 et 7 j/7) · 15 (SAMU) ou 112 en cas de risque imminent.";
+const ORIENTATIONS_VERS = ["Médecin traitant", "Psychologue / psychothérapeute", "Psychiatre", "Centre médico-psychologique (CMP)", "Service d'urgence / 3114", "Autre professionnel de santé"];
+const PRECAUTIONS_LIB = { respiratoire: "Problème respiratoire", cardiaque: "Problème cardiaque ou de tension", grossesse: "Grossesse", traumatisme: "Antécédent de traumatisme (certains exercices corporels peuvent réactiver)" };
+const ALLIANCE_ITEMS = [["lien", "Je me suis senti(e) écouté(e) et compris(e)"], ["objectifs", "Nous avons travaillé sur ce qui compte pour moi"], ["methode", "La façon de travailler me convient"], ["utilite", "Cette séance m'a été utile"]];
+const GAS_NIVEAUX = [["-2", "−2 · Bien moins que prévu"], ["-1", "−1 · Moins que prévu"], ["0", "0 · Résultat attendu"], ["1", "+1 · Mieux que prévu"], ["2", "+2 · Bien mieux que prévu"]];
+
+function cadreAlertes(c, maintenant) {
+  maintenant = maintenant || new Date(); const k = (c && c.cadre) || {}, a = k.accueil, out = [];
+  if (!a) out.push({ niveau: "info", texte: "Fiche d'accueil non remplie : 4 questions pour vérifier que la demande relève bien du coaching." });
+  else {
+    if (a.detresse === "forte") out.push({ niveau: "rouge", texte: "Détresse forte déclarée : propose une orientation avant de poursuivre les exercices. Urgence : " + URGENCE_TEXTE });
+    if (a.demande === "soin") out.push({ niveau: "rouge", texte: "La demande relève plutôt du soin : oriente vers un professionnel de santé et note ce que tu as proposé." });
+    if (a.detresse === "moderee" && a.suiviMedical === "non") out.push({ niveau: "orange", texte: "Souffrance importante sans suivi médical ni psychologique : propose une orientation." });
+  }
+  const p = k.precautions || {}, actives = Object.keys(PRECAUTIONS_LIB).filter(x => p[x]);
+  if (actives.length) out.push({ niveau: "orange", texte: "Précautions notées (" + actives.map(x => PRECAUTIONS_LIB[x].split(" (")[0].toLowerCase()).join(", ") + ") : adapte ou évite les exercices de respiration et de sophrologie." });
+  const limite = maintenant.getTime() - 14 * 86400000;
+  (k.orientations || []).filter(o => o && !String(o.reponse || "").trim() && new Date(o.date).getTime() < limite).forEach(o => out.push({ niveau: "orange", texte: "Orientation proposée le " + bilanDateFr(o.date) + " (" + o.vers + ") : pas de retour noté. Prends de ses nouvelles." }));
+  return out;
+}
+function allianceAnalyse(c) {
+  const al = (c && c.alliance) || {};
+  const liste = Object.keys(al).sort().map(d => { const s = al[d] || {}, v = ALLIANCE_ITEMS.map(x => Number(s[x[0]])).filter(n => n >= 0 && n <= 10); return { date: d, scores: s, moyenne: v.length ? Math.round(v.reduce((t, n) => t + n, 0) / v.length * 10) / 10 : null, min: v.length ? Math.min.apply(null, v) : null }; }).filter(x => x.moyenne !== null);
+  let alerte = null;
+  if (liste.length) {
+    const der = liste[liste.length - 1], prec = liste[liste.length - 2];
+    if (der.min <= 5) alerte = "Un point est noté 5 ou moins sur 10 : à aborder avec le coaché à la prochaine séance.";
+    else if (prec && prec.moyenne - der.moyenne >= 2) alerte = "L'appréciation a baissé de " + String(Math.round((prec.moyenne - der.moyenne) * 10) / 10).replace(".", ",") + " point(s) depuis la séance précédente : à aborder.";
+  }
+  return { liste, alerte };
+}
+function actionStatutDe(c, a) { const s = c.actionsStatut && c.actionsStatut[a.id]; return s && s.statut ? s : { statut: "a-faire" }; }
+const ACTION_LIB = { "a-faire": "À faire", "fait": "✓ Fait", "partiel": "Partiellement", "non": "Pas fait" };
+function actionsARevoir(c) { return (c.actions || []).filter(a => a && actionStatutDe(c, a).statut !== "fait"); }
+function compteRenduTexte(c, cr, actions) {
+  const prenom = String(c.name || "").trim().split(/\s+/)[0] || "";
+  const bloc = (t, x) => x && String(x).trim() ? "\n\n" + t + "\n" + String(x).trim() : "";
+  const act = (actions || []).length ? "\n\nTes engagements d'ici la prochaine séance :\n" + actions.map(a => "• " + a.texte + (a.echeance ? " (pour le " + bilanDateFr(a.echeance + "T12:00:00") + ")" : "")).join("\n") : "";
+  return ("Bonjour" + (prenom ? " " + prenom : "") + ", voici le compte rendu de notre séance du " + bilanDateFr(cr.date) + "." + bloc("Ce qu'on a regardé :", cr.vu) + bloc("Ce que tu retiens / ce que nous avons décidé :", cr.decisions) + bloc("Prochain pas :", cr.prochain) + act + "\n\nÀ très vite !").trim();
+}
+function suivisAFaire(clients, rdvs, maintenant) {
+  maintenant = maintenant || new Date(); const auj = isoDate(maintenant), jr = s => String(s).slice(0, 10);
+  return (clients || []).filter(c => c && c.status === "terminé" && !(c.suivi3mois && c.suivi3mois.fait)).map(c => {
+    const bil = (c.bilans || []).filter(b => b && b.type === "final" && b.date).map(b => jr(b.date)).sort().pop();
+    const rd = (rdvs || []).filter(r => r && r.clientId === c.id && r.date).map(r => jr(r.date)).sort().pop();
+    const fin = c.termineLe ? jr(c.termineLe) : (bil || rd || null); if (!fin) return null;
+    const [y, m, d] = fin.split("-").map(Number), due = isoDate(new Date(y, m - 1, d + 90));
+    return due <= auj ? { client: c, fin, jours: Math.round((new Date(maintenant.getFullYear(), maintenant.getMonth(), maintenant.getDate()) - new Date(y, m - 1, d)) / 86400000) } : null;
+  }).filter(Boolean).sort((a, b) => b.jours - a.jours);
+}
+
+// ── éléments d'interface partagés ──
+function cc(type, lib, val, opts) {
+  const s = "width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid #E4DAC0;border-radius:8px;font-size:16px;font-family:inherit;margin-top:3px;background:#fff";
+  let el;
+  if (type === "select") { el = h("select", { style: s }, ...opts.map(o => h("option", { value: o[0] }, o[1]))); el.value = val === undefined || val === null ? opts[0][0] : val; }
+  else if (type === "textarea") { el = h("textarea", { rows: "3", style: s, placeholder: (opts && opts.ph) || "" }); el.value = val || ""; }
+  else if (type === "check") { el = h("input", { type: "checkbox" }); el.checked = !!val; return { el: h("label", { style: "display:flex;gap:8px;align-items:flex-start;margin:8px 0;font-size:14px;color:#2E2A20;cursor:pointer" }, el, lib), val: () => el.checked }; }
+  else { el = h("input", { type, style: s, placeholder: (opts && opts.ph) || "" }); el.value = val || ""; }
+  return { el: h("div", { style: "margin-top:10px" }, lbl(lib), el), val: () => el.value };
+}
+function cadreCarte(titre, aide) {
+  const c = h("div", { class: "card", style: "padding:16px 18px;margin-bottom:14px" });
+  c.appendChild(h("div", { style: "font-weight:700;font-size:14.5px;color:#2E2A20" }, titre));
+  if (aide) c.appendChild(h("div", { style: "font-size:12.5px;color:#6B6355;margin:2px 0 4px;line-height:1.45" }, aide));
+  return c;
+}
+function ouvrirLien(href) { const a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noopener"; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
+function boutonsEnvoi(c, texte, sujet) {
+  const num = numeroInternational(c.tel), mail = String(c.email || "").trim(), barre = h("div", { style: "display:flex;gap:6px;flex-wrap:wrap;margin-top:8px" });
+  const b = (lib, href) => { const x = h("button", { class: "btn-sm", type: "button", style: href ? "" : "opacity:.4;cursor:not-allowed" }, lib); if (href) x.addEventListener("click", () => ouvrirLien(href)); return x; };
+  barre.appendChild(b("💬 WhatsApp", num ? "https://wa.me/" + num + "?text=" + encodeURIComponent(texte) : null));
+  barre.appendChild(b("📱 SMS", num ? "sms:+" + num + "?&body=" + encodeURIComponent(texte) : null));
+  barre.appendChild(b("✉️ E-mail", mail ? "mailto:" + encodeURIComponent(mail) + "?subject=" + encodeURIComponent(sujet) + "&body=" + encodeURIComponent(texte) : null));
+  const cp = h("button", { class: "btn-sm", type: "button" }, "📋 Copier"); cp.addEventListener("click", async () => { try { await navigator.clipboard.writeText(texte); cp.textContent = "✓ Copié"; } catch (e) { cp.textContent = "Copie impossible"; } });
+  barre.appendChild(cp); return barre;
+}
+function sauverChamps(c, patch) { Object.keys(patch).forEach(k => { c[k] = patch[k]; }); try { save(); } catch (e) {} ClientsManager.saveClient(c.id, patch); }
+
+// ── onglet « Cadre » ──
+function buildCadre(c) {
+  const wrap = h("div", {}); c.cadre = c.cadre || {}; const maintenant = new Date();
+  const enreg = () => { sauverChamps(c, { cadre: c.cadre }); render(); };
+  // alertes
+  cadreAlertes(c, maintenant).forEach(a => wrap.appendChild(h("div", { style: "padding:11px 14px;border-radius:12px;margin-bottom:10px;font-size:13.5px;line-height:1.5;color:#2E2A20;border:1px solid " + (a.niveau === "rouge" ? "#C0392B" : a.niveau === "orange" ? "#D4885A" : "#E4DAC0") + ";background:" + (a.niveau === "rouge" ? "#C0392B14" : a.niveau === "orange" ? "#D4885A18" : "#FFFDF7") }, (a.niveau === "rouge" ? "🚨 " : a.niveau === "orange" ? "⚠️ " : "ℹ️ ") + a.texte)));
+
+  // fiche d'accueil
+  const ac = c.cadre.accueil || {}, c1 = cadreCarte("🧭 Fiche d'accueil : la demande relève-t-elle du coaching ?", "Quatre questions, sans score ni diagnostic. Elles ne remplacent pas ton jugement.");
+  const OUI = [["", "— à renseigner —"], ["oui", "Oui"], ["non", "Non"], ["nsp", "Ne souhaite pas répondre"]];
+  const f1 = cc("select", "SUIVI MÉDICAL OU PSYCHOLOGIQUE EN COURS", ac.suiviMedical, OUI), f2 = cc("select", "TRAITEMENT EN COURS", ac.traitement, OUI);
+  const f3 = cc("select", "ÉTAT ACTUEL", ac.detresse, [["", "— à renseigner —"], ["aucune", "Aucune détresse particulière"], ["moderee", "Fatigue ou souffrance importante"], ["forte", "Détresse forte ou idées noires"]]);
+  const f4 = cc("select", "TA LECTURE DE LA DEMANDE", ac.demande, [["", "— à renseigner —"], ["coaching", "Relève du coaching"], ["clarifier", "À clarifier"], ["soin", "Relève plutôt du soin"]]);
+  const f5 = cc("textarea", "NOTE (FACULTATIF)", ac.note, { ph: "Ce que le coaché a dit, sans interprétation médicale…" });
+  [f1, f2, f3, f4, f5].forEach(f => c1.appendChild(f.el));
+  const s1 = h("button", { class: "btn", style: "margin-top:12px" }, "💾 Enregistrer la fiche d'accueil");
+  s1.addEventListener("click", () => { c.cadre.accueil = { suiviMedical: f1.val(), traitement: f2.val(), detresse: f3.val(), demande: f4.val(), note: f5.val().trim(), date: new Date().toISOString() }; enreg(); });
+  c1.appendChild(s1); wrap.appendChild(c1);
+
+  // orientations
+  const c2 = cadreCarte("🧑‍⚕️ Orientations proposées", "Garde la trace de ce que tu as proposé et de la réponse du coaché.");
+  (c.cadre.orientations || []).slice().reverse().forEach(o => {
+    const rep = h("input", { type: "text", value: o.reponse || "", placeholder: "Réponse du coaché…", style: "flex:1;min-width:0;padding:7px 9px;border:1px solid #E4DAC0;border-radius:8px;font-size:15px" });
+    const ok = h("button", { class: "btn-g", style: "font-size:12.5px;padding:6px 10px" }, "Noter");
+    ok.addEventListener("click", () => { o.reponse = rep.value.trim(); enreg(); });
+    const del = h("button", { class: "btn-g", style: "font-size:12.5px;padding:6px 10px" }, "✕"); del.setAttribute("aria-label", "Supprimer cette orientation");
+    del.addEventListener("click", () => { if (!confirm("Supprimer cette orientation ?")) return; c.cadre.orientations = c.cadre.orientations.filter(x => x.id !== o.id); enreg(); });
+    c2.appendChild(h("div", { style: "padding:9px 0;border-top:1px solid #EFE7D2" }, h("div", { style: "font-size:13.5px;font-weight:600;color:#2E2A20" }, bilanDateFr(o.date) + " · " + o.vers), o.note ? h("div", { style: "font-size:12.5px;color:#5A5648" }, o.note) : null, h("div", { style: "display:flex;gap:6px;margin-top:6px" }, rep, ok, del)));
+  });
+  const o1 = cc("select", "ORIENTATION VERS", ORIENTATIONS_VERS[0], ORIENTATIONS_VERS.map(x => [x, x])), o2 = cc("text", "NOTE (FACULTATIF)", "", { ph: "Ce que tu as proposé, comment c'est passé…" });
+  c2.appendChild(o1.el); c2.appendChild(o2.el);
+  const oAdd = h("button", { class: "btn-g", style: "margin-top:10px" }, "➕ Noter une orientation proposée");
+  oAdd.addEventListener("click", () => { c.cadre.orientations = (c.cadre.orientations || []).concat([{ id: "o_" + Date.now(), date: new Date().toISOString(), vers: o1.val(), note: o2.val().trim(), reponse: "" }]); enreg(); });
+  c2.appendChild(oAdd); wrap.appendChild(c2);
+
+  // précautions
+  const pr = c.cadre.precautions || {}, c3 = cadreCarte("🫁 Précautions avant les exercices corporels", "Respiration, sophrologie, relaxation : à vérifier avant de proposer ces exercices.");
+  const cb = {}; Object.keys(PRECAUTIONS_LIB).forEach(k => { cb[k] = cc("check", PRECAUTIONS_LIB[k], pr[k]); c3.appendChild(cb[k].el); });
+  const pn = cc("textarea", "EXERCICES À ÉVITER OU À ADAPTER", pr.note, { ph: "Ex. : pas d'apnée, relaxation guidée courte…" }); c3.appendChild(pn.el);
+  const s3 = h("button", { class: "btn-g", style: "margin-top:10px" }, "💾 Enregistrer les précautions");
+  s3.addEventListener("click", () => { const p = { note: pn.val().trim(), date: new Date().toISOString() }; Object.keys(cb).forEach(k => { p[k] = cb[k].val(); }); c.cadre.precautions = p; enreg(); });
+  c3.appendChild(s3); wrap.appendChild(c3);
+
+  // mode d'emploi
+  const me = c.cadre.modeEmploi || {}, c4 = cadreCarte("🧩 Mode d'emploi de " + c.name, "Comment cette personne fonctionne le mieux. Le canal préféré s'affiche dans tes rappels.");
+  const m1 = cc("select", "MOMENT DE LA JOURNÉE", me.moment, [["", "—"], ["matin", "Matin"], ["apres-midi", "Après-midi"], ["soir", "Soir"], ["variable", "Variable"]]);
+  const m2 = cc("select", "CANAL PRÉFÉRÉ", me.canal, [["", "—"], ["WhatsApp", "WhatsApp"], ["SMS", "SMS"], ["E-mail", "E-mail"], ["Appel", "Appel"]]);
+  const m3 = cc("select", "SUPPORTS QUI AIDENT", me.supports, [["", "—"], ["visuel", "Visuels (schémas, couleurs)"], ["audio", "Audio"], ["ecrit-court", "Écrit court"], ["mixte", "Mixte"]]);
+  const m4 = cc("select", "SÉANCES", me.duree, [["", "—"], ["courtes", "Plutôt courtes, avec des pauses"], ["standard", "Format standard"], ["longues", "Plutôt longues"]]);
+  const m5 = cc("textarea", "CE QUI L'AIDE", me.aide, { ph: "Rappels la veille, un seul sujet à la fois…" }), m6 = cc("textarea", "À ÉVITER", me.eviter, { ph: "Consignes longues à l'oral, messages tard le soir…" });
+  [m1, m2, m3, m4, m5, m6].forEach(f => c4.appendChild(f.el));
+  const s4 = h("button", { class: "btn-g", style: "margin-top:10px" }, "💾 Enregistrer le mode d'emploi");
+  s4.addEventListener("click", () => { c.cadre.modeEmploi = { moment: m1.val(), canal: m2.val(), supports: m3.val(), duree: m4.val(), aide: m5.val().trim(), eviter: m6.val().trim() }; enreg(); });
+  c4.appendChild(s4); wrap.appendChild(c4);
+
+  // échelle d'atteinte d'objectif (GAS)
+  const obj = (c.parcours && c.parcours.objectifs) || [], c5 = cadreCarte("🎯 Échelle d'atteinte d'objectif (GAS)", "Définis avec le coaché, dès le cadrage, ce que signifient −2 à +2 pour chaque objectif. Tu mesures ensuite son niveau à chaque bilan.");
+  if (!obj.length) c5.appendChild(h("div", { style: "font-size:13px;color:#5A5648;margin-top:6px" }, "Ajoute d'abord des objectifs dans l'onglet « Parcours »."));
+  obj.forEach(o => {
+    const g = (c.gas && c.gas[o.id]) || { niveaux: {}, mesures: [] }, boite = h("div", { style: "margin-top:14px;padding-top:10px;border-top:1px solid #EFE7D2" }, h("div", { style: "font-weight:600;font-size:14px;color:#2E2A20" }, o.titre));
+    const champs = {}; GAS_NIVEAUX.forEach(n => { champs[n[0]] = cc("text", n[1].toUpperCase(), (g.niveaux || {})[n[0]], { ph: "Ce que ça donnerait concrètement…" }); boite.appendChild(champs[n[0]].el); });
+    const dernier = (g.mesures || []).slice(-1)[0], mes = cc("select", "NIVEAU ACTUEL" + (dernier ? " (dernière mesure le " + bilanDateFr(dernier.date) + " : " + (dernier.niveau > 0 ? "+" : "") + dernier.niveau + ")" : ""), "", [["", "— ne pas mesurer maintenant —"]].concat(GAS_NIVEAUX));
+    boite.appendChild(mes.el);
+    const sv = h("button", { class: "btn-g", style: "margin-top:10px" }, "💾 Enregistrer");
+    sv.addEventListener("click", () => { const niveaux = {}; Object.keys(champs).forEach(k => { niveaux[k] = champs[k].val().trim(); }); const ms = (g.mesures || []).slice(); if (mes.val() !== "") ms.push({ date: new Date().toISOString(), niveau: Number(mes.val()) }); c.gas = Object.assign({}, c.gas, { [o.id]: { niveaux, mesures: ms } }); sauverChamps(c, { gas: c.gas }); render(); });
+    boite.appendChild(sv); c5.appendChild(boite);
+  });
+  wrap.appendChild(c5);
+
+  // repères de pratique
+  const c6 = cadreCarte("🛟 Repères de pratique", "À dire clairement : sur le site, dans le contrat, au premier rendez-vous.");
+  c6.appendChild(h("div", { style: "font-size:13.5px;line-height:1.55;color:#2E2A20;margin-top:6px;padding:10px 12px;background:#9C7A2E12;border-radius:10px" }, MENTION_CADRE));
+  const cpM = h("button", { class: "btn-g", style: "margin-top:8px" }, "📋 Copier la mention de cadre"); cpM.addEventListener("click", async () => { try { await navigator.clipboard.writeText(MENTION_CADRE); cpM.textContent = "✓ Copiée"; } catch (e) { cpM.textContent = "Copie impossible"; } });
+  c6.appendChild(cpM);
+  c6.appendChild(h("div", { style: "font-size:12.5px;line-height:1.55;color:#5A5648;margin-top:10px" }, "Le TDAH est un diagnostic médical : ne le pose pas et ne le promets pas. HPI et HSP ne sont pas des diagnostics cliniques. Sur la PNL, les revues systématiques disponibles sur les effets en santé rapportent des preuves limitées et de qualité inégale (voir Sturt et al., 2012, British Journal of General Practice) : présente-la comme un outil parmi d'autres, sans promesse de résultat."));
+  c6.appendChild(h("div", { style: "font-size:12.5px;line-height:1.55;color:#B0413E;margin-top:8px;font-weight:600" }, "En cas de risque : " + URGENCE_TEXTE));
+  wrap.appendChild(c6);
+  return wrap;
+}
+
+// ── onglet « Séance » : compte rendu, engagements, alliance ──
+function buildSuivi(c) {
+  const wrap = h("div", {}); const enreg = patch => { sauverChamps(c, patch); render(); };
+  // compte rendu
+  const c1 = cadreCarte("📝 Compte rendu de séance", "Un écrit court après la séance aide à retenir et à passer à l'action.");
+  const f1 = cc("textarea", "CE QU'ON A REGARDÉ", "", { ph: "Le sujet, ce qui est apparu…" }), f2 = cc("textarea", "CE QU'IL/ELLE RETIENT · DÉCISIONS", "", { ph: "Ce qu'il ou elle en retient, ce qui est décidé…" }), f3 = cc("textarea", "PROCHAIN PAS", "", { ph: "Une action simple avant la prochaine séance…" });
+  const f4 = cc("check", "Visible dans l'espace du coaché", true), f5 = cc("check", "Lui demander aussi un retour sur la séance (alliance)", true);
+  [f1, f2, f3, f4, f5].forEach(f => c1.appendChild(f.el));
+  const brut = () => ({ id: "cr_" + Date.now(), date: new Date().toISOString(), vu: f1.val().trim(), decisions: f2.val().trim(), prochain: f3.val().trim(), partage: f4.val() });
+  const texteCourant = () => compteRenduTexte(c, brut(), actionsARevoir(c));
+  const aper = h("div", { style: "font-size:12.5px;color:#5A5648;white-space:pre-wrap;margin-top:8px;padding:9px 11px;border:1px dashed #D8CBA8;border-radius:10px;display:none" });
+  const bSave = h("button", { class: "btn", style: "margin-top:8px" }, "💾 Enregistrer le compte rendu");
+  bSave.addEventListener("click", () => {
+    const cr = brut(); if (!cr.vu && !cr.decisions && !cr.prochain) { alert("Écris au moins une ligne dans le compte rendu."); return; }
+    const patch = { comptesRendus: (c.comptesRendus || []).concat([cr]) }; if (f5.val()) patch.allianceDemande = { date: cr.date.slice(0, 10), creeLe: cr.date };
+    enreg(patch);
+  });
+  const bMsg = h("button", { class: "btn-g", style: "margin-top:8px" }, "👁️ Voir le message à envoyer");
+  bMsg.addEventListener("click", () => { aper.style.display = "block"; aper.textContent = texteCourant(); const ancien = aper.nextSibling; if (ancien && ancien.getAttribute && ancien.getAttribute("data-envoi")) ancien.remove(); const e = boutonsEnvoi(c, texteCourant(), "Compte rendu de notre séance"); e.setAttribute("data-envoi", "1"); aper.after(e); });
+  c1.appendChild(h("div", { style: "display:flex;gap:8px;flex-wrap:wrap" }, bSave, bMsg)); c1.appendChild(aper);
+  (c.comptesRendus || []).slice().sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(cr => {
+    const ligne = h("div", { style: "padding:9px 0;border-top:1px solid #EFE7D2" }, h("div", { style: "font-size:13.5px;font-weight:600;color:#2E2A20" }, "Séance du " + bilanDateFr(cr.date)), h("div", { style: "font-size:12.5px;color:" + (cr.partage ? "#2F7D3B" : "#6B6355") }, cr.partage ? "✓ Visible par le coaché" : "Non partagé"));
+    const bt = h("div", { style: "display:flex;gap:6px;flex-wrap:wrap;margin-top:6px" });
+    const bP = h("button", { class: "btn-g", style: "font-size:12.5px;padding:5px 10px" }, cr.partage ? "Retirer du partage" : "Partager"); bP.addEventListener("click", () => { cr.partage = !cr.partage; enreg({ comptesRendus: c.comptesRendus }); });
+    const bD = h("button", { class: "btn-g", style: "font-size:12.5px;padding:5px 10px" }, "✕"); bD.setAttribute("aria-label", "Supprimer ce compte rendu"); bD.addEventListener("click", () => { if (!confirm("Supprimer ce compte rendu ?")) return; enreg({ comptesRendus: c.comptesRendus.filter(x => x.id !== cr.id) }); });
+    bt.appendChild(bP); bt.appendChild(bD); ligne.appendChild(bt); c1.appendChild(ligne);
+  });
+  wrap.appendChild(c1);
+
+  // engagements
+  const ouv = actionsARevoir(c), c2 = cadreCarte("🎯 Engagements entre les séances", ouv.length ? ouv.length + " à revoir à la prochaine séance. Le coaché les voit et les coche dans son espace." : "Aucun engagement en attente.");
+  (c.actions || []).forEach(a => {
+    const st = actionStatutDe(c, a), sel = h("select", { style: "padding:6px 8px;border:1px solid #E4DAC0;border-radius:8px;font-size:14px;background:#fff" }, ...Object.keys(ACTION_LIB).map(k => h("option", { value: k }, ACTION_LIB[k]))); sel.value = st.statut;
+    sel.addEventListener("change", () => { c.actionsStatut = c.actionsStatut || {}; c.actionsStatut[a.id] = { statut: sel.value, date: new Date().toISOString(), par: "coach" }; enreg({ actionsStatut: { [a.id]: c.actionsStatut[a.id] } }); });
+    const del = h("button", { class: "btn-g", style: "font-size:12.5px;padding:5px 10px" }, "✕"); del.setAttribute("aria-label", "Supprimer cet engagement"); del.addEventListener("click", () => { if (!confirm("Supprimer cet engagement ?")) return; enreg({ actions: c.actions.filter(x => x.id !== a.id) }); });
+    c2.appendChild(h("div", { style: "display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 0;border-top:1px solid #EFE7D2" }, h("div", { style: "min-width:0;font-size:13.5px;color:#2E2A20" }, a.texte, a.echeance ? h("div", { style: "font-size:12px;color:#6B6355" }, "pour le " + bilanDateFr(a.echeance + "T12:00:00")) : null), h("div", { style: "display:flex;gap:6px;align-items:center" }, sel, del)));
+  });
+  const a1 = cc("text", "NOUVEL ENGAGEMENT", "", { ph: "Ex. : 10 minutes de marche le matin" }), a2 = cc("date", "POUR LE (FACULTATIF)", "");
+  c2.appendChild(a1.el); c2.appendChild(a2.el);
+  const aAdd = h("button", { class: "btn-g", style: "margin-top:10px" }, "➕ Ajouter l'engagement");
+  aAdd.addEventListener("click", () => { const t = a1.val().trim(); if (!t) { alert("Écris l'engagement."); return; } enreg({ actions: (c.actions || []).concat([{ id: "a_" + Date.now(), texte: t, echeance: a2.val() || "", creeLe: new Date().toISOString() }]) }); });
+  c2.appendChild(aAdd); wrap.appendChild(c2);
+
+  // alliance
+  const an = allianceAnalyse(c), c3 = cadreCarte("🤝 Retour du coaché sur les séances", "Quatre questions de 0 à 10, posées en 1 minute. Elles repèrent une tension avant un éventuel abandon.");
+  if (an.alerte) c3.appendChild(h("div", { style: "padding:9px 12px;border-radius:10px;margin:6px 0;font-size:13.5px;border:1px solid #D4885A;background:#D4885A18;color:#2E2A20" }, "⚠️ " + an.alerte));
+  const dem = c.allianceDemande; if (dem && !(c.alliance && c.alliance[dem.date])) c3.appendChild(h("div", { style: "font-size:13px;color:#7A5C1A;margin:6px 0" }, "⏳ Retour demandé pour la séance du " + bilanDateFr(dem.date + "T12:00:00") + " : en attente du coaché."));
+  an.liste.slice().reverse().forEach(x => c3.appendChild(h("div", { style: "padding:8px 0;border-top:1px solid #EFE7D2;font-size:13.5px;color:#2E2A20" }, h("b", {}, bilanDateFr(x.date + "T12:00:00") + " · moyenne " + String(x.moyenne).replace(".", ",") + " / 10"), h("div", { style: "font-size:12.5px;color:#5A5648" }, ALLIANCE_ITEMS.map(i => i[1].replace(/ \(e\)/g, "") + " : " + (x.scores[i[0]] === undefined ? "—" : x.scores[i[0]])).join(" · ")), x.scores.commentaire ? h("div", { style: "font-size:12.5px;color:#5A5648;font-style:italic" }, "« " + x.scores.commentaire + " »") : null)));
+  const dDate = cc("date", "SÉANCE DU", isoDate(new Date()));
+  const bDem = h("button", { class: "btn-g", style: "margin-top:8px" }, "📨 Demander un retour dans son espace");
+  bDem.addEventListener("click", () => { const d = dDate.val(); if (!d) return; enreg({ allianceDemande: { date: d, creeLe: new Date().toISOString() } }); });
+  c3.appendChild(dDate.el); c3.appendChild(bDem);
+  const sels = ALLIANCE_ITEMS.map(i => cc("select", "SAISIE À LA MAIN : " + i[1].toUpperCase().replace(" (E)", ""), "", [["", "—"]].concat(Array.from({ length: 11 }, (_, n) => [String(n), String(n)]))));
+  sels.forEach(s => c3.appendChild(s.el));
+  const bMan = h("button", { class: "btn-g", style: "margin-top:8px" }, "💾 Enregistrer la saisie à la main");
+  bMan.addEventListener("click", () => { if (sels.some(s => s.val() === "")) { alert("Renseigne les quatre notes."); return; } const d = dDate.val(); const v = { date: new Date().toISOString(), par: "coach" }; ALLIANCE_ITEMS.forEach((i, k) => { v[i[0]] = Number(sels[k].val()); }); c.alliance = Object.assign({}, c.alliance, { [d]: v }); enreg({ alliance: { [d]: v } }); });
+  c3.appendChild(bMan); wrap.appendChild(c3);
+  return wrap;
+}
+
+// ── Journal réflexif (local, privé) ──
+function journalCsv(entrees) {
+  const q = v => '"' + String(v === undefined || v === null ? "" : v).replace(/"/g, '""') + '"';
+  return "\uFEFF" + [["Date", "Situation (anonymisée)", "Ce qui a marché", "Ce que ça a remué chez moi", "Question pour la supervision", "Statut"].map(q).join(";")].concat(entrees.map(e => [e.date, e.client, e.marche, e.remue, e.question, e.statut === "traite" ? "Traité" : "À porter en supervision"].map(q).join(";"))).join("\r\n");
+}
+function renderJournalTab() {
+  const wrap = h("div", { class: "page-wrap" }); const liste = (PrefsPrivees.lire().journal || []).slice().sort((a, b) => a.date < b.date ? 1 : -1);
+  let filtre = "tous";
+  wrap.appendChild(h("h3", { style: "font-size:20px;color:#2E2A20;font-weight:600;margin:0 0 4px;font-style:italic" }, "Journal réflexif"));
+  wrap.appendChild(h("p", { style: "color:#6B6355;font-size:13px;margin:0 0 14px;line-height:1.45" }, "Après une séance : ce qui a marché, ce que ça a remué chez toi, une question pour ta supervision. Reste sur cet appareil. N'écris jamais de nom complet : utilise « Client A » ou une situation."));
+  const f = h("div", { class: "card", style: "padding:14px 16px;margin-bottom:14px" });
+  const j0 = cc("date", "DATE", isoDate(new Date())), j1 = cc("text", "SITUATION (ANONYMISÉE)", "", { ph: "Ex. : Client A, 4e séance" }), j2 = cc("textarea", "CE QUI A MARCHÉ", ""), j3 = cc("textarea", "CE QUE ÇA A REMUÉ CHEZ MOI", ""), j4 = cc("textarea", "QUESTION POUR LA SUPERVISION", ""), j5 = cc("check", "À porter en supervision", true);
+  [j0, j1, j2, j3, j4, j5].forEach(x => f.appendChild(x.el));
+  const add = h("button", { class: "btn", style: "margin-top:8px" }, "💾 Ajouter au journal");
+  add.addEventListener("click", () => { if (!j2.val().trim() && !j3.val().trim() && !j4.val().trim()) { alert("Écris au moins une ligne."); return; } PrefsPrivees.ecrire({ journal: (PrefsPrivees.lire().journal || []).concat([{ id: "j_" + Date.now(), date: j0.val() || isoDate(new Date()), client: j1.val().trim(), marche: j2.val().trim(), remue: j3.val().trim(), question: j4.val().trim(), statut: j5.val() ? "a-porter" : "traite" }]) }); render(); });
+  f.appendChild(add); wrap.appendChild(f);
+  const lc = h("div", { class: "card", style: "padding:14px 16px" }); const zone = h("div", {});
+  const dessiner = () => {
+    zone.innerHTML = ""; const vus = liste.filter(e => filtre === "tous" || e.statut === filtre);
+    if (!vus.length) zone.appendChild(h("div", { style: "font-size:13px;color:#5A5648;padding:6px 0" }, "Aucune entrée."));
+    vus.forEach(e => {
+      const bS = h("button", { class: "btn-g", style: "font-size:12.5px;padding:5px 10px" }, e.statut === "traite" ? "Remettre à porter" : "✓ Traité"); bS.addEventListener("click", () => { PrefsPrivees.ecrire({ journal: PrefsPrivees.lire().journal.map(x => x.id === e.id ? Object.assign({}, x, { statut: x.statut === "traite" ? "a-porter" : "traite" }) : x) }); render(); });
+      const bD = h("button", { class: "btn-g", style: "font-size:12.5px;padding:5px 10px" }, "✕"); bD.setAttribute("aria-label", "Supprimer cette entrée"); bD.addEventListener("click", () => { if (!confirm("Supprimer cette entrée ?")) return; PrefsPrivees.ecrire({ journal: PrefsPrivees.lire().journal.filter(x => x.id !== e.id) }); render(); });
+      const bloc = (t, x) => x ? h("div", { style: "font-size:13px;color:#2E2A20;margin-top:3px" }, h("b", {}, t + " : "), x) : null;
+      zone.appendChild(h("div", { style: "padding:10px 0;border-top:1px solid #EFE7D2" }, h("div", { style: "font-size:13.5px;font-weight:700;color:#2E2A20" }, bilanDateFr(e.date + "T12:00:00") + (e.client ? " · " + e.client : "") + (e.statut === "traite" ? " · ✓ traité" : " · à porter")), bloc("Marché", e.marche), bloc("Remué", e.remue), bloc("Question", e.question), h("div", { style: "display:flex;gap:6px;margin-top:6px" }, bS, bD)));
+    });
+  };
+  const chips = h("div", { style: "display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px" });
+  [["tous", "Tout"], ["a-porter", "À porter en supervision"], ["traite", "Traité"]].forEach(([id, lib]) => { const b = h("button", { class: "btn-g", style: "font-size:12.5px;padding:5px 10px" }, lib); b.addEventListener("click", () => { filtre = id; dessiner(); }); chips.appendChild(b); });
+  lc.appendChild(h("div", { style: "font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:6px" }, "📓 Entrées (" + liste.length + ")")); lc.appendChild(chips); lc.appendChild(zone); dessiner();
+  const ex = h("button", { class: "btn", style: "margin-top:10px" }, "⬇️ Exporter pour la supervision (CSV)");
+  ex.addEventListener("click", () => { const blob = new Blob([journalCsv(liste.filter(e => filtre === "tous" || e.statut === filtre))], { type: "text/csv;charset=utf-8" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "journal-reflexif-" + isoDate(new Date()) + ".csv"; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(a.href), 2000); });
+  lc.appendChild(ex); wrap.appendChild(lc); return wrap;
+}
+
+// ── Conformité : liste de contrôle et documents à compléter ──
+const CONFORMITE_ITEMS = [["secrets", "Secrets régénérés (GitHub, Vercel, Google) après leur exposition"], ["regles", "Règles Firestore auditées (clients, contrats, portail)"], ["identite", "Identité du responsable de traitement renseignée ci-dessous"], ["registre", "Registre des traitements relu, complété et conservé"], ["politique", "Politique de confidentialité relue et publiée sur le site"], ["contrat", "Contrat : SIRET, RC Pro et durées de conservation réels (plus aucun champ « à remplir »)"], ["mentions", "Mentions légales et CGV en ligne sur le site"], ["mediateur", "Médiateur de la consommation désigné et mentionné (à vérifier)"], ["soustraitants", "Sous-traitants (Google, Vercel) : conditions d'utilisation et clauses de protection des données consultées"], ["aipd", "Besoin d'une analyse d'impact (AIPD) évalué, par écrit"], ["accueil", "Fiche d'accueil et orientation utilisées avec chaque nouveau coaché"], ["supervision", "Supervision ou mentorat en place"]];
+function conformiteAvancement(prefs) { const c = (prefs && prefs.conformite) || {}, n = CONFORMITE_ITEMS.filter(i => c[i[0]]).length; return { faits: n, total: CONFORMITE_ITEMS.length }; }
+const DOC_CSS = "body{font-family:Georgia,'Times New Roman',serif;color:#2E2A20;background:#fff;max-width:820px;margin:0 auto;padding:24px 18px 40px;line-height:1.6;font-size:15px}h1{font-size:24px;margin:0 0 6px}h2{font-size:17px;margin:22px 0 6px;color:#7A5C1A;border-bottom:1px solid #D8CBA8;padding-bottom:4px}table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0}td,th{border:1px solid #D8CBA8;padding:7px 9px;vertical-align:top;text-align:left}th{background:#FBF5E4}.av{padding:10px 14px;border:1px solid #D4885A;background:#D4885A18;border-radius:10px;font-size:14px;margin:12px 0}.imp{margin:0 0 16px}@media print{.imp{display:none}body{padding:0}tr{break-inside:avoid}}";
+function docEnveloppe(titre, corps) { return '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + bilanEsc(titre) + "</title><style>" + DOC_CSS + '</style></head><body><div class="imp"><button onclick="window.print()" style="font-size:16px;padding:10px 16px;border-radius:10px;border:1px solid #7A5C1A;background:#7A5C1A;color:#fff;cursor:pointer">🖨️ Imprimer / enregistrer en PDF</button></div>' + corps + "</body></html>"; }
+function identiteTexte(i) { i = i || {}; const v = (x, lib) => x && String(x).trim() ? bilanEsc(x) : "[À compléter : " + lib + "]"; return { nom: v(i.nom, "nom ou raison sociale"), siret: v(i.siret, "SIRET"), adresse: v(i.adresse, "adresse"), email: v(i.email, "e-mail de contact") }; }
+function docRegistreHtml(ident) {
+  const d = identiteTexte(ident), A = "[À compléter]";
+  const lignes = [
+    ["Gestion de l'accompagnement (fiches, séances, paiements, contrats)", "Identité, coordonnées, objectifs, notes de séance, paiements, contrat signé", "Exécution du contrat", "Coaché", "Google (Firebase), Vercel (hébergement du site)", A + " (ex. durée de l'accompagnement puis durée légale applicable)"],
+    ["Espace du coaché (exercices, check-ins énergie et charge mentale, évaluations, bilans, comptes rendus)", "Réponses saisies, évaluations, bilans. Peuvent révéler des informations sur le bien-être ou la santé", "Consentement explicite et contrat", "Coaché", "Google (Firebase)", A],
+    ["Fiche d'accueil et orientation", "Réponses déclaratives : suivi médical ou psychologique, traitement, état actuel, orientations proposées. Données de santé", "Consentement explicite", "Coaché", "Google (Firebase)", A],
+    ["Prise de rendez-vous en ligne et formulaire d'accueil du site", "Identité, coordonnées, motif de la demande", "Mesures précontractuelles", "Prospect", "Google (Firebase), Vercel", A],
+    ["Journal d'heures et journal réflexif (stockés sur l'appareil du coach)", "Heures de pratique, notes professionnelles anonymisées", "Intérêt légitime (suivi de formation et de pratique)", "Coach", "Aucun (appareil du coach)", A]];
+  return docEnveloppe("Registre des activités de traitement (brouillon)", "<h1>Registre des activités de traitement</h1><div>Brouillon à relire, compléter et valider par vos soins. Date de la version : " + bilanEsc(bilanDateFr(new Date().toISOString())) + "</div>"
+    + '<div class="av"><b>Brouillon, pas un avis juridique.</b> Les mentions entre crochets sont à compléter. Un registre est requis dès que les traitements ne sont pas occasionnels ou portent sur des données sensibles (art. 30 du RGPD). Pour un avis, adressez-vous à un professionnel du droit ou à la CNIL.</div>'
+    + "<h2>Responsable de traitement</h2><p>" + d.nom + "<br>SIRET : " + d.siret + "<br>Adresse : " + d.adresse + "<br>Contact : " + d.email + "</p><h2>Activités</h2><table><tr><th>Activité</th><th>Données</th><th>Base légale</th><th>Personnes</th><th>Destinataires / sous-traitants</th><th>Durée de conservation</th></tr>" + lignes.map(l => "<tr>" + l.map(x => "<td>" + bilanEsc(x) + "</td>").join("") + "</tr>").join("") + "</table>"
+    + "<h2>Transferts hors Union européenne</h2><p>[À vérifier : localisation des serveurs Firestore et conditions de transfert applicables à Google.]</p><h2>Mesures de sécurité</h2><p>Accès coach par authentification. Accès des coachés par lien personnel, renouvelable ou désactivable. Échanges chiffrés en transit (HTTPS). [À vérifier et compléter après l'audit des règles d'accès Firestore.]</p>");
+}
+function docPolitiqueHtml(ident) {
+  const d = identiteTexte(ident);
+  return docEnveloppe("Politique de confidentialité (brouillon)", "<h1>Politique de confidentialité</h1>"
+    + '<div class="av"><b>Brouillon, pas un avis juridique.</b> À relire, compléter (mentions entre crochets) et faire valider avant publication.</div>'
+    + "<h2>Qui est responsable de vos données ?</h2><p>" + d.nom + " (SIRET : " + d.siret + "), " + d.adresse + ". Contact : " + d.email + ".</p>"
+    + "<h2>Quelles données, pourquoi ?</h2><p>Pour vous accompagner : vos coordonnées, vos objectifs, vos notes de séance, vos paiements et votre contrat ; ce que vous saisissez dans votre espace personnel (exercices, évaluations, check-ins, bilans). Certaines informations peuvent concerner votre bien-être ou votre santé : elles ne sont recueillies qu'avec votre accord explicite et servent uniquement à votre accompagnement de coaching, jamais à un diagnostic.</p>"
+    + "<h2>Qui y accède ?</h2><p>Le coach. Les données sont hébergées par des prestataires techniques : Google (Firebase) et Vercel. [À compléter : localisation et garanties applicables.]</p>"
+    + "<h2>Combien de temps ?</h2><p>[À compléter : durée de conservation pendant l'accompagnement et après sa fin.]</p>"
+    + "<h2>Vos droits</h2><p>Vous pouvez demander l'accès à vos données, leur correction, leur suppression, leur récupération, vous opposer à un traitement ou retirer votre accord à tout moment, en écrivant à " + d.email + ". Vous pouvez aussi saisir la CNIL (cnil.fr).</p>"
+    + "<h2>Le cadre du coaching</h2><p>" + bilanEsc(MENTION_CADRE) + "</p>");
+}
+function ouvrirDocument(html) { const w = window.open("", "_blank"); if (!w) { alert("Ton navigateur a bloqué la fenêtre. Autorise les pop-ups pour ce site, puis réessaie."); return false; } w.document.open(); w.document.write(html); w.document.close(); return true; }
+function renderConformiteTab() {
+  const wrap = h("div", { class: "page-wrap" }), prefs = PrefsPrivees.lire(), av = conformiteAvancement(prefs), ident = prefs.identite || {};
+  wrap.appendChild(h("h3", { style: "font-size:20px;color:#2E2A20;font-weight:600;margin:0 0 4px;font-style:italic" }, "Conformité (RGPD)"));
+  wrap.appendChild(h("p", { style: "color:#6B6355;font-size:13px;margin:0 0 14px;line-height:1.45" }, "Une liste de contrôle et deux documents de départ. Ce ne sont pas des avis juridiques : relis, complète et fais valider. La liste reste sur cet appareil."));
+  const c1 = h("div", { class: "card", style: "padding:14px 16px;margin-bottom:14px" });
+  c1.appendChild(h("div", { style: "font-weight:700;font-size:14.5px;color:#2E2A20" }, "✅ Liste de contrôle (" + av.faits + " / " + av.total + ")"));
+  const bg = h("div", { style: "background:#E4DAC0;border-radius:6px;height:8px;overflow:hidden;margin:8px 0" }); bg.appendChild(h("div", { style: "background:" + (av.faits === av.total ? "#2F7D3B" : "#7A5C1A") + ";height:100%;width:" + Math.round(av.faits / av.total * 100) + "%" })); c1.appendChild(bg);
+  CONFORMITE_ITEMS.forEach(([id, lib]) => { const cb = h("input", { type: "checkbox" }); cb.checked = !!(prefs.conformite || {})[id]; cb.addEventListener("change", () => { PrefsPrivees.ecrire({ conformite: Object.assign({}, PrefsPrivees.lire().conformite, { [id]: cb.checked }) }); render(); }); c1.appendChild(h("label", { style: "display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-top:1px solid #EFE7D2;font-size:14px;color:#2E2A20;cursor:pointer" }, cb, lib)); });
+  wrap.appendChild(c1);
+  const c2 = h("div", { class: "card", style: "padding:14px 16px;margin-bottom:14px" }); c2.appendChild(h("div", { style: "font-weight:700;font-size:14.5px;color:#2E2A20" }, "🪪 Responsable de traitement (pré-remplit les documents)"));
+  const fi = { nom: cc("text", "NOM OU RAISON SOCIALE", ident.nom), siret: cc("text", "SIRET", ident.siret), adresse: cc("text", "ADRESSE", ident.adresse), email: cc("text", "E-MAIL DE CONTACT", ident.email) };
+  Object.keys(fi).forEach(k => c2.appendChild(fi[k].el));
+  const sv = h("button", { class: "btn-g", style: "margin-top:10px" }, "Enregistrer"); sv.addEventListener("click", () => { PrefsPrivees.ecrire({ identite: { nom: fi.nom.val().trim(), siret: fi.siret.val().trim(), adresse: fi.adresse.val().trim(), email: fi.email.val().trim() } }); render(); }); c2.appendChild(sv); wrap.appendChild(c2);
+  const c3 = h("div", { class: "card", style: "padding:14px 16px" }); c3.appendChild(h("div", { style: "font-weight:700;font-size:14.5px;color:#2E2A20;margin-bottom:8px" }, "📄 Documents à compléter"));
+  const b1 = h("button", { class: "btn" }, "Registre des traitements"); b1.addEventListener("click", () => ouvrirDocument(docRegistreHtml(PrefsPrivees.lire().identite)));
+  const b2 = h("button", { class: "btn", style: "margin-left:8px" }, "Politique de confidentialité"); b2.addEventListener("click", () => ouvrirDocument(docPolitiqueHtml(PrefsPrivees.lire().identite)));
+  c3.appendChild(b1); c3.appendChild(b2); wrap.appendChild(c3); return wrap;
+}
+// ===== FIN CADRE =====
 
 function businessCle(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
 function businessJour(d) { return businessCle(d) + "-" + String(d.getDate()).padStart(2, "0"); }
@@ -6453,6 +6778,8 @@ const TABS = [
   {id:"rdv",          icon:"📅", label:"Demandes RDV",             pole:"Gestion", cat:"Planning"},
   {id:"finances",     icon:"💰", label:"Finances & Business",                 pole:"Gestion", cat:"Finances"},
   {id:"heures",       icon:"⏱️", label:"Journal d'heures",         pole:"Gestion", cat:"Finances"},
+  {id:"journal",      icon:"📓", label:"Journal réflexif",          pole:"Gestion", cat:"Finances"},
+  {id:"conformite",   icon:"🛡️", label:"Conformité (RGPD)",         pole:"Gestion", cat:"Finances"},
   {id:"statistiques", icon:"📊", label:"Statistiques",             pole:"Gestion", cat:"Statistiques"},
   {id:"reglages",     icon:"⚙️", label:"Site internet & réglages", pole:"Gestion", cat:"Site internet"},
   {id:"notes",        icon:"◻", label:"Journal de bord",           pole:"Gestion", cat:"Administratif"},
@@ -6746,7 +7073,8 @@ const RELANCES = [
   { id: "blocage", icone: "🧩", titre: "Après un blocage signalé", sujet: "Ton blocage", texte: "Bonjour {prenom}, j'ai vu que tu avais signalé un blocage. Merci de me l'avoir dit. Veux-tu qu'on en parle avant la séance ? Dis-moi quand ça t'arrange." },
   { id: "recadrage", icone: "🤝", titre: "Recadrage bienveillant", sujet: "On fait le point ?", texte: "Bonjour {prenom}, j'ai remarqué que nos derniers échanges ont été difficiles à tenir. Rien de grave : peux-tu me dire ce qui t'a freiné·e ? On ajustera ensemble, sans jugement." },
   { id: "silence", icone: "🌙", titre: "Reprise après un silence", sujet: "Comment vas-tu ?", texte: "Bonjour {prenom}, ça fait un moment que je n'ai pas eu de tes nouvelles. Comment vas-tu ? Quand tu te sens prêt·e, on reprend à ton rythme." },
-  { id: "felicitations", icone: "🌟", titre: "Félicitations", sujet: "Bravo !", texte: "Bravo {prenom} ! J'ai vu ton avancée et ta régularité. Continue comme ça, tu peux être fier·e de toi." }
+  { id: "felicitations", icone: "🌟", titre: "Félicitations", sujet: "Bravo !", texte: "Bravo {prenom} ! J'ai vu ton avancée et ta régularité. Continue comme ça, tu peux être fier·e de toi." },
+  { id: "suivi3m", icone: "📅", titre: "Prise de nouvelles à 3 mois", sujet: "Des nouvelles ?", texte: "Bonjour {prenom}, ça fait environ trois mois que nous avons terminé notre accompagnement. Comment vas-tu ? Trois questions rapides : 1) Qu'est-ce qui tient aujourd'hui de ce qu'on avait mis en place ? 2) Qu'est-ce qui est plus difficile ? 3) De quoi aurais-tu besoin ? Si tu le souhaites, ton avis sur l'accompagnement m'aiderait aussi (tu es libre de ne pas répondre). À très vite !" }
 ];
 
 function relanceTexte(c, modele) {
@@ -7948,8 +8276,9 @@ function pipelineDeplacer(c, etapeId) {
   const e = PIPELINE_ETAPES.find(x => x.id === etapeId);
   if (!e) return;
   c.etape = etapeId; c.status = e.status;
+  if (etapeId === "termine" && !c.termineLe) c.termineLe = new Date().toISOString();
   try { save(); } catch (err) {}
-  ClientsManager.saveClient(c.id, { etape: c.etape, status: c.status });
+  ClientsManager.saveClient(c.id, Object.assign({ etape: c.etape, status: c.status }, etapeId === "termine" && c.termineLe ? { termineLe: c.termineLe } : {}));
 }
 
 function renderPipelineTab() {
@@ -8137,7 +8466,7 @@ function renderClientList() {
       const row = h("div",{class:"card client-row"},
         avatar(c.name,c.profile),
         h("div",{style:"flex:1;min-width:0"},
-          h("div",{style:"color:#2E2A20;font-size:15px;font-weight:600"},c.name),
+          h("div",{style:"color:#2E2A20;font-size:15px;font-weight:600"},c.name + ((typeof cadreAlertes === "function" && cadreAlertes(c).some(a => a.niveau === "rouge")) ? " 🚨" : "")),
           h("div",{style:"color:#5A5648;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"},c.objective||"Aucun objectif")
         ),
         h("div",{style:"display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0"},
@@ -8254,7 +8583,7 @@ function renderClientDetail() {
 
   // Subtabs
   const stabs = h("div",{class:"subtabs"});
-  [["fiche","◈ Fiche"],["temps","🕒 Fil du temps"],["protocole","🧭 Protocole"],["parcours","🧗 Parcours"],["bilan","📈 Bilan"],["paiements","€ Paiements"],["notes-c","◻ Notes"]].forEach(([id,lbl])=>{
+  [["fiche","◈ Fiche"],["temps","🕒 Fil du temps"],["protocole","🧭 Protocole"],["parcours","🧗 Parcours"],["bilan","📈 Bilan"],["cadre","🧭 Cadre"],["suivi","📝 Séance"],["paiements","€ Paiements"],["notes-c","◻ Notes"]].forEach(([id,lbl])=>{
     const b = h("button",{class:"subtab"+(state.subTab===id?" active":"")},lbl);
     b.addEventListener("click",()=>{ state.subTab=id; render(); });
     stabs.appendChild(b);
@@ -8268,6 +8597,8 @@ function renderClientDetail() {
   if (state.subTab==="protocole") content.appendChild(buildProtocole(c));
   if (state.subTab==="parcours")  content.appendChild(buildParcours(c));
   if (state.subTab==="bilan")     content.appendChild(buildBilan(c));
+  if (state.subTab==="cadre")     content.appendChild(buildCadre(c));
+  if (state.subTab==="suivi")     content.appendChild(buildSuivi(c));
   if (state.subTab==="paiements") content.appendChild(buildPaiements(c));
   if (state.subTab==="notes-c")   content.appendChild(buildNotesClient(c));
   box.appendChild(content);
@@ -9048,6 +9379,8 @@ function bilanHtmlImprimable(nom, b) {
     evo(ck.energieDebut, ck.energieRecent) ? chiffre("Énergie (début → récent)", bilanEsc(evo(ck.energieDebut, ck.energieRecent)) + " / 5") : "",
     evo(ck.chargeDebut, ck.chargeRecent) ? chiffre("Charge mentale (début → récent)", bilanEsc(evo(ck.chargeDebut, ck.chargeRecent)) + " / 5") : ""].join("");
   const objectifs = obj.length ? "<h2>Objectifs</h2>" + obj.map(o => '<div class="o"><div>' + bilanEsc(o.titre) + ' <b>' + bilanEsc(o.progression) + ' %</b></div><div class="bar"><div style="width:' + Math.max(0, Math.min(100, Number(o.progression) || 0)) + '%"></div></div></div>').join("") : "";
+  const sg = n => (n > 0 ? "+" : "") + n;
+  const gasHtml = (m.gas || []).length ? "<h2>Atteinte des objectifs (échelle de −2 à +2)</h2>" + m.gas.map(g => '<div class="o">' + bilanEsc(g.titre) + " : <b>" + bilanEsc(sg(g.initial)) + " → " + bilanEsc(sg(g.actuel)) + "</b></div>").join("") : "";
   const graph = bilanGraphiqueSvg(ck.serie, { energie: "#2F7D3B", charge: "#B8651B", grille: "#D8CBA8" });
   const periode = m.debut ? "Suivi depuis le " + bilanDateFr(m.debut) + (m.jours ? " (" + m.jours + " jours)" : "") : "";
   return '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + bilanEsc((BILAN_TYPES[b.type] || "Bilan") + " – " + nom) + "</title><style>"
@@ -9059,7 +9392,7 @@ function bilanHtmlImprimable(nom, b) {
     + "@media print{.imp{display:none}body{padding:0}h2{break-after:avoid}.o,.k{break-inside:avoid}}</style></head><body>"
     + '<div class="imp"><button onclick="window.print()" style="font-size:16px;padding:10px 16px;border-radius:10px;border:1px solid #7A5C1A;background:#7A5C1A;color:#fff;cursor:pointer">🖨️ Imprimer / enregistrer en PDF</button></div>'
     + "<h1>" + bilanEsc(BILAN_TYPES[b.type] || "Bilan de progression") + "</h1><div class=\"sub\">" + bilanEsc(nom) + " · " + bilanEsc(bilanDateFr(b.date)) + (periode ? " · " + bilanEsc(periode) : "") + "</div>"
-    + '<div class="ks">' + kpis + "</div>" + (graph ? "<h2>Énergie et charge mentale</h2>" + graph : "") + objectifs
+    + '<div class="ks">' + kpis + "</div>" + (graph ? "<h2>Énergie et charge mentale</h2>" + graph : "") + objectifs + gasHtml
     + bloc("Ce qui a changé", b.constats) + bloc("Points forts", b.pointsForts) + bloc("Axes de travail et prochaines étapes", b.axes)
     + (b.recommandation && BILAN_RECO[b.recommandation] ? "<h2>Recommandation</h2><p>" + bilanEsc(BILAN_RECO[b.recommandation]) + "</p>" : "")
     + (b.citation && String(b.citation).trim() && b.citationAutorisee ? "<h2>Parole du coaché</h2><p><i>« " + bilanEsc(b.citation) + " »</i></p>" : "")
@@ -9095,6 +9428,7 @@ function bilanMesures(c, rdvs, maintenant) {
     date: maintenant.toISOString(), debut, jours, seances: Number(c.sessions) || 0,
     exercices: { faits: ex.filter(e => e && e.done).length, total: ex.length },
     phases: { faites: ph.filter(p => p && p.done).length, total: ph.length },
+    gas: (par.objectifs || []).map(o => { const g = (c.gas && c.gas[o.id]) || {}, ms = (g.mesures || []).filter(x => x && x.niveau !== undefined); return ms.length ? { titre: o.titre || "", initial: ms[0].niveau, actuel: ms[ms.length - 1].niveau, n: ms.length } : null; }).filter(Boolean),
     objectifs, progressionMoyenne: objectifs.length ? Math.round(objectifs.reduce((a, o) => a + o.progression, 0) / objectifs.length) : null,
     checkins: { n: ck.length, energieDebut: moy(premiers, "energie"), energieRecent: moy(recents, "energie"), chargeDebut: moy(premiers, "charge"), chargeRecent: moy(recents, "charge"),
       serie: ck.slice(-30).map(x => ({ energie: Number(x.energie) || null, charge: Number(x.charge) || null })) }
@@ -9995,6 +10329,8 @@ function renderNow() {
   else if (state.tab==="agenda") content = renderAgendaTab();
   else if (state.tab==="finances") content = renderFinancesTab();
   else if (state.tab==="heures") content = renderHeuresTab();
+  else if (state.tab==="journal") content = renderJournalTab();
+  else if (state.tab==="conformite") content = renderConformiteTab();
   else if (state.tab==="exercices") content = renderExercicesTab();
   else if (state.tab==="statistiques") content = renderStatistiquesTab();
   else if (state.tab==="clairiere") content = renderClairiereTab();
