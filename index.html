@@ -5823,6 +5823,169 @@ function renderStatistiquesTab() {
   return wrap;
 }
 
+// ===== PRÉFÉRENCES PRIVÉES (stockées sur cet appareil uniquement) =====
+// Le document Firestore « settings/coach » est lu par ton site public : on n'y met aucune donnée privée.
+const PrefsPrivees = {
+  cle: "cs4-prefs-privees", _migre: false,
+  lire() { try { const v = JSON.parse(localStorage.getItem(this.cle) || "{}"); return v && typeof v === "object" ? v : {}; } catch (e) { return {}; } },
+  ecrire(patch) { const v = Object.assign(this.lire(), patch); try { localStorage.setItem(this.cle, JSON.stringify(v)); } catch (e) {} return v; },
+  // Reprise de l'objectif mensuel enregistré auparavant dans settings/coach (lisible publiquement) puis effacement de ce champ.
+  migrerDepuisReglages() {
+    const d = typeof CoachSettings !== "undefined" ? CoachSettings.data : null;
+    if (!d || d.objectifMensuel === undefined || this._migre) return;
+    this._migre = true;
+    const ancien = Number(d.objectifMensuel) || 0;
+    if (this.lire().objectifMensuel === undefined && ancien > 0) this.ecrire({ objectifMensuel: ancien });
+    delete d.objectifMensuel;
+    if (CoachLink.user) CoachSettings.save({ objectifMensuel: firebase.firestore.FieldValue.delete() });
+  }
+};
+
+// ===== RAPPELS DE RENDEZ-VOUS À ENVOYER (rien ne part tout seul : tu valides dans WhatsApp, SMS ou e-mail) =====
+const cleRappel = r => String(r.id || (r.clientId + "|" + r.date + "|" + (r.heure || "")));
+function rappelsCalculer(rdvs, clients, faits, maintenant) {
+  maintenant = maintenant || new Date(); faits = faits || {};
+  const auj = isoDate(maintenant), demain = isoDate(new Date(maintenant.getFullYear(), maintenant.getMonth(), maintenant.getDate() + 1)), limite = isoDate(new Date(maintenant.getFullYear(), maintenant.getMonth(), maintenant.getDate() + 2));
+  const hhmm = String(maintenant.getHours()).padStart(2, "0") + ":" + String(maintenant.getMinutes()).padStart(2, "0");
+  return (rdvs || []).filter(r => r && r.clientId && r.date).map(r => ({ r, j: String(r.date).slice(0, 10) }))
+    .filter(x => x.j >= auj && x.j <= limite && !(x.j === auj && x.r.heure && String(x.r.heure) < hhmm))
+    .map(x => ({ rdv: x.r, client: (clients || []).find(c => c.id === x.r.clientId), jour: x.j === auj ? "aujourd'hui" : x.j === demain ? "demain" : "après-demain", tri: x.j + " " + (x.r.heure || "") }))
+    .filter(x => x.client && x.client.status !== "terminé" && !faits[cleRappel(x.rdv)])
+    .sort((a, b) => a.tri < b.tri ? -1 : a.tri > b.tri ? 1 : 0);
+}
+function rappelTexteRdv(c, r) { return relanceTexte(Object.assign({}, c, { nextSession: r.date, nextSessionHeure: r.heure }), RELANCES.find(m => m.id === "rdv")); }
+function marquerRappelFait(r) {
+  const faits = Object.assign({}, PrefsPrivees.lire().rappelsFaits || {}), limite = Date.now() - 10 * 86400000;
+  Object.keys(faits).forEach(k => { if (new Date(faits[k]).getTime() < limite) delete faits[k]; });
+  faits[cleRappel(r)] = new Date().toISOString(); PrefsPrivees.ecrire({ rappelsFaits: faits });
+}
+function buildRappelsCard(maintenant) {
+  const liste = rappelsCalculer(state.appointments, state.clients, PrefsPrivees.lire().rappelsFaits, maintenant || new Date());
+  if (!liste.length) return null;
+  const card = h("div", { class: "card", style: "padding:14px 16px;margin-bottom:16px;border-color:#9C7A2E66" });
+  card.appendChild(h("div", { style: "font-weight:700;font-size:15px;color:#2E2A20" }, "🔔 Rappels de rendez-vous à envoyer (" + liste.length + ")"));
+  card.appendChild(h("div", { style: "font-size:12.5px;color:#6B6355;margin:2px 0 8px" }, "Pour les 2 prochains jours. Le message s'ouvre prérempli : tu peux le modifier. Rien ne part tout seul."));
+  liste.forEach(({ rdv, client, jour }) => {
+    const texte = rappelTexteRdv(client, rdv), num = numeroInternational(client.tel), mail = String(client.email || "").trim();
+    const ligne = h("div", { style: "padding:10px 0;border-top:1px solid #EFE7D2" });
+    ligne.appendChild(h("div", { style: "font-size:14px;font-weight:600;color:#2E2A20" }, client.name + " · " + jour + (rdv.heure ? " à " + rdv.heure : "") + (rdv.motif ? " · " + rdv.motif : "")));
+    ligne.appendChild(h("div", { style: "font-size:12.5px;color:#5A5648;margin:3px 0 7px;white-space:pre-wrap" }, texte));
+    if (!num && !mail) ligne.appendChild(h("div", { style: "font-size:12.5px;color:#B26A00;margin-bottom:6px" }, "Ni numéro ni e-mail dans la fiche : ajoute un contact pour pouvoir envoyer ce rappel."));
+    const barre = h("div", { style: "display:flex;gap:6px;flex-wrap:wrap" });
+    const lien = (lib, href) => href ? h("a", { class: "btn-sm", href, target: "_blank", rel: "noopener", style: "text-decoration:none" }, lib) : h("span", { class: "btn-sm", style: "opacity:.4;cursor:not-allowed" }, lib);
+    barre.appendChild(lien("💬 WhatsApp", num ? "https://wa.me/" + num + "?text=" + encodeURIComponent(texte) : null));
+    barre.appendChild(lien("📱 SMS", num ? "sms:+" + num + "?&body=" + encodeURIComponent(texte) : null));
+    barre.appendChild(lien("✉️ E-mail", mail ? "mailto:" + encodeURIComponent(mail) + "?subject=" + encodeURIComponent("Rappel de notre prochaine séance") + "&body=" + encodeURIComponent(texte) : null));
+    const ok = h("button", { class: "btn-sm" }, "✓ Envoyé"); ok.addEventListener("click", () => { marquerRappelFait(rdv); render(); });
+    barre.appendChild(ok); ligne.appendChild(barre); card.appendChild(ligne);
+  });
+  return card;
+}
+
+// ===== JOURNAL D'HEURES DE PRATIQUE =====
+const HEURES_TYPES = ["Pratique avec un client", "Supervision / mentorat", "Formation", "Autre"];
+const heuresFmt = min => Math.floor(min / 60) + " h " + String(Math.round(min % 60)).padStart(2, "0");
+function heuresCalculer(rdvs, prefs, maintenant) {
+  maintenant = maintenant || new Date(); prefs = prefs || {};
+  const auj = isoDate(maintenant), duree = Math.max(1, Number(prefs.dureeSeanceMin) || 60), inclureDec = prefs.heuresInclureDecouverte !== false;
+  const lignes = [];
+  (rdvs || []).forEach(r => {
+    if (!r || !r.clientId || !r.date || String(r.date).slice(0, 10) > auj) return;
+    if (!inclureDec && /d[ée]couverte/i.test(r.motif || "")) return;
+    lignes.push({ date: String(r.date).slice(0, 10), type: HEURES_TYPES[0], minutes: duree, client: r.clientName || r.nom || "", note: r.motif || "", source: "agenda" });
+  });
+  (prefs.heuresManuelles || []).forEach(e => { if (e && e.date && Number(e.minutes) > 0) lignes.push({ date: String(e.date).slice(0, 10), type: HEURES_TYPES.includes(e.type) ? e.type : "Autre", minutes: Number(e.minutes), client: "", note: e.note || "", source: "saisie", id: e.id }); });
+  lignes.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  const parType = {}, parMois = {}; let total = 0;
+  lignes.forEach(l => { total += l.minutes; parType[l.type] = (parType[l.type] || 0) + l.minutes; const m = l.date.slice(0, 7); parMois[m] = (parMois[m] || 0) + l.minutes; });
+  const objectifMin = Math.round((Number(prefs.objectifHeures) || 0) * 60);
+  return { lignes, totalMin: total, parType, parMois, seancesAgenda: lignes.filter(l => l.source === "agenda").length, objectifMin, pct: objectifMin > 0 ? Math.round(total / objectifMin * 100) : null };
+}
+function heuresCsv(lignes, anonymiser) {
+  const noms = {}, anon = n => { if (!n) return ""; if (!noms[n]) noms[n] = "Client " + (Object.keys(noms).length + 1); return noms[n]; };
+  const q = v => '"' + String(v === undefined || v === null ? "" : v).replace(/"/g, '""') + '"';
+  const rows = [["Date", "Type", "Durée (heures)", "Client", "Remarque"].map(q).join(";")];
+  lignes.forEach(l => rows.push([l.date, l.type, (l.minutes / 60).toFixed(2).replace(".", ","), anonymiser ? anon(l.client) : l.client, anonymiser && l.source === "agenda" ? "" : l.note].map(q).join(";")));
+  const total = lignes.reduce((t, l) => t + l.minutes, 0);
+  rows.push(["TOTAL", "", (total / 60).toFixed(2).replace(".", ","), "", ""].map(q).join(";"));
+  return "\uFEFF" + rows.join("\r\n");
+}
+function renderHeuresTab() {
+  const wrap = h("div", { class: "page-wrap" });
+  const prefs = PrefsPrivees.lire(), k = heuresCalculer(state.appointments, prefs, new Date());
+  const styleChamp = "padding:9px 11px;border:1px solid #E4DAC0;border-radius:8px;font-size:16px;background:#fff;box-sizing:border-box";
+  wrap.appendChild(h("h3", { style: "font-size:20px;color:#2E2A20;font-weight:600;margin:0 0 4px;font-style:italic" }, "Journal d'heures de pratique"));
+  wrap.appendChild(h("p", { style: "color:#6B6355;font-size:13px;margin:0 0 14px;line-height:1.45" }, "Les rendez-vous passés de ton agenda comptent comme des heures de pratique. Ajoute à la main les heures de supervision, de formation ou de pratique hors application. Ces données restent sur cet appareil : télécharge le CSV de temps en temps pour en garder une copie."));
+
+  // Résumé
+  const res = h("div", { class: "card", style: "padding:16px 18px;margin-bottom:14px" });
+  res.appendChild(h("div", { style: "font-size:12px;color:#5A5648;text-transform:uppercase;letter-spacing:.05em" }, "Total cumulé"));
+  res.appendChild(h("div", { style: "font-size:32px;font-weight:800;color:#7A5C1A;line-height:1.15" }, heuresFmt(k.totalMin)));
+  res.appendChild(h("div", { style: "font-size:12.5px;color:#5A5648" }, k.seancesAgenda + " séance(s) de l'agenda × " + (Number(prefs.dureeSeanceMin) || 60) + " min + saisies manuelles"));
+  if (k.objectifMin > 0) {
+    const bg = h("div", { style: "background:#E4DAC0;border-radius:6px;height:9px;overflow:hidden;margin-top:10px" });
+    bg.appendChild(h("div", { style: "background:" + (k.pct >= 100 ? "#2F7D3B" : "#7A5C1A") + ";height:100%;width:" + Math.min(100, k.pct) + "%" }));
+    res.appendChild(h("div", { style: "font-size:13.5px;margin-top:10px;color:#2E2A20" }, "🎯 Objectif : " + heuresFmt(k.totalMin) + " sur " + heuresFmt(k.objectifMin) + " (" + k.pct + " %)")); res.appendChild(bg);
+  }
+  Object.keys(k.parType).forEach(t => res.appendChild(h("div", { style: "display:flex;justify-content:space-between;font-size:13.5px;padding:6px 0;border-top:1px solid #EFE7D2;margin-top:6px;color:#2E2A20" }, h("span", {}, t), h("b", {}, heuresFmt(k.parType[t])))));
+  wrap.appendChild(res);
+
+  // Réglages
+  const reg = h("div", { class: "card", style: "padding:14px 16px;margin-bottom:14px" });
+  reg.appendChild(h("div", { style: "font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:8px" }, "⚙️ Réglages du journal"));
+  const dur = h("input", { type: "number", min: "15", step: "5", value: String(Number(prefs.dureeSeanceMin) || 60), style: styleChamp + ";width:100px" });
+  const obj = h("input", { type: "number", min: "0", step: "10", value: prefs.objectifHeures ? String(prefs.objectifHeures) : "", placeholder: "ex. 100", style: styleChamp + ";width:100px" });
+  const cb = h("input", { type: "checkbox" }); cb.checked = prefs.heuresInclureDecouverte !== false;
+  const ligne = (lib, el) => h("label", { style: "display:flex;align-items:center;gap:10px;margin:6px 0;font-size:14px;color:#2E2A20" }, h("span", { style: "min-width:190px" }, lib), el);
+  reg.appendChild(ligne("Durée d'une séance (minutes)", dur)); reg.appendChild(ligne("Objectif d'heures (facultatif)", obj));
+  reg.appendChild(h("label", { style: "display:flex;align-items:center;gap:10px;margin:6px 0;font-size:14px;color:#2E2A20;cursor:pointer" }, cb, "Compter les séances découverte"));
+  const sv = h("button", { class: "btn-g", style: "margin-top:6px" }, "Enregistrer les réglages");
+  sv.addEventListener("click", () => { PrefsPrivees.ecrire({ dureeSeanceMin: Math.max(15, Number(dur.value) || 60), objectifHeures: Math.max(0, Number(obj.value) || 0), heuresInclureDecouverte: cb.checked }); render(); });
+  reg.appendChild(sv); wrap.appendChild(reg);
+
+  // Saisie manuelle
+  const add = h("div", { class: "card", style: "padding:14px 16px;margin-bottom:14px" });
+  add.appendChild(h("div", { style: "font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:8px" }, "➕ Ajouter des heures"));
+  const dDate = h("input", { type: "date", value: isoDate(new Date()), style: styleChamp });
+  const dMin = h("input", { type: "number", min: "15", step: "15", value: "60", style: styleChamp + ";width:100px" });
+  const dType = h("select", { style: styleChamp }, ...HEURES_TYPES.map(t => h("option", { value: t }, t)));
+  const dNote = h("input", { type: "text", placeholder: "Remarque (facultatif)", style: styleChamp + ";width:100%" });
+  add.appendChild(h("div", { style: "display:flex;gap:8px;flex-wrap:wrap;align-items:center" }, dDate, h("span", { style: "display:flex;align-items:center;gap:6px;font-size:14px" }, dMin, "min"), dType));
+  add.appendChild(h("div", { style: "margin-top:8px" }, dNote));
+  const bAdd = h("button", { class: "btn", style: "margin-top:10px" }, "Ajouter au journal");
+  bAdd.addEventListener("click", () => {
+    const m = Number(dMin.value);
+    if (!dDate.value || !(m > 0)) { alert("Indique une date et une durée."); return; }
+    PrefsPrivees.ecrire({ heuresManuelles: (PrefsPrivees.lire().heuresManuelles || []).concat([{ id: "h_" + Date.now(), date: dDate.value, minutes: m, type: dType.value, note: dNote.value.trim() }]) }); render();
+  });
+  add.appendChild(bAdd); wrap.appendChild(add);
+
+  // Saisies manuelles + export
+  const manu = (prefs.heuresManuelles || []).slice().sort((a, b) => a.date < b.date ? 1 : -1);
+  const lst = h("div", { class: "card", style: "padding:14px 16px;margin-bottom:14px" });
+  lst.appendChild(h("div", { style: "font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:4px" }, "📝 Heures saisies à la main (" + manu.length + ")"));
+  if (!manu.length) lst.appendChild(h("div", { style: "font-size:13px;color:#5A5648" }, "Aucune saisie pour l'instant."));
+  manu.forEach(e => {
+    const x = h("button", { class: "btn-g", style: "font-size:12.5px;padding:5px 10px" }, "✕"); x.setAttribute("aria-label", "Supprimer cette saisie");
+    x.addEventListener("click", () => { if (!confirm("Supprimer cette saisie ?")) return; PrefsPrivees.ecrire({ heuresManuelles: (PrefsPrivees.lire().heuresManuelles || []).filter(z => z.id !== e.id) }); render(); });
+    lst.appendChild(h("div", { style: "display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid #EFE7D2" },
+      h("div", { style: "min-width:0;font-size:13.5px;color:#2E2A20" }, h("b", {}, bilanDateFr(e.date + "T12:00:00") + " · " + heuresFmt(e.minutes)), h("div", { style: "font-size:12.5px;color:#5A5648" }, e.type + (e.note ? " — " + e.note : ""))), x));
+  });
+  wrap.appendChild(lst);
+  const ex = h("div", { class: "card", style: "padding:14px 16px" });
+  ex.appendChild(h("div", { style: "font-weight:700;font-size:14px;color:#2E2A20;margin-bottom:6px" }, "⬇️ Exporter pour ton organisme de formation"));
+  const cbAnon = h("input", { type: "checkbox" }); cbAnon.checked = true;
+  ex.appendChild(h("label", { style: "display:flex;align-items:flex-start;gap:8px;font-size:13.5px;color:#2E2A20;cursor:pointer;margin-bottom:8px" }, cbAnon, "Remplacer les noms des clients par « Client 1, Client 2… » (recommandé)"));
+  const bCsv = h("button", { class: "btn" }, "Télécharger le journal (CSV)");
+  bCsv.addEventListener("click", () => {
+    const blob = new Blob([heuresCsv(heuresCalculer(state.appointments, PrefsPrivees.lire(), new Date()).lignes, cbAnon.checked)], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "journal-heures-" + isoDate(new Date()) + ".csv";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+  ex.appendChild(bCsv); wrap.appendChild(ex);
+  return wrap;
+}
+
 function businessCle(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
 function businessJour(d) { return businessCle(d) + "-" + String(d.getDate()).padStart(2, "0"); }
 
@@ -5928,7 +6091,8 @@ function businessCalculer(clients, rdvs, objectifMensuel, maintenant) {
 function renderFinancesTab() {
   const wrap = h("div", { class: "page-wrap" });
   if (CoachLink.user && !CoachSettings.data) CoachSettings.listen(() => { if (state.tab === "finances") render(); });
-  const k = businessCalculer(state.clients, state.appointments, (CoachSettings.data || {}).objectifMensuel, new Date());
+  PrefsPrivees.migrerDepuisReglages();
+  const k = businessCalculer(state.clients, state.appointments, PrefsPrivees.lire().objectifMensuel, new Date());
   const eur = n => Math.round(n).toLocaleString("fr-FR") + " €";
   const ouvrir = id => setState({ tab: "clients", selClientId: id, subTab: "fiche" });
   const titre = (emoji, texte, aide) => h("div", { style: "display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:26px 0 10px;padding-bottom:6px;border-bottom:1px solid #E4DAC0" },
@@ -5958,13 +6122,7 @@ function renderFinancesTab() {
     if (edition) {
       const champ = h("input", { type: "number", min: "0", step: "50", placeholder: "Objectif mensuel en €", value: k.objectif > 0 ? String(k.objectif) : "", style: "width:170px;padding:8px 10px;border:1px solid #E4DAC0;border-radius:8px;font-size:16px;margin:10px 8px 0 0" });
       const ok = h("button", { class: "btn-g" }, "Enregistrer");
-      ok.addEventListener("click", () => {
-        if (!CoachLink.user) { alert("Connecte-toi pour enregistrer l'objectif."); return; }
-        const n = Math.max(0, Number(champ.value) || 0);
-        CoachSettings.save({ objectifMensuel: n });
-        if (CoachSettings.data) CoachSettings.data.objectifMensuel = n;
-        render();
-      });
+      ok.addEventListener("click", () => { PrefsPrivees.ecrire({ objectifMensuel: Math.max(0, Number(champ.value) || 0) }); render(); });
       objZone.appendChild(champ); objZone.appendChild(ok);
     } else {
       const b = h("button", { class: "btn-g", style: "margin-top:" + (k.objectif > 0 ? "8" : "0") + "px;font-size:12.5px;padding:6px 12px" }, k.objectif > 0 ? "✏️ Modifier l'objectif" : "🎯 Définir un objectif mensuel");
@@ -6294,6 +6452,7 @@ const TABS = [
   {id:"agenda",       icon:"🗓️", label:"Agenda",                  pole:"Gestion", cat:"Planning"},
   {id:"rdv",          icon:"📅", label:"Demandes RDV",             pole:"Gestion", cat:"Planning"},
   {id:"finances",     icon:"💰", label:"Finances & Business",                 pole:"Gestion", cat:"Finances"},
+  {id:"heures",       icon:"⏱️", label:"Journal d'heures",         pole:"Gestion", cat:"Finances"},
   {id:"statistiques", icon:"📊", label:"Statistiques",             pole:"Gestion", cat:"Statistiques"},
   {id:"reglages",     icon:"⚙️", label:"Site internet & réglages", pole:"Gestion", cat:"Site internet"},
   {id:"notes",        icon:"◻", label:"Journal de bord",           pole:"Gestion", cat:"Administratif"},
@@ -7739,7 +7898,9 @@ function renderDashboard() {
   );
   wrap.insertBefore(buildAlertesRythmes(), wrap.children[1] || null);
   wrap.insertBefore(buildListeCoaches(), wrap.children[3] || null);
-  wrap.appendChild(buildDiagnosticCard());
+  PrefsPrivees.migrerDepuisReglages();
+{ const _rappels = buildRappelsCard(); if (_rappels) wrap.insertBefore(_rappels, wrap.children[1] || null); }
+wrap.appendChild(buildDiagnosticCard());
 wrap.appendChild(buildNettoyageCard());
 wrap.appendChild(buildSauvegardeCard());
   return wrap;
@@ -7904,7 +8065,7 @@ function renderPipelineTab() {
 // ===== SAUVEGARDE COMPLÈTE (protection des données) =====
 function sauvegardeContenu(etat, reglages) {
   const copie = x => x === undefined ? null : JSON.parse(JSON.stringify(x));
-  return { type: "sauvegarde-coachingstudio", version: 1, date: new Date().toISOString(), clients: copie(etat.clients) || [], rendezVous: copie(etat.appointments) || [], reglages: copie(reglages) };
+  return { type: "sauvegarde-coachingstudio", version: 1, date: new Date().toISOString(), clients: copie(etat.clients) || [], rendezVous: copie(etat.appointments) || [], reglages: copie(reglages), prefsPrivees: copie(typeof PrefsPrivees !== "undefined" ? PrefsPrivees.lire() : null) };
 }
 
 function buildSauvegardeCard() {
@@ -9833,6 +9994,7 @@ function renderNow() {
   else if (state.tab==="pipeline") content = renderPipelineTab();
   else if (state.tab==="agenda") content = renderAgendaTab();
   else if (state.tab==="finances") content = renderFinancesTab();
+  else if (state.tab==="heures") content = renderHeuresTab();
   else if (state.tab==="exercices") content = renderExercicesTab();
   else if (state.tab==="statistiques") content = renderStatistiquesTab();
   else if (state.tab==="clairiere") content = renderClairiereTab();
